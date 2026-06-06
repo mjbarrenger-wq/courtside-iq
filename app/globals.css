@@ -3,24 +3,98 @@
 :root {
   --background: #ffffff;
   --foreground: #171717;
+  --card-bg: #f3f4f6;
+  --card-border: #e5e7eb;
+  --muted: #6b7280;
+  --row-alt: #f9fafb;
+
+  /* Brand palette */
+  --brand-primary: #307b92;
+  --brand-light: #97cfdc;
+
+  /* Dashboard text hierarchy */
+  --text-primary:   #f1f5f9;   /* values, main labels */
+  --text-secondary: #cbd5e1;   /* supporting labels */
+  --text-muted:     #8fa3b8;   /* hints, vs-opp, footnotes */
+  --text-hero:      #ffffff;   /* hero numbers only */
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-brand-primary: var(--brand-primary);
+  --color-brand-light: var(--brand-light);
+  --font-sans: var(--font-inter);
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
+    --background: #0f1117;
     --foreground: #ededed;
+    --card-bg: #1e2330;
+    --card-border: #2d3447;
+    --muted: #9ca3af;
+    --row-alt: #181d29;
   }
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  /* Inter with antialiasing — eliminates the blurry/halo effect on dark backgrounds */
+  font-family: var(--font-inter), 'Inter', system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  font-feature-settings: "kern" 1, "liga" 1, "calt" 1;
 }
+
+/* Date range slider — pointer-events fix so both thumbs are always reachable */
+input[type="range"].date-slider-input {
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+  height: 20px;
+  margin: 0;
+  padding: 0;
+  pointer-events: none;
+}
+input[type="range"].date-slider-input::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #307b92;
+  border: 2px solid #97cfdc;
+  cursor: grab;
+  pointer-events: all;
+}
+input[type="range"].date-slider-input::-webkit-slider-runnable-track {
+  height: 0;
+  background: transparent;
+}
+input[type="range"].date-slider-input::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #307b92;
+  border: 2px solid #97cfdc;
+  cursor: grab;
+  pointer-events: all;
+}
+input[type="range"].date-slider-input::-moz-range-track {
+  height: 0;
+  background: transparent;
+  pointer-events: none;
+}
+
+/* Semantic utility classes using CSS vars */
+.card {
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 0.75rem;
+  padding: 1rem;
+}
+.text-muted { color: var(--muted); }
+.row-base   { background: var(--background); }
+.row-alt    { background: var(--row-alt); }
