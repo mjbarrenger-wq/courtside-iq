@@ -1,147 +1,251 @@
-export default async function Home() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL!
-  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+export const dynamic = 'force-dynamic'
 
-  const gamesRes = await fetch(`${url}/rest/v1/games?select=*,opponents(full_name)&order=game_date.asc`, {
-    headers: { 'apikey': key, 'Authorization': `Bearer ${key}` },
-    cache: 'no-store'
+const SB_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!
+const SB_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+
+async function fetchJson(path: string) {
+  const res = await fetch(`${SB_URL}/rest/v1/${path}`, {
+    headers: { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}` },
+    cache: 'no-store',
   })
-  const gamesRaw = await gamesRes.json()
-  const games = gamesRaw.map((g: any) => ({
+  return res.json()
+}
+
+const BG     = '#07111e'
+const BORDER = '#2a4a6e'
+const CARD   = '#0d1b2e'
+const HEADER = '#0a1628'
+
+export default async function Home() {
+  const [gamesRaw, stats, players] = await Promise.all([
+    fetchJson('games?select=*,opponents(full_name)&order=game_date.asc'),
+    fetchJson('player_game_stats?select=player_id,points,reb,ast,stl,blk'),
+    fetchJson('players?select=*&order=jersey_number.asc'),
+  ])
+
+  const games = (Array.isArray(gamesRaw) ? gamesRaw : []).map((g: any) => ({
     ...g,
-    opponent_name: g.opponents?.full_name ?? 'Unknown'
+    opponent_name: g.opponents?.full_name ?? 'Unknown',
   }))
 
-  const statsRes = await fetch(`${url}/rest/v1/player_game_stats?select=player_id,points,reb,ast,stl,blk`, {
-    headers: { 'apikey': key, 'Authorization': `Bearer ${key}` },
-    cache: 'no-store'
-  })
-  const stats = await statsRes.json()
+  const wins      = games.filter((g: any) => g.result === 'W').length
+  const losses    = games.filter((g: any) => g.result === 'L').length
+  const totalFor  = games.reduce((s: number, g: any) => s + g.team_score, 0)
+  const totalOpp  = games.reduce((s: number, g: any) => s + g.opponent_score, 0)
+  const pointDiff = totalFor - totalOpp
+  const ppg       = games.length ? (totalFor / games.length).toFixed(1) : '—'
+  const oppPpg    = games.length ? (totalOpp / games.length).toFixed(1) : '—'
 
-  const playersRes = await fetch(`${url}/rest/v1/players?select=*`, {
-    headers: { 'apikey': key, 'Authorization': `Bearer ${key}` },
-    cache: 'no-store'
-  })
-  const players = await playersRes.json()
-
-  const wins = games.filter((g: any) => g.result === 'W').length
-  const losses = games.filter((g: any) => g.result === 'L').length
-  const totalPoints = games.reduce((sum: number, g: any) => sum + g.team_score, 0)
-  const totalOppPoints = games.reduce((sum: number, g: any) => sum + g.opponent_score, 0)
-  const pointDiff = totalPoints - totalOppPoints
-
-  const playerTotals = players.map((p: any) => {
-    const playerStats = stats.filter((s: any) => s.player_id === p.id)
+  const playerTotals = (Array.isArray(players) ? players : []).map((p: any) => {
+    const ps = (Array.isArray(stats) ? stats : []).filter((s: any) => s.player_id === p.id)
+    const sum = (key: string) => ps.reduce((s: number, r: any) => s + (r[key] || 0), 0)
+    const gp  = ps.length
     return {
-      id: p.id,
-      name: `${p.first_name} ${p.last_name}`,
-      games: playerStats.length,
-      points: playerStats.reduce((sum: number, s: any) => sum + (s.points || 0), 0),
-      reb: playerStats.reduce((sum: number, s: any) => sum + (s.reb || 0), 0),
-      ast: playerStats.reduce((sum: number, s: any) => sum + (s.ast || 0), 0),
-      stl: playerStats.reduce((sum: number, s: any) => sum + (s.stl || 0), 0),
-      blk: playerStats.reduce((sum: number, s: any) => sum + (s.blk || 0), 0),
+      id: p.id, name: `${p.first_name} ${p.last_name}`, jersey: p.jersey_number,
+      gp, pts: sum('points'), reb: sum('reb'), ast: sum('ast'), stl: sum('stl'), blk: sum('blk'),
+      ppg: gp ? (sum('points') / gp).toFixed(1) : '—',
     }
-  }).sort((a: any, b: any) => b.points - a.points)
+  }).sort((a: any, b: any) => b.pts - a.pts)
 
   return (
-    <main className="p-8 max-w-4xl mx-auto">
-      {/* Header */}
-      <h1 className="text-4xl font-bold mb-1" style={{ color: 'var(--brand-primary)' }}>
-        Courtside IQ
-      </h1>
-      <p className="text-muted mb-2 text-sm">WGT 12.2 — 2025/26 Season</p>
-      <div className="flex gap-4 mb-8">
-        <a href="/dashboard" className="text-sm font-medium hover:underline" style={{ color: 'var(--brand-primary)' }}>
-          → Value Driver Tree
-        </a>
-        <a href="/players" className="text-sm font-medium hover:underline" style={{ color: 'var(--brand-primary)' }}>
-          → Player Quadrants
-        </a>
-      </div>
+    <main style={{
+      background: BG, minHeight: '100vh', color: '#e2e8f0',
+      fontFamily: "'Inter', system-ui, sans-serif",
+      WebkitFontSmoothing: 'antialiased', padding: '0 0 64px',
+    }}>
 
-      {/* Season Record */}
-      <div className="grid grid-cols-4 gap-4 mb-8">
-        <div className="card text-center">
-          <div className="text-3xl font-bold">{wins}-{losses}</div>
-          <div className="text-muted text-sm mt-1">Season Record</div>
-        </div>
-        <div className="card text-center">
-          <div className="text-3xl font-bold">{games.length}</div>
-          <div className="text-muted text-sm mt-1">Games Played</div>
-        </div>
-        <div className="card text-center">
-          <div className="text-3xl font-bold">{(totalPoints / games.length).toFixed(1)}</div>
-          <div className="text-muted text-sm mt-1">Avg Points For</div>
-        </div>
-        <div className="card text-center">
-          <div
-            className="text-3xl font-bold"
-            style={{ color: pointDiff >= 0 ? '#16a34a' : '#dc2626' }}
-          >
-            {pointDiff >= 0 ? '+' : ''}{pointDiff}
+      {/* ── Header ── */}
+      <div style={{ background: HEADER, borderBottom: `1px solid ${BORDER}`, padding: '20px 32px' }}>
+        <div style={{ maxWidth: 1100, margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div>
+            <div style={{ fontSize: 22, fontWeight: 800, color: '#e2e8f0', letterSpacing: '0.05em' }}>
+              COURTSIDE IQ
+            </div>
+            <div style={{ fontSize: 12, color: '#64748b', marginTop: 3 }}>
+              WGT 12.2 · U12 Basketball · Melbourne · Season 2025–26 &nbsp;·&nbsp;
+              <span style={{ color: '#307b92', fontWeight: 600 }}>CMD Sports Analytics</span>
+            </div>
           </div>
-          <div className="text-muted text-sm mt-1">Point Differential</div>
+          {/* Season record pills */}
+          <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+            <span style={{
+              background: '#052e16', border: '1px solid #16a34a', borderRadius: 20,
+              padding: '4px 14px', fontSize: 13, fontWeight: 700, color: '#22c55e',
+            }}>{wins}–{losses}</span>
+            <span style={{
+              background: '#07111e', border: `1px solid ${BORDER}`, borderRadius: 20,
+              padding: '4px 14px', fontSize: 13, fontWeight: 700,
+              color: pointDiff >= 0 ? '#22c55e' : '#ef4444',
+            }}>{pointDiff >= 0 ? '+' : ''}{pointDiff} PTS</span>
+          </div>
         </div>
       </div>
 
-      {/* Player Stats Table */}
-      <h2 className="text-2xl font-bold mb-4">Season Player Stats</h2>
-      <div className="overflow-x-auto rounded-xl border" style={{ borderColor: 'var(--card-border)' }}>
-        <table className="w-full text-sm">
-          <thead>
-            <tr style={{ backgroundColor: 'var(--brand-primary)', color: '#ffffff' }}>
-              <th className="text-left p-3">Player</th>
-              <th className="p-3">GP</th>
-              <th className="p-3">PTS</th>
-              <th className="p-3">REB</th>
-              <th className="p-3">AST</th>
-              <th className="p-3">STL</th>
-              <th className="p-3">BLK</th>
-              <th className="p-3">PPG</th>
-            </tr>
-          </thead>
-          <tbody>
-            {playerTotals.map((p: any, i: number) => (
-              <tr key={i} className={i % 2 === 0 ? 'row-base' : 'row-alt'}>
-                <td className="p-3 font-medium">{p.name}</td>
-                <td className="p-3 text-center text-muted">{p.games}</td>
-                <td className="p-3 text-center">{p.points}</td>
-                <td className="p-3 text-center">{p.reb}</td>
-                <td className="p-3 text-center">{p.ast}</td>
-                <td className="p-3 text-center">{p.stl}</td>
-                <td className="p-3 text-center">{p.blk}</td>
-                <td className="p-3 text-center font-bold" style={{ color: 'var(--brand-primary)' }}>
-                  {(p.points / p.games).toFixed(1)}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <div style={{ maxWidth: 1100, margin: '0 auto', padding: '32px 32px 0' }}>
 
-      {/* Recent Games */}
-      <h2 className="text-2xl font-bold mt-8 mb-4">Game Results</h2>
-      <div className="space-y-2">
-        {[...games].reverse().slice(0, 10).map((game: any) => (
-          <div
-            key={game.id}
-            className="flex items-center justify-between p-3 rounded-lg"
-            style={{ background: 'var(--card-bg)', border: '1px solid var(--card-border)' }}
-          >
-            <span className="text-muted text-sm w-24">{game.game_date}</span>
-            <span className="text-sm flex-1 text-center">
-              {game.home_away === 'home' ? 'vs' : '@'} {game.opponent_name}
-            </span>
-            <span className="font-bold w-20 text-center">{game.team_score} – {game.opponent_score}</span>
-            <span
-              className="font-bold w-8 text-center"
-              style={{ color: game.result === 'W' ? '#16a34a' : '#dc2626' }}
+        {/* ── Nav cards ── */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginBottom: 40 }}>
+
+          {/* Coaching Intelligence */}
+          <a href="/dashboard" style={{ textDecoration: 'none' }}>
+            <div style={{
+              background: CARD, border: `1px solid ${BORDER}`,
+              borderTop: '3px solid #307b92',
+              borderRadius: 14, padding: '28px 28px 24px',
+              cursor: 'pointer', transition: 'border-color 0.15s',
+            }}
+              onMouseEnter={(e) => (e.currentTarget.style.borderColor = '#97cfdc')}
+              onMouseLeave={(e) => (e.currentTarget.style.borderColor = BORDER)}
             >
-              {game.result}
-            </span>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: '#97cfdc', letterSpacing: '0.08em' }}>
+                  COACHING INTELLIGENCE
+                </div>
+                <span style={{ fontSize: 18, color: '#307b92' }}>→</span>
+              </div>
+              <div style={{ fontSize: 22, fontWeight: 800, color: '#e2e8f0', marginBottom: 10, lineHeight: 1.2 }}>
+                Value Driver Tree
+              </div>
+              <div style={{ fontSize: 13, color: '#64748b', lineHeight: 1.7 }}>
+                Net PPP decomposition across 8 performance pillars. Understand what's driving wins and
+                losses — shot efficiency, possession control, defensive pressure, and more.
+              </div>
+              <div style={{ marginTop: 18, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                {['Net PPP', 'Driver Scores', 'AI Priorities'].map(tag => (
+                  <span key={tag} style={{
+                    background: '#0a1628', border: `1px solid ${BORDER}`,
+                    borderRadius: 20, padding: '3px 10px', fontSize: 10,
+                    fontWeight: 600, color: '#97cfdc',
+                  }}>{tag}</span>
+                ))}
+              </div>
+            </div>
+          </a>
+
+          {/* Player Quadrants */}
+          <a href="/players" style={{ textDecoration: 'none' }}>
+            <div style={{
+              background: CARD, border: `1px solid ${BORDER}`,
+              borderTop: '3px solid #8b5cf6',
+              borderRadius: 14, padding: '28px 28px 24px',
+              cursor: 'pointer',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: '#c4b5fd', letterSpacing: '0.08em' }}>
+                  PLAYER ANALYSIS
+                </div>
+                <span style={{ fontSize: 18, color: '#8b5cf6' }}>→</span>
+              </div>
+              <div style={{ fontSize: 22, fontWeight: 800, color: '#e2e8f0', marginBottom: 10, lineHeight: 1.2 }}>
+                Player Quadrants
+              </div>
+              <div style={{ fontSize: 13, color: '#64748b', lineHeight: 1.7 }}>
+                Offensive vs Defensive PPP for every player. Identify two-way contributors,
+                specialists, and development priorities. Filter by game window or date range.
+              </div>
+              <div style={{ marginTop: 18, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                {['Off/Def PPP', 'Quadrant Map', 'So What?'].map(tag => (
+                  <span key={tag} style={{
+                    background: '#0a1628', border: `1px solid ${BORDER}`,
+                    borderRadius: 20, padding: '3px 10px', fontSize: 10,
+                    fontWeight: 600, color: '#c4b5fd',
+                  }}>{tag}</span>
+                ))}
+              </div>
+            </div>
+          </a>
+        </div>
+
+        {/* ── Season snapshot ── */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 12, marginBottom: 32 }}>
+          {[
+            { label: 'Record',    value: `${wins}–${losses}`,                colour: '#22c55e' },
+            { label: 'Games',     value: String(games.length),               colour: '#e2e8f0' },
+            { label: 'PPG',       value: ppg,                                colour: '#97cfdc' },
+            { label: 'Opp PPG',   value: oppPpg,                             colour: '#c4b5fd' },
+            { label: 'Pt Diff',   value: `${pointDiff >= 0 ? '+' : ''}${pointDiff}`, colour: pointDiff >= 0 ? '#22c55e' : '#ef4444' },
+          ].map(({ label, value, colour }) => (
+            <div key={label} style={{
+              background: CARD, border: `1px solid ${BORDER}`,
+              borderRadius: 10, padding: '16px 16px 14px', textAlign: 'center',
+            }}>
+              <div style={{ fontSize: 22, fontWeight: 800, color: colour }}>{value}</div>
+              <div style={{ fontSize: 10, color: '#64748b', marginTop: 4, textTransform: 'uppercase', letterSpacing: '0.07em', fontWeight: 600 }}>{label}</div>
+            </div>
+          ))}
+        </div>
+
+        {/* ── Player stats table ── */}
+        <div style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: 14, overflow: 'hidden', marginBottom: 28 }}>
+          <div style={{ padding: '14px 20px', borderBottom: `1px solid ${BORDER}` }}>
+            <span style={{ fontSize: 13, fontWeight: 700, color: '#97cfdc' }}>SEASON PLAYER STATS</span>
           </div>
-        ))}
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+            <thead>
+              <tr style={{ background: '#0a1628' }}>
+                {['#', 'Player', 'GP', 'PTS', 'REB', 'AST', 'STL', 'BLK', 'PPG'].map(h => (
+                  <th key={h} style={{
+                    padding: '10px 14px',
+                    textAlign: h === 'Player' ? 'left' : 'center',
+                    fontSize: 10, fontWeight: 700, color: '#64748b',
+                    textTransform: 'uppercase', letterSpacing: '0.08em',
+                    borderBottom: `1px solid ${BORDER}`,
+                  }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {playerTotals.map((p: any, i: number) => (
+                <tr key={p.id} style={{
+                  borderBottom: `1px solid ${BORDER}`,
+                  background: i % 2 === 0 ? 'transparent' : '#0a1628',
+                }}>
+                  <td style={{ padding: '10px 14px', textAlign: 'center', color: '#64748b' }}>#{p.jersey}</td>
+                  <td style={{ padding: '10px 14px', fontWeight: 600, color: '#e2e8f0' }}>{p.name}</td>
+                  <td style={{ padding: '10px 14px', textAlign: 'center', color: '#94a3b8' }}>{p.gp}</td>
+                  <td style={{ padding: '10px 14px', textAlign: 'center', color: '#e2e8f0' }}>{p.pts}</td>
+                  <td style={{ padding: '10px 14px', textAlign: 'center', color: '#94a3b8' }}>{p.reb}</td>
+                  <td style={{ padding: '10px 14px', textAlign: 'center', color: '#94a3b8' }}>{p.ast}</td>
+                  <td style={{ padding: '10px 14px', textAlign: 'center', color: '#94a3b8' }}>{p.stl}</td>
+                  <td style={{ padding: '10px 14px', textAlign: 'center', color: '#94a3b8' }}>{p.blk}</td>
+                  <td style={{ padding: '10px 14px', textAlign: 'center', fontWeight: 700, color: '#97cfdc' }}>{p.ppg}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        {/* ── Recent games ── */}
+        <div style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: 14, overflow: 'hidden' }}>
+          <div style={{ padding: '14px 20px', borderBottom: `1px solid ${BORDER}` }}>
+            <span style={{ fontSize: 13, fontWeight: 700, color: '#97cfdc' }}>RECENT RESULTS</span>
+          </div>
+          <div style={{ padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {[...games].reverse().slice(0, 10).map((g: any) => {
+              const date = new Date(g.game_date).toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })
+              return (
+                <div key={g.id} style={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                  padding: '8px 10px', borderRadius: 8,
+                  background: BG, border: `1px solid ${BORDER}`,
+                }}>
+                  <span style={{ fontSize: 11, color: '#64748b', width: 60 }}>{date}</span>
+                  <span style={{ fontSize: 12, color: '#94a3b8', flex: 1, textAlign: 'center' }}>
+                    {g.home_away === 'home' ? 'vs' : '@'} {g.opponent_name}
+                  </span>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: '#e2e8f0', width: 80, textAlign: 'center' }}>
+                    {g.team_score} – {g.opponent_score}
+                  </span>
+                  <span style={{
+                    fontSize: 11, fontWeight: 800, width: 28, textAlign: 'center',
+                    color: g.result === 'W' ? '#22c55e' : '#ef4444',
+                  }}>{g.result}</span>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+
       </div>
     </main>
   )
