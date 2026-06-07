@@ -33,6 +33,10 @@ function applyFilter(allGames: any[], filter: FilterKey): any[] {
     case 'wins':        return sorted.filter(g => g.result === 'W')
     case 'losses':      return sorted.filter(g => g.result === 'L')
     case 'last3losses': return sorted.filter(g => g.result === 'L').slice(0, 3)
+    case 'close_games': return sorted.filter(g =>
+      g.team_score != null && g.opponent_score != null &&
+      Math.abs(g.team_score - g.opponent_score) < 6
+    )
     default:            return sorted
   }
 }
@@ -161,7 +165,7 @@ export default async function PlayerQuadrantsPage({
             <Suspense fallback={<div style={{ width: 100, height: 28 }} />}>
               <GamePicker games={pickerGames} />
             </Suspense>
-            <a href="/dashboard" style={{ color: '#64748b', fontSize: 11, textDecoration: 'none' }}>← Driver Tree</a>
+            <a href={`/dashboard?${gamesParam ? `games=${gamesParam}` : `filter=${filter}`}`} style={{ color: '#64748b', fontSize: 11, textDecoration: 'none' }}>← Driver Tree</a>
             <a href="/" style={{ color: '#64748b', fontSize: 11, textDecoration: 'none' }}>← Overview</a>
           </div>
         </div>

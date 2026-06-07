@@ -9,7 +9,6 @@ import { DateSlider } from './DateSlider'
 import { PlayerSelector } from './PlayerSelector'
 import { GamePicker } from './GamePicker'
 import type { PickerGame } from './GamePicker'
-
 export const dynamic = 'force-dynamic'
 
 const TEAM_ID = 'b1000000-0000-0000-0000-000000000001'
@@ -241,8 +240,8 @@ const PILLAR_ICONS: Record<string, string> = {
   'Discipline':           '⚖️',
 }
 
-function PillarCard({ pillar, side, sparkValues, vsLabel = 'Opp' }: {
-  pillar: PillarScore; side: 'off' | 'def'; sparkValues?: number[]; vsLabel?: string
+function PillarCard({ pillar, side, sparkValues, vsLabel = 'Opp', estimated = false }: {
+  pillar: PillarScore; side: 'off' | 'def'; sparkValues?: number[]; vsLabel?: string; estimated?: boolean
 }) {
   const pos = pillar.delta >= 0
   const borderColor = pos ? '#22c55e' : '#ef4444'
@@ -266,6 +265,11 @@ function PillarCard({ pillar, side, sparkValues, vsLabel = 'Opp' }: {
         <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-secondary)', letterSpacing: '0.08em', textTransform: 'uppercase', lineHeight: 1.3 }}>
           {pillar.name}
         </div>
+        {estimated && (
+          <div style={{ display: 'inline-block', fontSize: 9, fontWeight: 700, color: '#92400e', background: '#fef3c7', border: '1px solid #f59e0b', borderRadius: 4, padding: '1px 6px', marginTop: 4, letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+            Estimated
+          </div>
+        )}
         <div style={{ fontSize: 24, fontWeight: 800, color: accentColor, margin: '5px 0 2px' }}>
           {pillar.score}
         </div>
@@ -338,6 +342,10 @@ function applyFilter(allGames: any[], filter: FilterKey): any[] {
     case 'wins':        return sorted.filter(g => g.result === 'W')
     case 'losses':      return sorted.filter(g => g.result === 'L')
     case 'last3losses': return sorted.filter(g => g.result === 'L').slice(0, 3)
+    case 'close_games': return sorted.filter(g =>
+      g.team_score != null && g.opponent_score != null &&
+      Math.abs(g.team_score - g.opponent_score) < 6
+    )
     default:            return sorted
   }
 }
@@ -440,6 +448,9 @@ export default async function DashboardPage({
       `player_game_stats?select=game_id,twopt_made,twopt_att,threept_made,threept_att,ft_made,ft_att,turnovers,oreb,dreb,def_fouls&game_id=in.${idList}`
     ),
   ])
+
+  // Does this team have real opponent data?
+  const hasOppData = Array.isArray(perGameOpp) && perGameOpp.length > 0
 
   // Build per-game lookup maps
   const oppByGame: Record<string, any>    = {}
@@ -575,7 +586,7 @@ export default async function DashboardPage({
             <Suspense fallback={<div style={{ width: 160, height: 28 }} />}>
               <PlayerSelector players={allPlayers} currentPlayerId={playerId} />
             </Suspense>
-            <a href="/players" style={{ color: 'var(--text-muted)', fontSize: 11, textDecoration: 'none' }}>Player Quadrants</a>
+            <a href={`/players?${gamesParam ? `games=${gamesParam}` : `filter=${filter}`}`} style={{ color: 'var(--text-muted)', fontSize: 11, textDecoration: 'none' }}>Player Quadrants</a>
             <a href="/" style={{ color: 'var(--text-muted)', fontSize: 11, textDecoration: 'none' }}>← Overview</a>
           </div>
         </div>
@@ -697,6 +708,14 @@ export default async function DashboardPage({
             </div>
           </div>
 
+          {/* Data quality warning — shown when no opponent stats available */}
+          {!isPlayerMode && !hasOppData && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#fef3c7', border: '1px solid #f59e0b', borderRadius: 6, padding: '7px 14px', margin: '0 0 10px', fontSize: 11, color: '#92400e' }}>
+              <span style={{ fontSize: 14 }}>⚠️</span>
+              <span><strong>Defensive analysis is estimated.</strong> No opponent box score was found for this team. Upload opponent stats to unlock accurate defensive metrics.</span>
+            </div>
+          )}
+
           {/* All 8 pillar cards in ONE grid row → all same height automatically */}
           <div style={{
             display: 'grid',
@@ -712,6 +731,7 @@ export default async function DashboardPage({
             {tree.pillars.defensive.map((p, i) => (
               <PillarCard key={`def-${i}`} pillar={p} side="def"
                 vsLabel={isPlayerMode ? 'Team Avg' : 'Opp'}
+                estimated={!isPlayerMode && !hasOppData}
                 sparkValues={[pillarSparks.shotSuppression, pillarSparks.possessionEnding, pillarSparks.pressureDisruption, pillarSparks.discipline][i]} />
             ))}
           </div>

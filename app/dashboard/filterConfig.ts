@@ -1,4 +1,4 @@
-export type FilterKey = 'all' | 'last5' | 'last10' | 'wins' | 'losses' | 'last3losses'
+export type FilterKey = 'all' | 'last5' | 'last10' | 'wins' | 'losses' | 'last3losses' | 'close_games'
 
 export const FILTER_CONFIG: { key: FilterKey; label: string; emoji: string }[] = [
   { key: 'all',         label: 'All Games',    emoji: '📅' },
@@ -7,4 +7,5 @@ export const FILTER_CONFIG: { key: FilterKey; label: string; emoji: string }[] =
   { key: 'wins',        label: 'Wins Only',     emoji: '✅' },
   { key: 'losses',      label: 'Losses Only',   emoji: '❌' },
   { key: 'last3losses', label: 'Last 3 Losses', emoji: '🔍' },
+  { key: 'close_games', label: 'Close Games',   emoji: '⚡' },
 ]

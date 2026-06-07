@@ -151,12 +151,12 @@ export default function BubbleChart({ players }: { players: PlayerBubble[] }) {
 
         {/* ── Quadrant labels ── */}
         {[
-          { label: ['Weaker Defence', 'Strong Offence'],   x: PAD.left + 10,      y: PAD.top + 10      },
-          { label: ['Strong Defence', 'Strong Offence'],   x: avgX + 10,          y: PAD.top + 10      },
-          { label: ['Weaker Defence', 'Lower Offence'],    x: PAD.left + 10,      y: avgY + 14         },
-          { label: ['Strong Defence', 'Lower Offence'],    x: avgX + 10,          y: avgY + 14         },
-        ].map(({ label, x, y }) => (
-          <g key={label[0]}>
+          { id: 'q1', label: ['Weaker Defence', 'Strong Offence'],   x: PAD.left + 10,      y: PAD.top + 10      },
+          { id: 'q2', label: ['Strong Defence', 'Strong Offence'],   x: avgX + 10,          y: PAD.top + 10      },
+          { id: 'q3', label: ['Weaker Defence', 'Lower Offence'],    x: PAD.left + 10,      y: avgY + 14         },
+          { id: 'q4', label: ['Strong Defence', 'Lower Offence'],    x: avgX + 10,          y: avgY + 14         },
+        ].map(({ id, label, x, y }) => (
+          <g key={id}>
             <text x={x + 4} y={y + 13} fontSize={11} fontWeight={700} fill={TEXT_DIM}>{label[0]}</text>
             <text x={x + 4} y={y + 26} fontSize={11} fontWeight={700} fill={TEXT_DIM}>{label[1]}</text>
           </g>

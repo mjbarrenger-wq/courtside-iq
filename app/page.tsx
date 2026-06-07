@@ -84,7 +84,7 @@ export default async function Home() {
       <div style={{ maxWidth: 1100, margin: '0 auto', padding: '32px 32px 0' }}>
 
         {/* ── Nav cards ── */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginBottom: 40 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 20, marginBottom: 40 }}>
 
           {/* Coaching Intelligence */}
           <a href="/dashboard" style={{ textDecoration: 'none' }}>
@@ -92,11 +92,8 @@ export default async function Home() {
               background: CARD, border: `1px solid ${BORDER}`,
               borderTop: '3px solid #307b92',
               borderRadius: 14, padding: '28px 28px 24px',
-              cursor: 'pointer', transition: 'border-color 0.15s',
-            }}
-              onMouseEnter={(e) => (e.currentTarget.style.borderColor = '#97cfdc')}
-              onMouseLeave={(e) => (e.currentTarget.style.borderColor = BORDER)}
-            >
+              cursor: 'pointer',
+            }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
                 <div style={{ fontSize: 11, fontWeight: 700, color: '#97cfdc', letterSpacing: '0.08em' }}>
                   COACHING INTELLIGENCE
@@ -149,6 +146,39 @@ export default async function Home() {
                     background: '#0a1628', border: `1px solid ${BORDER}`,
                     borderRadius: 20, padding: '3px 10px', fontSize: 10,
                     fontWeight: 600, color: '#c4b5fd',
+                  }}>{tag}</span>
+                ))}
+              </div>
+            </div>
+          </a>
+
+          {/* Drills Library */}
+          <a href="/drills" style={{ textDecoration: 'none' }}>
+            <div style={{
+              background: CARD, border: `1px solid ${BORDER}`,
+              borderTop: '3px solid #10b981',
+              borderRadius: 14, padding: '28px 28px 24px',
+              cursor: 'pointer',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: '#6ee7b7', letterSpacing: '0.08em' }}>
+                  TRAINING TOOLS
+                </div>
+                <span style={{ fontSize: 18, color: '#10b981' }}>→</span>
+              </div>
+              <div style={{ fontSize: 22, fontWeight: 800, color: '#e2e8f0', marginBottom: 10, lineHeight: 1.2 }}>
+                Drills Library
+              </div>
+              <div style={{ fontSize: 13, color: '#64748b', lineHeight: 1.7 }}>
+                80 drills across all 8 driver pillars — ranked by your team's current performance
+                data. Worst-performing areas surface first.
+              </div>
+              <div style={{ marginTop: 18, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                {['80 Drills', 'Data-Ranked', 'All Pillars'].map(tag => (
+                  <span key={tag} style={{
+                    background: '#0a1628', border: `1px solid ${BORDER}`,
+                    borderRadius: 20, padding: '3px 10px', fontSize: 10,
+                    fontWeight: 600, color: '#6ee7b7',
                   }}>{tag}</span>
                 ))}
               </div>
