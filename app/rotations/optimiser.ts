@@ -8,7 +8,6 @@ import type {
 import { DEFAULT_GAME_CONFIG, POSITION_GROUP } from './types'
 
 const PER_SLOT    = 5
-const MAX_STAGGER = 2
 const NUM_STARTS  = 80   // random restarts
 const LOCAL_ITERS = 30   // hill-climbing passes per start (each pass = one accepted improvement)
 
@@ -115,6 +114,7 @@ function pickLineup(params: {
   slotIndex:           number
   totalSlots:          number
   jitter:              number
+  maxStagger:          number
   // Period balance (optional — only passed when balanceByPeriod is on)
   periodPlayed?:       Map<string, number>   // slots played so far in current period
   periodMinTarget?:    Map<string, number>   // target slots per period per player
@@ -123,7 +123,7 @@ function pickLineup(params: {
 }): string[] {
   const {
     eligible, prevLineup, locked, byId, slotsPlayed, minSlots,
-    slotIndex, totalSlots, jitter,
+    slotIndex, totalSlots, jitter, maxStagger,
     periodPlayed, periodMinTarget, windowsLeftInPeriod,
     warnings,
   } = params
@@ -159,7 +159,7 @@ function pickLineup(params: {
   if (prevLineup.length > 0) {
     const carriable  = prevLineup.filter(id => eligSet.has(id) && !validLocked.includes(id))
     const forced     = validLocked.filter(id => !prevLineup.includes(id)).length
-    const free       = Math.max(0, MAX_STAGGER - forced)
+    const free       = Math.max(0, maxStagger - forced)
     const mustCarry  = Math.max(0, (PER_SLOT - validLocked.length) - free)
 
     carryIds = [...carriable].sort((a, b) => urg(b) - urg(a)).slice(0, mustCarry)
@@ -260,6 +260,7 @@ function repairMinutes(
   periodDuration: number,
   noSubFirstMins: number,
   noSubLastMins:  number,
+  maxStagger:     number,
   warnings:       string[],
 ): void {
   const LAST = assignments.length - 1
@@ -290,8 +291,8 @@ function repairMinutes(
 
       const pStart = isPeriodStart(s, periodDuration)
       const nStart = s < LAST && isPeriodStart(s + 1, periodDuration)
-      const prevOk = s === 0 || pStart || changes(assignments[s-1], newLineup) <= MAX_STAGGER
-      const nextOk = s === LAST || nStart || changes(newLineup, assignments[s+1]) <= MAX_STAGGER
+      const prevOk = s === 0 || pStart || changes(assignments[s-1], newLineup) <= maxStagger
+      const nextOk = s === LAST || nStart || changes(newLineup, assignments[s+1]) <= maxStagger
       if (!prevOk || !nextOk || !posValid(newLineup, byId)) continue
 
       assignments[s] = newLineup
@@ -320,6 +321,7 @@ function repairEveryQuarter(
   periodDuration: number,
   noSubFirstMins: number,
   noSubLastMins:  number,
+  maxStagger:     number,
   warnings:       string[],
 ): void {
   const LAST  = assignments.length - 1
@@ -348,8 +350,8 @@ function repairEveryQuarter(
 
         const pStart = isPeriodStart(i, periodDuration)
         const nStart = i < LAST && isPeriodStart(i + 1, periodDuration)
-        const prevOk = i === 0 || pStart || changes(assignments[i-1], newLineup) <= MAX_STAGGER
-        const nextOk = i === LAST || nStart || changes(newLineup, assignments[i+1]) <= MAX_STAGGER
+        const prevOk = i === 0 || pStart || changes(assignments[i-1], newLineup) <= maxStagger
+        const nextOk = i === LAST || nStart || changes(newLineup, assignments[i+1]) <= maxStagger
         if (!prevOk || !nextOk || !posValid(newLineup, byId)) continue
 
         assignments[i] = newLineup
@@ -528,8 +530,8 @@ function localSearch(
           // Stagger check with neighbours
           const pStart = isPeriodStart(s, periodDuration)
           const nStart = s < LAST && isPeriodStart(s + 1, periodDuration)
-          const prevOk = s === 0 || pStart || changes(current[s-1], candidate) <= MAX_STAGGER
-          const nextOk = s === LAST || nStart || changes(candidate, current[s+1]) <= MAX_STAGGER
+          const prevOk = s === 0 || pStart || changes(current[s-1], candidate) <= config.maxStagger
+          const nextOk = s === LAST || nStart || changes(candidate, current[s+1]) <= config.maxStagger
           if (!prevOk || !nextOk) continue
           if (!posValid(candidate, byId)) continue
 
@@ -708,7 +710,7 @@ function solveOnce(
 
     const lineup = pickLineup({
       eligible, prevLineup, locked, byId, slotsPlayed, minSlots,
-      slotIndex: i, totalSlots: TOTAL_SLOTS, jitter,
+      slotIndex: i, totalSlots: TOTAL_SLOTS, jitter, maxStagger: config.maxStagger,
       periodPlayed:        config.balanceByPeriod ? slotsPlayedThisPeriod : undefined,
       periodMinTarget:     config.balanceByPeriod ? periodTargets : undefined,
       windowsLeftInPeriod: config.balanceByPeriod ? windowsLeftInPeriod : undefined,
@@ -736,11 +738,11 @@ function solveOnce(
   const cMap2  = new Map(constraints.map(c => [c.playerId, c]))
   repairMinutes(
     assignments, slotOrder, available, byId2, minSlots, maxSlots,
-    slotsPlayed, cMap2, periodDuration, noSubFirstMins, noSubLastMins, warnings,
+    slotsPlayed, cMap2, periodDuration, noSubFirstMins, noSubLastMins, config.maxStagger, warnings,
   )
   repairEveryQuarter(
     assignments, slotOrder, available, byId2, cMap2, slotsPlayed, minSlots,
-    numPeriods, periodDuration, noSubFirstMins, noSubLastMins, warnings,
+    numPeriods, periodDuration, noSubFirstMins, noSubLastMins, config.maxStagger, warnings,
   )
 
   return { assignments, frozenSlots, slotsPlayed, warnings }

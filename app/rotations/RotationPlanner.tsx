@@ -317,6 +317,20 @@ export default function RotationPlanner({ players: initialPlayers, teamId: _team
               )}
             </div>
           </div>
+
+          {/* Max players per sub */}
+          <div>
+            <div style={{ fontSize: 11, color: MUTED, marginBottom: 6 }}>Max players per sub</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <NumInput value={config.maxStagger} min={1} max={4} width={52}
+                onChange={v => updateConfig({ maxStagger: v })} />
+              <span style={{ fontSize: 12, color: SEC }}>
+                {config.maxStagger === 1 ? '(1 change — very stable)' :
+                 config.maxStagger === 4 ? '(4 changes — max flex)' :
+                 `(${5 - config.maxStagger} must carry over)`}
+              </span>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -526,7 +540,7 @@ export default function RotationPlanner({ players: initialPlayers, teamId: _team
 
       {/* ── Lineup continuity note ── */}
       <div style={{ marginBottom: 16, padding: '9px 14px', background: 'rgba(151,207,220,0.05)', border: `1px solid rgba(151,207,220,0.18)`, borderRadius: 8, fontSize: 11, color: SEC }}>
-        <strong style={{ color: TEAL }}>Lineup continuity:</strong> At most 2 players rotate out between any two consecutive sub windows — at least 3 must carry over. Full lineup resets are allowed at period starts.
+        <strong style={{ color: TEAL }}>Lineup continuity:</strong> At most {config.maxStagger} player{config.maxStagger !== 1 ? 's' : ''} rotate out between any two consecutive sub windows — at least {5 - config.maxStagger} must carry over. Full lineup resets are allowed at period starts.
       </div>
 
       {/* ── Errors + generate ── */}
