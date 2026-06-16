@@ -9,8 +9,8 @@ import { DEFAULT_GAME_CONFIG, POSITION_GROUP } from './types'
 
 const PER_SLOT    = 5
 const MAX_STAGGER = 2
-const NUM_STARTS  = 50   // random restarts
-const LOCAL_ITERS = 25   // hill-climbing passes per start (each pass = one accepted improvement)
+const NUM_STARTS  = 80   // random restarts
+const LOCAL_ITERS = 30   // hill-climbing passes per start (each pass = one accepted improvement)
 
 // ── Score weights ─────────────────────────────────────────────────────────────
 
@@ -165,8 +165,9 @@ function pickLineup(params: {
     carryIds = [...carriable].sort((a, b) => urg(b) - urg(a)).slice(0, mustCarry)
 
     // Position-aware sub selection:
-    // Prefer incoming players who can cover the position groups being vacated.
-    // Soft bonus only — doesn't hard-block players who need minutes.
+    // Primary position match → strong bonus (0.4). Secondary position match → small bonus (0.15).
+    // Secondary is only a fallback — primary holders are strongly preferred.
+    // Soft bonus only — doesn't hard-block players who urgently need minutes.
     const outgoing = prevLineup.filter(id => !carryIds.includes(id) && !validLocked.includes(id))
     const vacatedGroups = new Set<string>()
     outgoing.forEach(id => {
@@ -176,8 +177,10 @@ function pickLineup(params: {
     const posBonus = (id: string): number => {
       if (vacatedGroups.size === 0) return 0
       const p = byId.get(id)
-      if (!p || (p.primaryPositions.length === 0 && p.secondaryPositions.length === 0)) return 0
-      return allPos(p).some(pos => vacatedGroups.has(POSITION_GROUP[pos])) ? 0.3 : 0
+      if (!p) return 0
+      const primaryMatch   = p.primaryPositions.some(pos => vacatedGroups.has(POSITION_GROUP[pos]))
+      const secondaryMatch = p.secondaryPositions.some(pos => vacatedGroups.has(POSITION_GROUP[pos]))
+      return primaryMatch ? 0.4 : secondaryMatch ? 0.15 : 0
     }
 
     const rem    = spotsLeft - carryIds.length
@@ -620,48 +623,35 @@ function solveOnce(
   // Per-period balance tracking (only used when balanceByPeriod is on)
   const slotsPlayedThisPeriod = new Map(available.map(p => [p.id, 0]))
 
-  // Pre-planned period quotas — each player gets an exact integer minute allocation per period.
-  // This is computed ONCE before the greedy pass so the solver has a clear per-period target.
-  // When jitter > 0 (multi-start), the "extra" minutes are shuffled across periods so different
-  // starts explore different distributions — the best-of-N scoring picks the winner.
-  //
-  // Why pre-planned vs adaptive? Adaptive recomputation at period boundaries can't account for
-  // gap-locked windows that force a player to stay on court beyond their period cap. Pre-planned
-  // integer quotas give the eligible filter a stable, predictable cap to enforce.
-  const periodQuota = new Map<string, number[]>()   // [Q1 mins, Q2 mins, ...] per player
-  if (config.balanceByPeriod) {
-    available.forEach(p => {
-      const total = minSlots.get(p.id) ?? 0
-      const base  = Math.floor(total / numPeriods)
-      const extra = total % numPeriods
-      // Build period indices; shuffle them for non-deterministic starts so extra minutes
-      // aren't always assigned to the earliest periods.
-      const idxs: number[] = Array.from({ length: numPeriods }, (_, i) => i)
-      if (jitter > 0 && extra > 0) {
-        for (let i = idxs.length - 1; i > 0; i--) {
-          const j = Math.floor(Math.random() * (i + 1))
-          ;[idxs[i], idxs[j]] = [idxs[j], idxs[i]]
-        }
-      }
-      const quotas: number[] = Array(numPeriods).fill(base)
-      for (let i = 0; i < extra; i++) quotas[idxs[i]]++
-      periodQuota.set(p.id, quotas)
-    })
-  }
-
   const periodTargets = new Map<string, number>()   // target slots for current period
   const periodCaps    = new Map<string, number>()   // max slots for current period
 
+  // Adaptive period budgets, recalculated at each period start.
+  //
+  // Sub constraints create fixed-size "chunks" per period. With noSubFirst=2, noSubLast=2,
+  // minSubGap=2 in a 10-min period the chunks are [2, 2, 2, 4] minutes — achievable per-period
+  // totals are only {2, 4, 6, 8, 10}, never exactly 5.
+  //
+  // A hard cap of exactly 5 would prevent players from playing 6, leaving them stuck at 4
+  // per quarter (16 total instead of 20). The cap must be the NEXT ACHIEVABLE VALUE above
+  // the floating target: for target=5 with minSubGapMins=2, cap = ceil(5/2)*2 = 6.
+  // Players then get 4+6+4+6=20 or 6+4+6+4=20 — balanced and hitting target. ✓
+  //
+  // Adaptive recomputation means a player who overplayed in Q1 gets a lower target in Q2
+  // (remaining / periodsLeft), and the urgency signal naturally compensates.
   function recomputePeriodBudgets(currentQ: number) {
     if (!config.balanceByPeriod) return
+    const periodsLeft = numPeriods - currentQ + 1
+    const chunkSize   = Math.max(1, config.minSubGapMins)
     available.forEach(p => {
-      const quota = periodQuota.get(p.id)
-      if (quota) {
-        // Use pre-planned quota as both target and exact cap (no +1 buffer)
-        const target = quota[currentQ - 1]
-        periodTargets.set(p.id, target)
-        periodCaps.set(p.id, target)
-      }
+      const totalPlayed = slotsPlayed.get(p.id) ?? 0
+      const remaining   = Math.max(0, (minSlots.get(p.id) ?? 0) - totalPlayed)
+      const target      = remaining / periodsLeft
+      periodTargets.set(p.id, target)
+      // Round cap UP to nearest achievable chunk boundary — never blocks players
+      // from reaching their full-game target despite chunk-size constraints.
+      const cap = Math.max(chunkSize, Math.ceil(target / chunkSize) * chunkSize)
+      periodCaps.set(p.id, cap)
     })
   }
 
