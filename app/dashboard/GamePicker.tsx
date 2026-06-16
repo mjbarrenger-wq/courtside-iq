@@ -56,9 +56,9 @@ export function GamePicker({ games }: { games: PickerGame[] }) {
         style={{
           padding: '5px 12px',
           borderRadius: 20,
-          border: `1px solid ${n > 0 ? '#307b92' : '#3a5a7a'}`,
-          background: n > 0 ? '#1a3a54' : '#0d1b2e',
-          color: n > 0 ? '#97cfdc' : '#cbd5e1',
+          border: `1px solid ${n > 0 ? '#307b92' : '#1e2f45'}`,
+          background: n > 0 ? '#1e2f45' : '#171c2a',
+          color: n > 0 ? '#97cfdc' : '#c5cde0',
           fontSize: 11,
           fontWeight: n > 0 ? 700 : 500,
           cursor: 'pointer',
@@ -84,7 +84,7 @@ export function GamePicker({ games }: { games: PickerGame[] }) {
             top: 36,
             right: 0,
             zIndex: 100,
-            background: '#0d1b2e',
+            background: '#171c2a',
             border: '1px solid #2a4a6e',
             borderRadius: 10,
             padding: '12px',
@@ -96,7 +96,7 @@ export function GamePicker({ games }: { games: PickerGame[] }) {
               <button style={btnStyle(true)} onClick={() => setSelected(new Set(games.map(g => g.id)))}>
                 All
               </button>
-              <span style={{ fontSize: 10, color: '#94a3b8' }}>
+              <span style={{ fontSize: 10, color: '#a0a8bc' }}>
                 {n > 0 ? `${n} of ${games.length} selected` : 'No games selected'}
               </span>
               <button style={btnStyle(true)} onClick={() => setSelected(new Set())}>
@@ -124,13 +124,13 @@ export function GamePicker({ games }: { games: PickerGame[] }) {
                   />
                   <span style={{
                     fontSize: 10, fontWeight: 700, width: 14, flexShrink: 0,
-                    color: g.result === 'W' ? '#22c55e' : '#ef4444',
+                    color: g.result === 'W' ? '#34d399' : '#f87171',
                   }}>{g.result}</span>
-                  <span style={{ fontSize: 10, color: '#94a3b8', width: 40, flexShrink: 0 }}>{g.label}</span>
-                  <span style={{ fontSize: 11, color: '#cbd5e1', flex: 1, overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>
+                  <span style={{ fontSize: 10, color: '#a0a8bc', width: 40, flexShrink: 0 }}>{g.label}</span>
+                  <span style={{ fontSize: 11, color: '#c5cde0', flex: 1, overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>
                     {g.opponent}
                   </span>
-                  <span style={{ fontSize: 10, color: '#64748b', flexShrink: 0 }}>{g.score}</span>
+                  <span style={{ fontSize: 10, color: '#6d7894', flexShrink: 0 }}>{g.score}</span>
                 </label>
               ))}
             </div>
@@ -145,7 +145,7 @@ export function GamePicker({ games }: { games: PickerGame[] }) {
                 borderRadius: 8,
                 border: 'none',
                 background: n > 0 ? '#307b92' : '#1a3050',
-                color: n > 0 ? '#fff' : '#475569',
+                color: n > 0 ? '#fff' : '#5c6880',
                 fontSize: 11,
                 fontWeight: 700,
                 cursor: n > 0 ? 'pointer' : 'not-allowed',

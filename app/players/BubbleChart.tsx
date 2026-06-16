@@ -13,15 +13,15 @@ export type PlayerBubble = {
 }
 
 const PLAYER_COLORS: Record<string, string> = {
-  'Zach Schulze':     '#3b82f6',
-  'Raph Liu':         '#8b5cf6',
-  'Wade Porto':       '#ef4444',
-  'Cooper Barrenger': '#ec4899',
+  'Zach Schulze':     '#60a5fa',
+  'Raph Liu':         '#818cf8',
+  'Wade Porto':       '#f87171',
+  'Cooper Barrenger': '#fbbf24',
   'Teddy Young':      '#06b6d4',
-  'Charlie Pallson':  '#a16207',
+  'Charlie Pallson':  '#ca8a04',
   'Zac Nikolovski':   '#f97316',
-  'Lenny Simmons':    '#6b7280',
-  'Mitchell Pearson': '#22c55e',
+  'Lenny Simmons':    '#a0a8bc',
+  'Mitchell Pearson': '#34d399',
   'Ethan Broadbent':  '#84cc16',
 }
 
@@ -55,8 +55,15 @@ export default function BubbleChart({ players }: { players: PlayerBubble[] }) {
   const mpgMin = Math.min(...mpgValues)
   const mpgMax = Math.max(...mpgValues)
 
-  const teamAvgOff = players.reduce((s, p) => s + p.off_ppp, 0) / players.length
-  const teamAvgDef = players.reduce((s, p) => s + p.def_ppp, 0) / players.length
+  // Minutes-weighted team average — total minutes played weights each player's contribution.
+  // Simple mean is wrong because a 2-game sample skews the crosshairs as much as a 10-game sample.
+  const totalMins = players.reduce((s, p) => s + p.mpg * p.games, 0)
+  const teamAvgOff = totalMins > 0
+    ? players.reduce((s, p) => s + p.off_ppp * (p.mpg * p.games), 0) / totalMins
+    : players.reduce((s, p) => s + p.off_ppp, 0) / players.length
+  const teamAvgDef = totalMins > 0
+    ? players.reduce((s, p) => s + p.def_ppp * (p.mpg * p.games), 0) / totalMins
+    : players.reduce((s, p) => s + p.def_ppp, 0) / players.length
 
   // X: def_ppp reversed — lower (better) to the right
   const xScale = (def: number) =>
@@ -98,13 +105,13 @@ export default function BubbleChart({ players }: { players: PlayerBubble[] }) {
   }
 
   // ── Colours ───────────────────────────────────────────────────────────────────
-  const color = (p: PlayerBubble) => PLAYER_COLORS[p.name] ?? '#64748b'
+  const color = (p: PlayerBubble) => PLAYER_COLORS[p.name] ?? '#6d7894'
 
-  const CARD_BG    = '#07111e'
-  const GRID_LINE  = '#1e3a5f'
-  const TEXT_DIM   = '#64748b'
-  const TEXT_MED   = '#94a3b8'
-  const TEXT_LIGHT = '#e2e8f0'
+  const CARD_BG    = '#0f1117'
+  const GRID_LINE  = '#1d3451'
+  const TEXT_DIM   = '#6d7894'
+  const TEXT_MED   = '#a0a8bc'
+  const TEXT_LIGHT = '#e8eaf0'
   const AVG_LINE   = '#97cfdc'
 
   return (
@@ -162,7 +169,7 @@ export default function BubbleChart({ players }: { players: PlayerBubble[] }) {
           </g>
         ))}
 
-        {/* ── Bubbles (dimmed first, then hovered on top) ── */}
+        {/* ── Bubbles ── */}
         {players.map((p) => {
           const x = xScale(p.def_ppp)
           const y = yScale(p.off_ppp)
@@ -181,7 +188,7 @@ export default function BubbleChart({ players }: { players: PlayerBubble[] }) {
               <circle
                 cx={x} cy={y} r={r}
                 fill={c}
-                opacity={isDim ? 0.2 : isHov ? 1 : 0.75}
+                opacity={isDim ? 0.12 : isHov ? 0.9 : 0.75}
                 stroke={isHov ? '#ffffff' : c}
                 strokeWidth={isHov ? 2 : 0}
                 style={{ transition: 'opacity 0.15s' }}
@@ -264,7 +271,7 @@ export default function BubbleChart({ players }: { players: PlayerBubble[] }) {
         return (
           <div style={{
             position: 'absolute', top: 8, right: 8,
-            background: '#0d1b2e',
+            background: '#171c2a',
             border: `1px solid ${PLAYER_COLORS[p.name] ?? '#334155'}`,
             borderRadius: 10, padding: '12px 16px',
             minWidth: 180,

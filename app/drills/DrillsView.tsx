@@ -8,19 +8,19 @@ import type { Drill } from './page'
 
 const PILLAR_CONFIG: Record<string, { label: string; color: string; side: 'offence' | 'defence' }> = {
   shot_efficiency:    { label: 'Shot Efficiency',      color: '#307b92', side: 'offence' },
-  possession_control: { label: 'Possession Control',   color: '#4a6fa5', side: 'offence' },
-  extra_possessions:  { label: 'Extra Possessions',    color: '#8b5cf6', side: 'offence' },
-  pressure_creation:  { label: 'Pressure Creation',    color: '#f59e0b', side: 'offence' },
-  shot_suppression:   { label: 'Shot Suppression',     color: '#ef4444', side: 'defence' },
-  possession_ending:  { label: 'Possession Ending',    color: '#10b981', side: 'defence' },
-  pressure_disruption:{ label: 'Pressure & Disruption',color: '#e879f9', side: 'defence' },
-  discipline:         { label: 'Discipline',           color: '#6366f1', side: 'defence' },
+  possession_control: { label: 'Possession Control',   color: '#7a9eb5', side: 'offence' },
+  extra_possessions:  { label: 'Extra Possessions',    color: '#60a5fa', side: 'offence' },
+  pressure_creation:  { label: 'Pressure Creation',    color: '#fbbf24', side: 'offence' },
+  shot_suppression:   { label: 'Shot Suppression',     color: '#f87171', side: 'defence' },
+  possession_ending:  { label: 'Possession Ending',    color: '#34d399', side: 'defence' },
+  pressure_disruption:{ label: 'Pressure & Disruption',color: '#97cfdc', side: 'defence' },
+  discipline:         { label: 'Discipline',           color: '#6d7894', side: 'defence' },
 }
 
 const DIFFICULTY_CONFIG = {
-  foundation:  { label: 'Foundation', color: '#10b981', order: 1 },
-  developing:  { label: 'Developing', color: '#f59e0b', order: 2 },
-  competitive: { label: 'Competitive',color: '#ef4444', order: 3 },
+  foundation:  { label: 'Foundation', color: '#34d399', order: 1 },
+  developing:  { label: 'Developing', color: '#fbbf24', order: 2 },
+  competitive: { label: 'Competitive',color: '#f87171', order: 3 },
 }
 
 // Priority tier based on delta
@@ -37,9 +37,9 @@ const PRIORITY_LABEL: Record<string, string> = {
 }
 
 const PRIORITY_COLOR: Record<string, string> = {
-  high:   '#ef4444',
-  medium: '#f59e0b',
-  low:    '#10b981',
+  high:   '#f87171',
+  medium: '#fbbf24',
+  low:    '#34d399',
 }
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -61,7 +61,7 @@ function DrillCard({ drill, delta }: { drill: Drill; delta: number }) {
 
   return (
     <div style={{
-      background: '#0d1b2e',
+      background: '#171c2a',
       border: `1px solid #2a4a6e`,
       borderLeft: `3px solid ${PRIORITY_COLOR[priority]}`,
       borderRadius: 8,
@@ -99,10 +99,10 @@ function DrillCard({ drill, delta }: { drill: Drill; delta: number }) {
             }}>
               {config.label}
             </span>
-            <span style={{ fontSize: 11, color: '#5a8fa8' }}>
+            <span style={{ fontSize: 11, color: '#6d7894' }}>
               ⏱ {drill.duration_mins} min
             </span>
-            <span style={{ fontSize: 11, color: '#5a8fa8' }}>
+            <span style={{ fontSize: 11, color: '#6d7894' }}>
               👥 {drill.players_min}–{drill.players_max} players
             </span>
             <span style={{
@@ -115,7 +115,7 @@ function DrillCard({ drill, delta }: { drill: Drill; delta: number }) {
         </div>
         {/* Expand chevron */}
         <span style={{
-          color: '#5a8fa8', fontSize: 16, flexShrink: 0,
+          color: '#6d7894', fontSize: 16, flexShrink: 0,
           transform: open ? 'rotate(180deg)' : 'rotate(0deg)',
           transition: 'transform 0.2s',
           marginTop: 2,
@@ -146,7 +146,7 @@ function DrillCard({ drill, delta }: { drill: Drill; delta: number }) {
           {/* Setup */}
           <Section label="Setup">
             {drill.equipment && (
-              <p style={{ fontSize: 12, color: '#5a8fa8', marginBottom: 4 }}>
+              <p style={{ fontSize: 12, color: '#6d7894', marginBottom: 4 }}>
                 Equipment: {drill.equipment}
               </p>
             )}
@@ -183,7 +183,7 @@ function DrillCard({ drill, delta }: { drill: Drill; delta: number }) {
               {drill.tags.map(tag => (
                 <span key={tag} style={{
                   fontSize: 10, padding: '1px 7px', borderRadius: 99,
-                  background: '#1a3a5a', color: '#5a8fa8',
+                  background: '#1a3a5a', color: '#6d7894',
                   border: '1px solid #2a4a6e',
                 }}>
                   {tag}
@@ -200,7 +200,7 @@ function DrillCard({ drill, delta }: { drill: Drill; delta: number }) {
 function Section({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div style={{ marginBottom: 12 }}>
-      <p style={{ fontSize: 10, fontWeight: 700, color: '#5a8fa8', textTransform: 'uppercase',
+      <p style={{ fontSize: 10, fontWeight: 700, color: '#6d7894', textTransform: 'uppercase',
                   letterSpacing: '0.08em', marginBottom: 5 }}>
         {label}
       </p>
@@ -246,13 +246,13 @@ export default function DrillsView({ drills, pillarDeltaMap }: Props) {
     .slice(0, 3)
 
   return (
-    <div style={{ minHeight: '100vh', background: '#07111e', color: '#e8f4f8', fontFamily: 'system-ui, sans-serif' }}>
+    <div style={{ minHeight: '100vh', background: '#0f1117', color: '#e8f4f8', fontFamily: 'system-ui, sans-serif' }}>
       {/* Nav */}
       <div style={{
         borderBottom: '1px solid #1a3a5a', padding: '14px 24px',
         display: 'flex', alignItems: 'center', gap: 16,
       }}>
-        <Link href="/" style={{ color: '#5a8fa8', textDecoration: 'none', fontSize: 13 }}>
+        <Link href="/" style={{ color: '#6d7894', textDecoration: 'none', fontSize: 13 }}>
           ← Home
         </Link>
         <span style={{ color: '#1a3a5a' }}>|</span>
@@ -266,17 +266,17 @@ export default function DrillsView({ drills, pillarDeltaMap }: Props) {
           <h1 style={{ fontSize: 24, fontWeight: 700, color: '#e8f4f8', margin: 0 }}>
             Drills Library
           </h1>
-          <p style={{ color: '#5a8fa8', fontSize: 13, marginTop: 6 }}>
+          <p style={{ color: '#6d7894', fontSize: 13, marginTop: 6 }}>
             80 drills across 8 performance pillars — recommended by driver tree insights.
           </p>
         </div>
 
         {/* Priority strip */}
         <div style={{
-          background: '#0d1b2e', border: '1px solid #2a4a6e', borderRadius: 8,
+          background: '#171c2a', border: '1px solid #2a4a6e', borderRadius: 8,
           padding: '14px 18px', marginBottom: 24,
         }}>
-          <p style={{ fontSize: 11, fontWeight: 700, color: '#5a8fa8', textTransform: 'uppercase',
+          <p style={{ fontSize: 11, fontWeight: 700, color: '#6d7894', textTransform: 'uppercase',
                       letterSpacing: '0.08em', margin: '0 0 10px' }}>
             Training Priorities This Week
           </p>
@@ -299,7 +299,7 @@ export default function DrillsView({ drills, pillarDeltaMap }: Props) {
                     {PRIORITY_LABEL[priority]}
                   </span>
                   <span style={{ fontSize: 12, color: '#e8f4f8' }}>{cfg?.label}</span>
-                  <span style={{ fontSize: 11, color: '#5a8fa8' }}>
+                  <span style={{ fontSize: 11, color: '#6d7894' }}>
                     Delta: {delta > 0 ? '+' : ''}{delta}
                   </span>
                 </button>
@@ -317,8 +317,8 @@ export default function DrillsView({ drills, pillarDeltaMap }: Props) {
               style={{
                 padding: '6px 14px', borderRadius: 6, fontSize: 12, cursor: 'pointer',
                 background: sortByRecommended ? '#307b92' : 'transparent',
-                color: sortByRecommended ? '#fff' : '#5a8fa8',
-                border: `1px solid ${sortByRecommended ? '#307b92' : '#2a4a6e'}`,
+                color: sortByRecommended ? '#fff' : '#6d7894',
+                border: `1px solid ${sortByRecommended ? '#307b92' : '#2e374d'}`,
               }}
             >
               Recommended First
@@ -328,8 +328,8 @@ export default function DrillsView({ drills, pillarDeltaMap }: Props) {
               style={{
                 padding: '6px 14px', borderRadius: 6, fontSize: 12, cursor: 'pointer',
                 background: !sortByRecommended ? '#307b92' : 'transparent',
-                color: !sortByRecommended ? '#fff' : '#5a8fa8',
-                border: `1px solid ${!sortByRecommended ? '#307b92' : '#2a4a6e'}`,
+                color: !sortByRecommended ? '#fff' : '#6d7894',
+                border: `1px solid ${!sortByRecommended ? '#307b92' : '#2e374d'}`,
               }}
             >
               Browse All
@@ -346,14 +346,14 @@ export default function DrillsView({ drills, pillarDeltaMap }: Props) {
                   padding: '5px 12px', borderRadius: 6, fontSize: 11, cursor: 'pointer',
                   textTransform: 'capitalize',
                   background: activeDiff === d
-                    ? (d === 'all' ? '#2a4a6e' : DIFFICULTY_CONFIG[d]?.color + '33')
+                    ? (d === 'all' ? '#2e374d' : DIFFICULTY_CONFIG[d]?.color + '33')
                     : 'transparent',
                   color: activeDiff === d
                     ? (d === 'all' ? '#e8f4f8' : DIFFICULTY_CONFIG[d]?.color)
-                    : '#5a8fa8',
+                    : '#6d7894',
                   border: `1px solid ${activeDiff === d
-                    ? (d === 'all' ? '#3a6a9e' : DIFFICULTY_CONFIG[d]?.color + '66')
-                    : '#2a4a6e'}`,
+                    ? (d === 'all' ? '#1e2f45' : DIFFICULTY_CONFIG[d]?.color + '66')
+                    : '#2e374d'}`,
                 }}
               >
                 {d === 'all' ? 'All Levels' : DIFFICULTY_CONFIG[d].label}
@@ -367,9 +367,9 @@ export default function DrillsView({ drills, pillarDeltaMap }: Props) {
               onClick={() => setActivePillar('all')}
               style={{
                 padding: '5px 12px', borderRadius: 6, fontSize: 11, cursor: 'pointer',
-                background: activePillar === 'all' ? '#2a4a6e' : 'transparent',
-                color: activePillar === 'all' ? '#e8f4f8' : '#5a8fa8',
-                border: `1px solid ${activePillar === 'all' ? '#3a6a9e' : '#2a4a6e'}`,
+                background: activePillar === 'all' ? '#2e374d' : 'transparent',
+                color: activePillar === 'all' ? '#e8f4f8' : '#6d7894',
+                border: `1px solid ${activePillar === 'all' ? '#1e2f45' : '#2e374d'}`,
               }}
             >
               All Pillars
@@ -384,8 +384,8 @@ export default function DrillsView({ drills, pillarDeltaMap }: Props) {
                   style={{
                     padding: '5px 12px', borderRadius: 6, fontSize: 11, cursor: 'pointer',
                     background: activePillar === key ? cfg.color + '33' : 'transparent',
-                    color: activePillar === key ? cfg.color : '#5a8fa8',
-                    border: `1px solid ${activePillar === key ? cfg.color + '66' : '#2a4a6e'}`,
+                    color: activePillar === key ? cfg.color : '#6d7894',
+                    border: `1px solid ${activePillar === key ? cfg.color + '66' : '#2e374d'}`,
                     display: 'flex', alignItems: 'center', gap: 5,
                   }}
                 >
@@ -401,7 +401,7 @@ export default function DrillsView({ drills, pillarDeltaMap }: Props) {
         </div>
 
         {/* Count */}
-        <p style={{ fontSize: 12, color: '#5a8fa8', marginBottom: 16 }}>
+        <p style={{ fontSize: 12, color: '#6d7894', marginBottom: 16 }}>
           Showing {sorted.length} drill{sorted.length !== 1 ? 's' : ''}
           {activePillar !== 'all' && ` · ${PILLAR_CONFIG[activePillar]?.label}`}
           {activeDiff !== 'all' && ` · ${DIFFICULTY_CONFIG[activeDiff].label}`}
@@ -421,7 +421,7 @@ export default function DrillsView({ drills, pillarDeltaMap }: Props) {
         {sorted.length === 0 && (
           <div style={{
             textAlign: 'center', padding: '40px 20px',
-            color: '#5a8fa8', background: '#0d1b2e',
+            color: '#6d7894', background: '#171c2a',
             border: '1px solid #2a4a6e', borderRadius: 8,
           }}>
             No drills match the current filters.

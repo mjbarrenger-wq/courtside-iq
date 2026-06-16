@@ -20,6 +20,8 @@ export interface SeasonAggregates {
   stl: number
   blk: number
   def_fouls: number
+  plus_minus: number
+  vps: number
   games: number
   opp_pts: number
   opp_possessions: number
@@ -33,6 +35,9 @@ export interface SeasonAggregates {
   opp_oreb: number
   opp_dreb: number
   opp_def_fouls: number
+  opp_ast: number
+  opp_stl: number
+  opp_blk: number
 }
 
 export interface MetricScore {
@@ -106,13 +111,13 @@ export function computeDriverTree(a: SeasonAggregates): DriverTreeOutput {
 
   const shotEff: PillarScore = {
     name: 'Shot Efficiency',
-    score: efg,
-    opp_score: opp_efg,
-    delta: r(efg - opp_efg, 1),
+    score: ts,
+    opp_score: opp_ts,
+    delta: r(ts - opp_ts, 1),
     metrics: [
-      { name: 'eFG%', value: efg, opp_value: opp_efg, delta: r(efg - opp_efg, 1), format: 'pct' },
-      { name: 'TS%', value: ts, opp_value: opp_ts, delta: r(ts - opp_ts, 1), format: 'pct' },
-      { name: 'ATR (FTA/FGA)', value: atr, opp_value: opp_atr, delta: r(atr - opp_atr, 2), format: 'num' },
+      { name: 'TS%',  value: ts,      opp_value: opp_ts,      delta: r(ts - opp_ts, 1),           format: 'pct' },
+      { name: 'eFG%', value: efg,     opp_value: opp_efg,     delta: r(efg - opp_efg, 1),         format: 'pct' },
+      { name: 'ATR',  value: atr,     opp_value: opp_atr,     delta: r(atr - opp_atr, 2),         format: 'num' },
     ]
   }
 
@@ -123,17 +128,20 @@ export function computeDriverTree(a: SeasonAggregates): DriverTreeOutput {
 
   const opp_fga = a.opp_twopt_att + a.opp_threept_att
   const opp_to_pct = pct(a.opp_turnovers, opp_fga + 0.44 * a.opp_ft_att + a.opp_turnovers)
-  const opp_ato = 0 // opponent A/TO not tracked
+  const opp_ato = a.opp_turnovers > 0 ? r(a.opp_ast / a.opp_turnovers, 2) : 0
 
   // Score = TO% (lower is better — delta positive if we turn it over less)
+  const to_pg     = per_game(a.turnovers, g)
+  const opp_to_pg = per_game(a.opp_turnovers, g)
+
   const possCtrl: PillarScore = {
     name: 'Possession Control',
     score: to_pct,
     opp_score: opp_to_pct,
     delta: r(opp_to_pct - to_pct, 1),  // positive = we turn it over less
     metrics: [
-      { name: 'TO%', value: to_pct, opp_value: opp_to_pct, delta: r(opp_to_pct - to_pct, 1), format: 'pct' },
-      { name: 'A/TO', value: ato, opp_value: opp_ato, delta: r(ato - opp_ato, 2), format: 'num' },
+      { name: 'TO%',  value: to_pct, opp_value: opp_to_pct, delta: r(opp_to_pct - to_pct, 1), format: 'pct' },
+      { name: 'TO/G', value: to_pg,  opp_value: opp_to_pg,  delta: r(opp_to_pg - to_pg, 1),   format: 'num' },
     ]
   }
 
@@ -147,13 +155,13 @@ export function computeDriverTree(a: SeasonAggregates): DriverTreeOutput {
   const opp_oreb_pg = per_game(a.opp_oreb, g)
 
   const extraPoss: PillarScore = {
-    name: 'Extra Possessions',
+    name: 'Second Chances',
     score: oreb_pct,
     opp_score: opp_oreb_pct,
     delta: r(oreb_pct - opp_oreb_pct, 1),
     metrics: [
-      { name: 'OReb%', value: oreb_pct, opp_value: opp_oreb_pct, delta: r(oreb_pct - opp_oreb_pct, 1), format: 'pct' },
-      { name: 'OReb/G', value: oreb_pg, opp_value: opp_oreb_pg, delta: r(oreb_pg - opp_oreb_pg, 1), format: 'num' },
+      { name: 'OReb%',  value: oreb_pct, opp_value: opp_oreb_pct, delta: r(oreb_pct - opp_oreb_pct, 1), format: 'pct' },
+      { name: 'OReb/G', value: oreb_pg,  opp_value: opp_oreb_pg,  delta: r(oreb_pg - opp_oreb_pg, 1),   format: 'num' },
     ]
   }
 
@@ -165,15 +173,19 @@ export function computeDriverTree(a: SeasonAggregates): DriverTreeOutput {
   const opp_ft_pct = pct(a.opp_ft_made, a.opp_ft_att)
   const opp_ftf_pg = per_game(a.opp_ft_att, g)
 
+  // Combined pressure score: FTF/G × (0.5 + 0.5 × FT%) — mirrors player view formula
+  const pressure_score     = r(ftf_pg     * (0.5 + 0.5 * (ft_pct     / 100)), 2)
+  const opp_pressure_score = r(opp_ftf_pg * (0.5 + 0.5 * (opp_ft_pct / 100)), 2)
+
   const pressureCreation: PillarScore = {
-    name: 'Pressure Creation',
-    score: r(ft_pct, 1),
-    opp_score: r(opp_ft_pct, 1),
-    delta: r(ft_pct - opp_ft_pct, 1),
+    name: 'Rim Pressure',
+    score: pressure_score,
+    opp_score: opp_pressure_score,
+    delta: r(pressure_score - opp_pressure_score, 2),
     metrics: [
-      { name: 'FTF/G', value: ftf_pg, opp_value: opp_ftf_pg, delta: r(ftf_pg - opp_ftf_pg, 1), format: 'num' },
-      { name: 'FT Made/G', value: ft_made_pg, opp_value: per_game(a.opp_ft_made, g), delta: r(ft_made_pg - per_game(a.opp_ft_made, g), 1), format: 'num' },
-      { name: 'FT%', value: ft_pct, opp_value: opp_ft_pct, delta: r(ft_pct - opp_ft_pct, 1), format: 'pct' },
+      { name: 'FTF/G',     value: ftf_pg,     opp_value: opp_ftf_pg,                  delta: r(ftf_pg - opp_ftf_pg, 1),         format: 'num' },
+      { name: 'FT%',       value: ft_pct,     opp_value: opp_ft_pct,                  delta: r(ft_pct - opp_ft_pct, 1),         format: 'pct' },
+      { name: 'FT Made/G', value: ft_made_pg, opp_value: per_game(a.opp_ft_made, g),  delta: r(ft_made_pg - per_game(a.opp_ft_made, g), 1), format: 'num' },
     ]
   }
 
@@ -184,6 +196,8 @@ export function computeDriverTree(a: SeasonAggregates): DriverTreeOutput {
   const def3pt_pct = pct(a.opp_threept_made, a.opp_threept_att)
   const def_efg    = pct(a.opp_twopt_made + 1.5 * a.opp_threept_made, a.opp_twopt_att + a.opp_threept_att)
   const def_ppp_val = r(a.opp_pts / a.opp_possessions, 3)
+  const blk_pg     = per_game(a.blk, g)
+  const opp_blk_pg = per_game(a.opp_blk ?? 0, g)
 
   const us_2pt_pct = pct(a.twopt_made, a.twopt_att)
   const us_3pt_pct = pct(a.threept_made, a.threept_att)
@@ -194,10 +208,10 @@ export function computeDriverTree(a: SeasonAggregates): DriverTreeOutput {
     opp_score: efg,        // our eFG% against them — lower is better for them
     delta: r(efg - def_efg, 1),  // positive = we suppress better
     metrics: [
-      { name: 'Opp eFG%',  value: def_efg,    opp_value: efg,        delta: r(efg - def_efg, 1),               format: 'pct' },
-      { name: 'Opp 2Pt%',  value: def2pt_pct,  opp_value: us_2pt_pct, delta: r(us_2pt_pct - def2pt_pct, 1),    format: 'pct' },
-      { name: 'Opp 3Pt%',  value: def3pt_pct,  opp_value: us_3pt_pct, delta: r(us_3pt_pct - def3pt_pct, 1),    format: 'pct' },
-      { name: 'Def PPP',   value: def_ppp_val, opp_value: off_ppp,    delta: r(off_ppp - def_ppp_val, 3),       format: 'num' },
+      { name: 'Opp eFG%',  value: def_efg,    opp_value: efg,        delta: r(efg - def_efg, 1),           format: 'pct' },
+      { name: 'BLK/G',     value: blk_pg,     opp_value: opp_blk_pg, delta: r(blk_pg - opp_blk_pg, 1),     format: 'num' },
+      { name: 'Opp 2Pt%',  value: def2pt_pct, opp_value: us_2pt_pct, delta: r(us_2pt_pct - def2pt_pct, 1), format: 'pct' },
+      { name: 'Opp 3Pt%',  value: def3pt_pct, opp_value: us_3pt_pct, delta: r(us_3pt_pct - def3pt_pct, 1), format: 'pct' },
     ]
   }
 
@@ -227,17 +241,16 @@ export function computeDriverTree(a: SeasonAggregates): DriverTreeOutput {
   const def_to_pct = pct(a.opp_turnovers, a.opp_possessions)
   const us_to_pct  = pct(a.turnovers, a.possessions)
   const stl_pg     = per_game(a.stl, g)
-  const blk_pg     = per_game(a.blk, g)
+  const opp_stl_pg = per_game(a.opp_stl ?? 0, g)
 
   const pressureDisrupt: PillarScore = {
-    name: 'Pressure & Disruption',
+    name: 'Possession Creation',
     score: r(def_to_pct, 1),
     opp_score: r(us_to_pct, 1),
     delta: r(def_to_pct - us_to_pct, 1),
     metrics: [
-      { name: 'Def TO%', value: def_to_pct, opp_value: us_to_pct, delta: r(def_to_pct - us_to_pct, 1), format: 'pct' },
-      { name: 'Stl/G',   value: stl_pg,     opp_value: null as any,  delta: stl_pg,                     format: 'num' },
-      { name: 'Blk/G',   value: blk_pg,     opp_value: null as any,  delta: blk_pg,                     format: 'num' },
+      { name: 'Def TO%', value: def_to_pct, opp_value: us_to_pct,  delta: r(def_to_pct - us_to_pct, 1), format: 'pct' },
+      { name: 'STL/G',   value: stl_pg,     opp_value: opp_stl_pg, delta: r(stl_pg - opp_stl_pg, 1),    format: 'num' },
     ]
   }
 
@@ -346,7 +359,8 @@ export function computePlayerDriverTree(
   const player_vps_pg  = r(player.vps / g, 2)
 
   // Team averages per player per game
-  const team_fga     = team.twopt_att + team.threept_att
+  const team_fga             = team.twopt_att + team.threept_att
+  const team_possessions_est = team_fga + 0.44 * team.ft_att + team.turnovers
   const team_efg     = pctP(team.twopt_made + 1.5 * team.threept_made, team_fga)
   const team_ts      = pctP(team.pts, 2 * (team_fga + 0.44 * team.ft_att))
   const team_2pt_pct = pctP(team.twopt_made, team.twopt_att)
@@ -367,47 +381,59 @@ export function computePlayerDriverTree(
 
   const shotEff: PillarScore = {
     name: 'Shot Efficiency',
-    score: player_efg,
-    opp_score: team_efg,
-    delta: r(player_efg - team_efg, 1),
+    score: player_ts,
+    opp_score: team_ts,
+    delta: r(player_ts - team_ts, 1),
     metrics: [
-      { name: 'eFG%',  value: player_efg,    opp_value: team_efg,    delta: r(player_efg - team_efg, 1),    format: 'pct' },
-      { name: 'TS%',   value: player_ts,     opp_value: team_ts,     delta: r(player_ts - team_ts, 1),      format: 'pct' },
-      { name: '2Pt%',  value: player_2pt_pct,opp_value: team_2pt_pct,delta: r(player_2pt_pct - team_2pt_pct, 1), format: 'pct' },
+      { name: 'TS%',   value: player_ts,      opp_value: team_ts,      delta: r(player_ts - team_ts, 1),           format: 'pct' },
+      { name: 'eFG%',  value: player_efg,     opp_value: team_efg,     delta: r(player_efg - team_efg, 1),         format: 'pct' },
+      { name: '2Pt%',  value: player_2pt_pct, opp_value: team_2pt_pct, delta: r(player_2pt_pct - team_2pt_pct, 1), format: 'pct' },
     ],
   }
 
+  // TO% = turnovers / (FGA + 0.44*FTA + TO) — possession-adjusted turnover rate
+  const player_possessions = player_fga + 0.44 * player.ft_att + player.turnovers
+  const player_to_pct = player_possessions > 0 ? r((player.turnovers / player_possessions) * 100, 1) : 0
+
+  const team_to_pct  = team_possessions_est > 0 ? r((team.turnovers / team_possessions_est) * 100, 1) : 0
+
   const possCtrl: PillarScore = {
     name: 'Possession Control',
-    score: player_to_pg,
-    opp_score: team_to_ppg,
-    delta: r(team_to_ppg - player_to_pg, 1), // positive = fewer TOs = better
+    score: player_to_pct,
+    opp_score: team_to_pct,
+    delta: r(team_to_pct - player_to_pct, 1), // positive = player turns it over less = better
     metrics: [
+      { name: 'TO%',   value: player_to_pct, opp_value: team_to_pct,  delta: r(team_to_pct - player_to_pct, 1),  format: 'pct' },
       { name: 'TO/G',  value: player_to_pg,  opp_value: team_to_ppg,  delta: r(team_to_ppg - player_to_pg, 1),   format: 'num' },
-      { name: 'Ast/G', value: player_ast_pg, opp_value: team_ast_ppg, delta: r(player_ast_pg - team_ast_ppg, 1),  format: 'num' },
-      { name: 'A/TO',  value: player_ato,    opp_value: team_ato,     delta: r(player_ato - team_ato, 2),         format: 'num' },
     ],
   }
 
   const extraPoss: PillarScore = {
-    name: 'Extra Possessions',
+    name: 'Second Chances',
     score: player_oreb_pg,
     opp_score: team_oreb_ppg,
     delta: r(player_oreb_pg - team_oreb_ppg, 1),
     metrics: [
-      { name: 'OReb/G', value: player_oreb_pg, opp_value: team_oreb_ppg, delta: r(player_oreb_pg - team_oreb_ppg, 1), format: 'num' },
-      { name: 'PPG',    value: player_ppg,      opp_value: team_ppg_pp,   delta: r(player_ppg - team_ppg_pp, 1),       format: 'num' },
+      { name: 'OReb/G',  value: player_oreb_pg, opp_value: team_oreb_ppg, delta: r(player_oreb_pg - team_oreb_ppg, 1), format: 'num' },
+      { name: 'Total Reb/G', value: player_reb_pg, opp_value: team_reb_ppg, delta: r(player_reb_pg - team_reb_ppg, 1), format: 'num' },
     ],
   }
 
+  // Combined pressure score: FTA/G weighted by conversion rate
+  // Full credit for makes, half credit for misses (drawing the foul still has possession value)
+  const player_pressure_score = r(player_ftf_pg * (0.5 + 0.5 * (player_ft_pct / 100)), 2)
+  const team_pressure_score   = r(team_ftf_ppg  * (0.5 + 0.5 * (team_ft_pct  / 100)), 2)
+  const team_ft_made_ppg      = tppg(team.ft_made)
+
   const pressureCreation: PillarScore = {
-    name: 'Pressure Creation',
-    score: player_ft_pct,
-    opp_score: team_ft_pct,
-    delta: r(player_ft_pct - team_ft_pct, 1),
+    name: 'Rim Pressure',
+    score: player_pressure_score,
+    opp_score: team_pressure_score,
+    delta: r(player_pressure_score - team_pressure_score, 2),
     metrics: [
-      { name: 'FT%',   value: player_ft_pct, opp_value: team_ft_pct, delta: r(player_ft_pct - team_ft_pct, 1), format: 'pct' },
-      { name: 'FTF/G', value: player_ftf_pg, opp_value: team_ftf_ppg,delta: r(player_ftf_pg - team_ftf_ppg, 1),format: 'num' },
+      { name: 'FTF/G',     value: player_ftf_pg,               opp_value: team_ftf_ppg,     delta: r(player_ftf_pg - team_ftf_ppg, 1),                                 format: 'num' },
+      { name: 'FT%',       value: player_ft_pct,               opp_value: team_ft_pct,       delta: r(player_ft_pct - team_ft_pct, 1),                                  format: 'pct' },
+      { name: 'FT Made/G', value: r(player.ft_made / g, 1),    opp_value: team_ft_made_ppg,  delta: r(r(player.ft_made / g, 1) - team_ft_made_ppg, 1),                  format: 'num' },
     ],
   }
 
@@ -415,12 +441,11 @@ export function computePlayerDriverTree(
 
   const shotSupp: PillarScore = {
     name: 'Shot Suppression',
-    score: r(player_stl_pg + player_blk_pg, 1),
-    opp_score: r(team_stl_ppg + team_blk_ppg, 1),
-    delta: r((player_stl_pg + player_blk_pg) - (team_stl_ppg + team_blk_ppg), 1),
+    score: player_blk_pg,
+    opp_score: team_blk_ppg,
+    delta: r(player_blk_pg - team_blk_ppg, 1),
     metrics: [
-      { name: 'Stl/G', value: player_stl_pg, opp_value: team_stl_ppg, delta: r(player_stl_pg - team_stl_ppg, 1), format: 'num' },
-      { name: 'Blk/G', value: player_blk_pg, opp_value: team_blk_ppg, delta: r(player_blk_pg - team_blk_ppg, 1), format: 'num' },
+      { name: 'BLK/G', value: player_blk_pg, opp_value: team_blk_ppg, delta: r(player_blk_pg - team_blk_ppg, 1), format: 'num' },
     ],
   }
 
@@ -431,18 +456,19 @@ export function computePlayerDriverTree(
     delta: r(player_dreb_pg - team_dreb_ppg, 1),
     metrics: [
       { name: 'DReb/G', value: player_dreb_pg, opp_value: team_dreb_ppg, delta: r(player_dreb_pg - team_dreb_ppg, 1), format: 'num' },
-      { name: 'Reb/G',  value: player_reb_pg,  opp_value: team_reb_ppg,  delta: r(player_reb_pg - team_reb_ppg, 1),   format: 'num' },
     ],
   }
 
+  const team_pm_ppg  = r(team.plus_minus / tg / np, 1)
+  const team_vps_ppg = r(team.vps / tg / np, 2)
+
   const pressureDisrupt: PillarScore = {
-    name: 'Pressure & Disruption',
-    score: player_pm_pg,
-    opp_score: 0,
-    delta: player_pm_pg, // team avg +/- per player = 0 by definition
+    name: 'Possession Creation',
+    score: player_stl_pg,
+    opp_score: team_stl_ppg,
+    delta: r(player_stl_pg - team_stl_ppg, 1),
     metrics: [
-      { name: '+/- Per G', value: player_pm_pg,  opp_value: 0,           delta: player_pm_pg, format: 'num' },
-      { name: 'VPS/G',     value: player_vps_pg, opp_value: null as any, delta: player_vps_pg, format: 'num' },
+      { name: 'STL/G', value: player_stl_pg, opp_value: team_stl_ppg, delta: r(player_stl_pg - team_stl_ppg, 1), format: 'num' },
     ],
   }
 

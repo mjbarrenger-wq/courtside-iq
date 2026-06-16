@@ -35,12 +35,12 @@ export function DateSlider({ games }: { games: SliderGame[] }) {
   return (
     <div style={{
       padding: '10px 16px 12px',
-      background: '#0d1b2e',
+      background: '#171c2a',
       borderRadius: 8,
       border: '1px solid #2a4a6e',
       minWidth: 280,
     }}>
-      <div style={{ fontSize: 10, color: '#cbd5e1', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 8 }}>
+      <div style={{ fontSize: 10, color: '#c5cde0', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 8 }}>
         Custom Date Range
       </div>
 
@@ -69,7 +69,7 @@ export function DateSlider({ games }: { games: SliderGame[] }) {
 
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 6 }}>
         <span style={{ fontSize: 11, color: '#97cfdc', fontWeight: 600 }}>{games[start]?.label}</span>
-        <span style={{ fontSize: 10, color: '#cbd5e1' }}>
+        <span style={{ fontSize: 10, color: '#c5cde0' }}>
           {end - start + 1} game{end - start + 1 !== 1 ? 's' : ''}
         </span>
         <span style={{ fontSize: 11, color: '#97cfdc', fontWeight: 600 }}>{games[end]?.label}</span>
@@ -78,7 +78,7 @@ export function DateSlider({ games }: { games: SliderGame[] }) {
       <div style={{ display: 'flex', gap: 6, marginTop: 10, justifyContent: 'flex-end' }}>
         <button onClick={reset} style={{
           padding: '4px 12px', borderRadius: 14, border: '1px solid #2a4a6e',
-          background: 'transparent', color: '#cbd5e1', fontSize: 10, cursor: 'pointer',
+          background: 'transparent', color: '#c5cde0', fontSize: 10, cursor: 'pointer',
         }}>Reset</button>
         <button onClick={apply} style={{
           padding: '4px 14px', borderRadius: 14, border: 'none',

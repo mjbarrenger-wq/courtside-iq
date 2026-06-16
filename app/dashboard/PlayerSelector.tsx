@@ -30,16 +30,16 @@ export function PlayerSelector({
 
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-      <span style={{ fontSize: 10, color: '#cbd5e1', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+      <span style={{ fontSize: 10, color: '#c5cde0', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
         Player:
       </span>
       <select
         value={currentPlayerId ?? 'team'}
         onChange={e => onChange(e.target.value)}
         style={{
-          background: '#0d1b2e',
-          border: `1px solid ${currentPlayerId ? '#307b92' : '#2a4a6e'}`,
-          color: currentPlayerId ? '#97cfdc' : '#cbd5e1',
+          background: '#171c2a',
+          border: `1px solid ${currentPlayerId ? '#307b92' : '#2e374d'}`,
+          color: currentPlayerId ? '#97cfdc' : '#c5cde0',
           fontSize: 12,
           fontWeight: 600,
           padding: '5px 32px 5px 12px',

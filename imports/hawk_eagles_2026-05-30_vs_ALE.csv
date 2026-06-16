@@ -1,0 +1,10 @@
+game_date,team,opponent,player,jersey,minutes,pts,oreb,dreb,reb,ast,stl,blk,turnovers,fgm,fga,fg3m,fg3a,ftm,fta,pf,efg_pct,ts_pct,source
+2026-05-30,Hawk Eagles,ALE,William Smith,11,,3,0,0,0,0,2,0,1,1,2,0,0,1,1,1,50.0,61.5,Superstat
+2026-05-30,Hawk Eagles,ALE,Theodore Welsh,13,,5,2,2,4,0,2,0,1,2,4,0,0,1,1,2,50.0,56.3,Superstat
+2026-05-30,Hawk Eagles,ALE,Anhad Takkar,14,,7,1,0,1,3,2,0,1,3,5,1,1,0,0,3,70.0,70.0,Superstat
+2026-05-30,Hawk Eagles,ALE,Jinming Liu,15,,6,1,0,1,1,1,0,0,3,11,0,3,0,0,3,27.3,27.3,Superstat
+2026-05-30,Hawk Eagles,ALE,Luca Hounslow,20,,0,0,1,1,0,0,0,0,0,0,0,0,0,0,2,,,Superstat
+2026-05-30,Hawk Eagles,ALE,Lucas Phang,22,,7,1,5,6,0,0,0,3,3,9,0,2,1,1,3,33.3,37.1,Superstat
+2026-05-30,Hawk Eagles,ALE,Spencer Wilson,23,,2,0,0,0,0,0,0,0,1,5,0,0,0,0,4,20.0,20.0,Superstat
+2026-05-30,Hawk Eagles,ALE,Kasper Sidebottom,46,,8,3,2,5,0,4,2,1,4,6,0,0,0,2,0,66.7,58.1,Superstat
+2026-05-30,Hawk Eagles,ALE,TEAM,,, 38,8,10,18,4,11,2,7,17,42,1,6,3,5,18,41.7,43.0,Superstat

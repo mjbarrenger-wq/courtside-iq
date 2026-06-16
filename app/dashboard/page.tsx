@@ -9,6 +9,7 @@ import { DateSlider } from './DateSlider'
 import { PlayerSelector } from './PlayerSelector'
 import { GamePicker } from './GamePicker'
 import type { PickerGame } from './GamePicker'
+import DashboardDrillCards, { type DashboardDrill } from './DashboardDrillCards'
 export const dynamic = 'force-dynamic'
 
 const TEAM_ID = 'b1000000-0000-0000-0000-000000000001'
@@ -33,11 +34,11 @@ const PILLAR_TRANSLATION: Record<string, { strength: string; weakness: string }>
     strength: 'Ball security is holding. Keep live defenders on every ball-handling rep at training.',
     weakness: 'Turnovers are leaking possessions. Run live-ball decision drills with active defenders every session.',
   },
-  'Extra Possessions': {
+  'Second Chances': {
     strength: 'Offensive rebounding is generating second chances. Maintain the crash-the-glass habit after every drive.',
     weakness: 'Second chances are being left on the board. Add offensive glass pursuit to every half-court drill.',
   },
-  'Pressure Creation': {
+  'Rim Pressure': {
     strength: 'Getting to the line and converting. Rim pressure is working. Keep attacking the paint.',
     weakness: 'Not enough foul line opportunities. Encourage players to drive and finish through contact rather than pull up.',
   },
@@ -49,7 +50,7 @@ const PILLAR_TRANSLATION: Record<string, { strength: string; weakness: string }>
     strength: 'Defensive rebounding is ending possessions cleanly. Box-out discipline is paying off.',
     weakness: 'Opponents are getting offensive rebounds. Make two hands on your player before looking for the ball a non-negotiable rule.',
   },
-  'Pressure & Disruption': {
+  'Possession Creation': {
     strength: 'Active hands are creating turnovers and transition chances. Keep the ball pressure on.',
     weakness: 'Opponents are moving the ball too freely. Add ball pressure and gap coverage work to your half-court defence sessions.',
   },
@@ -63,11 +64,11 @@ const PILLAR_TRANSLATION: Record<string, { strength: string; weakness: string }>
 const PILLAR_DELTA_UNIT: Record<string, string> = {
   'Shot Efficiency':       'eFG% pp',
   'Possession Control':    'TO% pp',
-  'Extra Possessions':     'OReb% pp',
-  'Pressure Creation':     'FT% pp',
+  'Second Chances':        'OReb% pp',
+  'Rim Pressure':     'FT% pp',
   'Shot Suppression':      'eFG% pp',
   'Possession Ending':     'DReb% pp',
-  'Pressure & Disruption': 'TO% pp',
+  'Possession Creation':   'STL/G',
   'Discipline':            'fouls/g',
 }
 
@@ -75,12 +76,39 @@ const PILLAR_DELTA_UNIT: Record<string, string> = {
 const PILLAR_KEY: Record<string, string> = {
   'Shot Efficiency':      'shot_efficiency',
   'Possession Control':   'possession_control',
-  'Extra Possessions':    'extra_possessions',
-  'Pressure Creation':    'pressure_creation',
+  'Second Chances':       'extra_possessions',
+  'Rim Pressure':    'pressure_creation',
   'Shot Suppression':     'shot_suppression',
   'Possession Ending':    'possession_ending',
-  'Pressure & Disruption':'pressure_disruption',
+  'Possession Creation':  'pressure_disruption',
   'Discipline':           'discipline',
+}
+
+// Returns drills matched to the current view's weakest pillars
+function getRelevantDashboardDrills(
+  leakageAreas: { pillar: string; delta: number }[],
+  allDrills: DashboardDrill[],
+  limit = 4,
+): DashboardDrill[] {
+  const weakPillars = leakageAreas
+    .sort((a, b) => a.delta - b.delta) // most negative first
+    .map(d => PILLAR_KEY[d.pillar])
+    .filter(Boolean)
+
+  if (weakPillars.length === 0) {
+    return allDrills.filter(d => d.difficulty === 'foundation').slice(0, limit)
+  }
+
+  const result: DashboardDrill[] = []
+  for (const pillar of weakPillars) {
+    const matches = allDrills
+      .filter(d => d.pillar === pillar)
+      .sort((a, b) => (a as any).difficulty_order - (b as any).difficulty_order)
+      .slice(0, 2)
+    result.push(...matches)
+    if (result.length >= limit) break
+  }
+  return result.slice(0, limit)
 }
 
 async function getInsightsFromDB(
@@ -191,7 +219,7 @@ function Sparkline({ values, color = '#fbbf24', w = 90, h = 26 }: {
 // ── Metric progress bar row ──────────────────────────────────────────────────
 function MetricBar({ m, side }: { m: MetricScore; side: 'off' | 'def' }) {
   const pos = m.delta >= 0
-  const dColor = pos ? '#22c55e' : '#ef4444'
+  const dColor = pos ? '#34d399' : '#f87171'
   const hasOpp = m.opp_value != null
   let barPct = 50
   if (hasOpp && m.opp_value !== 0) {
@@ -215,8 +243,8 @@ function MetricBar({ m, side }: { m: MetricScore; side: 'off' | 'def' }) {
         </span>
         {hasOpp && (
           <>
-            <div style={{ flex: 1, height: 4, background: '#1e3a5f', borderRadius: 2, overflow: 'hidden' }}>
-              <div style={{ width: `${barPct}%`, height: '100%', borderRadius: 2, background: pos ? '#22c55e' : '#ef4444' }} />
+            <div style={{ flex: 1, height: 4, background: '#1d3451', borderRadius: 2, overflow: 'hidden' }}>
+              <div style={{ width: `${barPct}%`, height: '100%', borderRadius: 2, background: pos ? '#34d399' : '#f87171' }} />
             </div>
             <span style={{ fontSize: 11, color: 'var(--text-muted)', minWidth: 40, textAlign: 'right' }}>
               {fmtVal(m.opp_value)}
@@ -232,25 +260,37 @@ function MetricBar({ m, side }: { m: MetricScore; side: 'off' | 'def' }) {
 const PILLAR_ICONS: Record<string, string> = {
   'Shot Efficiency':      '🎯',
   'Possession Control':   '🔄',
-  'Extra Possessions':    '⊕',
-  'Pressure Creation':    '🔥',
+  'Second Chances':       '⊕',
+  'Rim Pressure':    '🔥',
   'Shot Suppression':     '🛡',
   'Possession Ending':    '📌',
-  'Pressure & Disruption':'⚡',
+  'Possession Creation':  '⚡',
   'Discipline':           '⚖️',
 }
 
-function PillarCard({ pillar, side, sparkValues, vsLabel = 'Opp', estimated = false }: {
+const PILLAR_TOOLTIPS: Record<string, string> = {
+  'Shot Efficiency':       'Primary: TS% — True Shooting % accounts for 2-pointers, 3-pointers and free throws on equal footing. The most complete measure of scoring efficiency. Higher is better.',
+  'Possession Control':    'Primary: TO% — Turnovers per estimated possession (TOs ÷ (FGA + 0.44×FTA + TOs)). Captures ball security relative to usage, not just raw count. Lower is better.',
+  'Second Chances':        'Primary: OReb/G — Offensive rebounds per game. Each offensive board extends a possession, giving the team another scoring opportunity. Higher is better.',
+  'Rim Pressure':     'Primary: FTF/G × (0.5 + 0.5 × FT%) — Rewards getting to the line with a conversion modifier. Full credit for makes, half credit for misses — drawing the foul still has value. Higher is better.',
+  'Shot Suppression':      'Team: Opp eFG% — opponent shooting efficiency allowed. Player: BLK/G — best available proxy for shot contest activity. Note: individual shot suppression data (contested shots, opponent FG% when guarded) is not tracked in this dataset.',
+  'Possession Ending':     'Primary: DReb/G — Defensive rebounds per game. Finishing defensive possessions denies second-chance points. Higher is better.',
+  'Possession Creation':   'Primary: STL/G (player) / Def TO% (team) — Steals and forced turnovers that directly generate new possessions. Higher is better.',
+  'Discipline':            'Primary: Def Fouls/G — Defensive fouls per game. Unnecessary fouling extends opponent possessions and surrenders free throw attempts. Lower is better.',
+}
+
+function PillarCard({ pillar, side, sparkValues, vsLabel = 'Opp', estimated = false, rank, totalRanked }: {
   pillar: PillarScore; side: 'off' | 'def'; sparkValues?: number[]; vsLabel?: string; estimated?: boolean
+  rank?: number; totalRanked?: number
 }) {
   const pos = pillar.delta >= 0
-  const borderColor = pos ? '#22c55e' : '#ef4444'
-  const accentColor = side === 'off' ? '#97cfdc' : '#c4b5fd'
-  const sparkColor  = pos ? '#22c55e' : '#ef4444'
+  const borderColor = pos ? '#34d399' : '#f87171'
+  const accentColor = side === 'off' ? '#97cfdc' : '#7a9eb5'
+  const sparkColor  = pos ? '#34d399' : '#f87171'
 
   return (
     <div style={{
-      background: '#0f1f35',
+      background: '#1a2a40',
       border: `2px solid ${borderColor}`,
       borderRadius: 12,
       padding: '14px 12px',
@@ -262,8 +302,16 @@ function PillarCard({ pillar, side, sparkValues, vsLabel = 'Opp', estimated = fa
       {/* Header */}
       <div style={{ textAlign: 'center', marginBottom: 10 }}>
         <div style={{ fontSize: 20, marginBottom: 2 }}>{PILLAR_ICONS[pillar.name] ?? '📊'}</div>
-        <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-secondary)', letterSpacing: '0.08em', textTransform: 'uppercase', lineHeight: 1.3 }}>
-          {pillar.name}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
+          <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-secondary)', letterSpacing: '0.08em', textTransform: 'uppercase', lineHeight: 1.3 }}>
+            {pillar.name}
+          </div>
+          {PILLAR_TOOLTIPS[pillar.name] && (
+            <div className="pillar-info">
+              <span className="pillar-info-icon">i</span>
+              <div className="pillar-info-tooltip">{PILLAR_TOOLTIPS[pillar.name]}</div>
+            </div>
+          )}
         </div>
         {estimated && (
           <div style={{ display: 'inline-block', fontSize: 9, fontWeight: 700, color: '#92400e', background: '#fef3c7', border: '1px solid #f59e0b', borderRadius: 4, padding: '1px 6px', marginTop: 4, letterSpacing: '0.06em', textTransform: 'uppercase' }}>
@@ -279,7 +327,7 @@ function PillarCard({ pillar, side, sparkValues, vsLabel = 'Opp', estimated = fa
           </div>
         )}
         <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 1 }}>vs {vsLabel}: {pillar.opp_score}</div>
-        <div style={{ fontSize: 12, fontWeight: 700, color: pos ? '#22c55e' : '#ef4444', marginTop: 2 }}>
+        <div style={{ fontSize: 12, fontWeight: 700, color: pos ? '#34d399' : '#f87171', marginTop: 2 }}>
           {pos ? '+' : ''}{pillar.delta}
         </div>
       </div>
@@ -290,6 +338,19 @@ function PillarCard({ pillar, side, sparkValues, vsLabel = 'Opp', estimated = fa
           <MetricBar key={i} m={m} side={side} />
         ))}
       </div>
+
+      {/* Player rank badge */}
+      {rank != null && totalRanked != null && (
+        <div style={{ borderTop: '1px solid #1e3a5f', marginTop: 8, paddingTop: 6, textAlign: 'center' }}>
+          <span style={{
+            fontSize: 10, fontWeight: 700, letterSpacing: '0.04em',
+            color: rank === 1 ? '#fbbf24' : rank <= Math.ceil(totalRanked / 3) ? '#34d399' : rank > Math.floor(totalRanked * 2 / 3) ? '#f87171' : '#a0a8bc',
+          }}>
+            #{rank} of {totalRanked}
+          </span>
+          <div style={{ fontSize: 9, color: '#6d7894', marginTop: 1 }}>team rank</div>
+        </div>
+      )}
     </div>
   )
 }
@@ -317,7 +378,7 @@ function KPIStat({ label, value, opp, sparkValues, color = '#fbbf24', prefix = '
 }
 
 // ── Tree connector ────────────────────────────────────────────────────────────
-const LINE = '#2a4a6e'
+const LINE = '#2e374d'
 
 function BranchConnector() {
   return (
@@ -438,15 +499,16 @@ export default async function DashboardPage({
     ? playersRaw.map((p: any) => ({ id: p.id, name: `${p.first_name} ${p.last_name}`, jersey: p.jersey_number }))
     : []
 
-  // Fetch aggregates + per-game data in parallel
-  const [aggregates, perGameOpp, perGamePlayers] = await Promise.all([
+  // Fetch aggregates + per-game data + drills in parallel
+  const [aggregates, perGameOpp, perGamePlayers, drillsRaw] = await Promise.all([
     getSeasonAggregates(TEAM_ID, filter === 'all' && !isCustom ? undefined : gameIds),
     fetchJson(
       `opponent_game_stats?select=game_id,opp_off_ppp,opp_def_ppp,opp_twopt_made,opp_twopt_att,opp_threept_made,opp_threept_att,opp_turnovers,opp_oreb,opp_dreb,opp_possessions&game_id=in.${idList}&order=game_id.asc`
     ),
     fetchJson(
-      `player_game_stats?select=game_id,twopt_made,twopt_att,threept_made,threept_att,ft_made,ft_att,turnovers,oreb,dreb,def_fouls&game_id=in.${idList}`
+      `player_game_stats?select=player_id,game_id,twopt_made,twopt_att,threept_made,threept_att,ft_made,ft_att,turnovers,ast,oreb,dreb,stl,blk,def_fouls,def_ppp,plus_minus&game_id=in.${idList}`
     ),
+    fetchJson(`drills?select=*`),
   ])
 
   // Does this team have real opponent data?
@@ -459,8 +521,15 @@ export default async function DashboardPage({
   }
 
   const playerByGame: Record<string, any> = {}
+  const perPlayerAgg: Record<string, {
+    games: number; twopt_made: number; twopt_att: number; threept_made: number; threept_att: number
+    ft_made: number; ft_att: number; turnovers: number; ast: number; oreb: number; dreb: number
+    stl: number; blk: number; def_fouls: number; def_ppp_sum: number; plus_minus: number
+  }> = {}
+
   if (Array.isArray(perGamePlayers)) {
     for (const r of perGamePlayers) {
+      // per-game team aggregates
       if (!playerByGame[r.game_id]) {
         playerByGame[r.game_id] = { twopt_made:0, twopt_att:0, threept_made:0, threept_att:0,
           ft_made:0, ft_att:0, turnovers:0, oreb:0, dreb:0, def_fouls:0 }
@@ -476,13 +545,57 @@ export default async function DashboardPage({
       g.oreb         += r.oreb         || 0
       g.dreb         += r.dreb         || 0
       g.def_fouls    += r.def_fouls    || 0
+
+      // per-player aggregates for ranking
+      if (r.player_id) {
+        if (!perPlayerAgg[r.player_id]) {
+          perPlayerAgg[r.player_id] = { games:0, twopt_made:0, twopt_att:0, threept_made:0, threept_att:0,
+            ft_made:0, ft_att:0, turnovers:0, ast:0, oreb:0, dreb:0, stl:0, blk:0, def_fouls:0, def_ppp_sum:0, plus_minus:0 }
+        }
+        const p = perPlayerAgg[r.player_id]
+        p.games++
+        p.twopt_made   += r.twopt_made   || 0
+        p.twopt_att    += r.twopt_att    || 0
+        p.threept_made += r.threept_made || 0
+        p.threept_att  += r.threept_att  || 0
+        p.ft_made      += r.ft_made      || 0
+        p.ft_att       += r.ft_att       || 0
+        p.turnovers    += r.turnovers    || 0
+        p.ast          += r.ast          || 0
+        p.oreb         += r.oreb         || 0
+        p.dreb         += r.dreb         || 0
+        p.stl          += r.stl          || 0
+        p.blk          += r.blk          || 0
+        p.def_fouls    += r.def_fouls    || 0
+        p.def_ppp_sum  += r.def_ppp      || 0
+        p.plus_minus   += r.plus_minus   || 0
+      }
     }
+  }
+
+  // Helper: rank a player among all who played >= minGames
+  function pillarRank(
+    pid: string,
+    getValue: (p: typeof perPlayerAgg[string]) => number,
+    higherIsBetter: boolean,
+    minGames = 3,
+  ): { rank: number; total: number } {
+    const entries = Object.entries(perPlayerAgg)
+      .filter(([, p]) => p.games >= minGames)
+      .map(([id, p]) => ({ id, value: getValue(p) }))
+      .sort((a, b) => higherIsBetter ? b.value - a.value : a.value - b.value)
+    const idx = entries.findIndex(e => e.id === pid)
+    return { rank: idx >= 0 ? idx + 1 : entries.length, total: entries.length }
   }
 
   // ── Player mode ──────────────────────────────────────────────────────────
   let playerTree: DriverTreeOutput | null = null
   let selectedPlayer: { id: string; name: string; jersey: number } | null = null
-  let numActivePlayers = Object.keys(playerByGame).length || 10
+  let pillarRanks: { rank: number; total: number }[] | null = null
+  const numGames = Math.max(Object.keys(playerByGame).length, 1)
+  const numActivePlayers = Array.isArray(perGamePlayers) && perGamePlayers.length > 0
+    ? perGamePlayers.length / numGames
+    : 10
 
   if (playerId) {
     selectedPlayer = allPlayers.find((p: any) => p.id === playerId) ?? null
@@ -512,6 +625,29 @@ export default async function DashboardPage({
       }
 
       playerTree = computePlayerDriverTree(ps, aggregates, numActivePlayers)
+
+      // Compute per-pillar ranks (all per-game rates to equalise unequal game counts)
+      pillarRanks = [
+        // Offensive
+        pillarRank(playerId, p => {                                                        // Shot Efficiency — TS% higher better
+          const fga = p.twopt_att + p.threept_att
+          const pts = 2 * p.twopt_made + 3 * p.threept_made + p.ft_made
+          const denom = 2 * (fga + 0.44 * p.ft_att)
+          return denom > 0 ? pts / denom : 0
+        }, true),
+        pillarRank(playerId, p => {                                                        // Possession Control — TO% lower better
+          const poss = p.twopt_att + p.threept_att + 0.44 * p.ft_att + p.turnovers
+          return poss > 0 ? p.turnovers / poss : 999
+        }, false),
+        pillarRank(playerId, p => p.games > 0 ? p.oreb / p.games : 0, true),           // Second Chances — OReb/G higher better
+        pillarRank(playerId, p => p.games > 0 && p.ft_att > 0                              // Rim Pressure — FTF/G × (0.5 + 0.5 × FT%) combined metric
+          ? (p.ft_att / p.games) * (0.5 + 0.5 * (p.ft_made / p.ft_att)) : 0, true),
+        // Defensive
+        pillarRank(playerId, p => p.games > 0 ? p.blk / p.games : 0, true),            // Shot Suppression — BLK/G higher better (matches pillar score)
+        pillarRank(playerId, p => p.games > 0 ? p.dreb / p.games : 0, true),           // Possession Ending — DReb/G higher better
+        pillarRank(playerId, p => p.games > 0 ? p.stl / p.games : 0, true),            // Possession Creation — STL/G higher better (matches pillar score)
+        pillarRank(playerId, p => p.games > 0 ? p.def_fouls / p.games : 999, false),   // Discipline — Def Fouls/G lower better
+      ]
     }
   }
 
@@ -527,6 +663,10 @@ export default async function DashboardPage({
   const insights = isPlayerMode && selectedPlayer
     ? await getPlayerInsights(selectedPlayer.name, selectedPlayer.jersey, tree)
     : await getInsightsFromDB(allPillarDrivers, SB_URL, SB_KEY)
+
+  // Drills matched to current leakage areas (team or player)
+  const allDrills: DashboardDrill[] = Array.isArray(drillsRaw) ? drillsRaw : []
+  const relevantDrills = getRelevantDashboardDrills(tree.leakage_areas, allDrills)
 
   // Sorted game IDs for sparklines (chronological)
   const sortedGameIds = [...filteredGames]
@@ -557,15 +697,39 @@ export default async function DashboardPage({
     score:    `${g.team_score}-${g.opponent_score}`,
   }))
 
-  const BG     = '#07111e'
-  const CARD   = '#0d1b2e'
-  const BORDER = '#2a4a6e'
+  const BG     = '#0f1117'
+  const CARD   = '#171c2a'
+  const BORDER = '#2e374d'
 
   return (
     <main style={{ background: BG, minHeight: '100vh', color: 'var(--text-primary)', fontFamily: "'Inter', system-ui, sans-serif", WebkitFontSmoothing: 'antialiased', MozOsxFontSmoothing: 'grayscale', padding: '0 0 40px' }}>
+      <style>{`
+        .pillar-info { position: relative; display: inline-flex; align-items: center; cursor: help; }
+        .pillar-info-icon {
+          width: 13px; height: 13px; border-radius: 50%;
+          background: #1a3a54; border: 1px solid #3a5a7a;
+          color: #94a3b8; font-size: 8px; font-weight: 800;
+          display: inline-flex; align-items: center; justify-content: center;
+          font-style: italic; line-height: 1; flex-shrink: 0;
+        }
+        .pillar-info-tooltip {
+          visibility: hidden; opacity: 0;
+          position: absolute; bottom: calc(100% + 6px); left: 50%;
+          transform: translateX(-50%);
+          background: #07111e; border: 1px solid #3a5a7a;
+          border-radius: 8px; padding: 9px 11px;
+          font-size: 11px; color: #cbd5e1; line-height: 1.55;
+          width: 210px; text-align: left; z-index: 200;
+          transition: opacity 0.15s ease;
+          pointer-events: none;
+          box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+          font-weight: 400; text-transform: none; letter-spacing: 0;
+        }
+        .pillar-info:hover .pillar-info-tooltip { visibility: visible; opacity: 1; }
+      `}</style>
 
       {/* ── Header row 1 ── */}
-      <div style={{ background: '#0a1628', borderBottom: `1px solid ${BORDER}`, padding: '12px 28px' }}>
+      <div style={{ background: '#1f2537', borderBottom: `1px solid ${BORDER}`, padding: '12px 28px' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
           <div>
             <div style={{ fontSize: 20, fontWeight: 800, color: 'var(--text-hero)', letterSpacing: '0.05em' }}>
@@ -573,7 +737,7 @@ export default async function DashboardPage({
             </div>
             <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2 }}>
               WGT 12.2 — {contextLabel(filteredGames, filter, isCustom)} &nbsp;·&nbsp;
-              <span style={{ color: '#307b92', fontWeight: 600 }}>CMD Sports Analytics</span>
+              <span style={{ color: '#97cfdc', fontWeight: 700 }}>CMD Sports Analytics</span>
             </div>
           </div>
           <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -586,8 +750,9 @@ export default async function DashboardPage({
             <Suspense fallback={<div style={{ width: 160, height: 28 }} />}>
               <PlayerSelector players={allPlayers} currentPlayerId={playerId} />
             </Suspense>
-            <a href={`/players?${gamesParam ? `games=${gamesParam}` : `filter=${filter}`}`} style={{ color: 'var(--text-muted)', fontSize: 11, textDecoration: 'none' }}>Player Quadrants</a>
-            <a href="/" style={{ color: 'var(--text-muted)', fontSize: 11, textDecoration: 'none' }}>← Overview</a>
+            <a href={`/players?${gamesParam ? `games=${gamesParam}` : `filter=${filter}`}`} style={{ color: '#e8eaf0', fontSize: 11, textDecoration: 'none', background: '#1e2f45', border: '1px solid #3a5a7a', borderRadius: 20, padding: '5px 11px', fontWeight: 500, whiteSpace: 'nowrap' }}>Player Quadrants</a>
+            <a href="/players/c1000000-0000-0000-0000-000000000001" style={{ color: '#fbbf24', fontSize: 11, textDecoration: 'none', background: '#1a2a0a', border: '1px solid #f59e0b', borderRadius: 20, padding: '5px 11px', fontWeight: 600, whiteSpace: 'nowrap' }}>Player Profiles</a>
+            <a href="/" style={{ color: '#e8eaf0', fontSize: 11, textDecoration: 'none', background: '#1e2f45', border: '1px solid #3a5a7a', borderRadius: 20, padding: '5px 11px', fontWeight: 500, whiteSpace: 'nowrap' }}>← Overview</a>
           </div>
         </div>
 
@@ -628,29 +793,37 @@ export default async function DashboardPage({
             label={isPlayerMode ? 'Def PPP (On-Court)' : 'Defensive PPP'}
             value={tree.def_ppp}
             opp={isPlayerMode ? undefined : String(tree.opp_def_ppp)}
-            sparkValues={defTrend} color="#c4b5fd"
+            sparkValues={defTrend} color="#7a9eb5"
           />
 
           {/* Net PPP / Player Net hero */}
           <div style={{
-            textAlign: 'center', background: '#0a1f38',
-            border: `2px solid ${netPos ? '#22c55e' : '#ef4444'}`,
+            textAlign: 'center', background: '#252d40',
+            border: `2px solid ${netPos ? '#34d399' : '#f87171'}`,
             borderRadius: 12, padding: '14px 20px',
           }}>
             <div style={{ fontSize: 11, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.12em', marginBottom: 4 }}>
               {isPlayerMode ? `#${selectedPlayer?.jersey} ${selectedPlayer?.name}` : 'NET PPP'}
             </div>
-            <div style={{ fontSize: 46, fontWeight: 900, color: netPos ? '#22c55e' : '#ef4444', lineHeight: 1 }}>
+            <div style={{ fontSize: 46, fontWeight: 900, color: netPos ? '#34d399' : '#f87171', lineHeight: 1 }}>
               {netPos ? '+' : ''}{tree.net_ppp}
             </div>
             <div style={{ display: 'flex', justifyContent: 'center', margin: '6px 0 4px' }}>
-              <Sparkline values={netTrend} color={netPos ? '#22c55e' : '#ef4444'} w={120} h={30} />
+              <Sparkline values={netTrend} color={netPos ? '#34d399' : '#f87171'} w={120} h={30} />
             </div>
             <div style={{ fontSize: 11, color: 'var(--text-muted)', maxWidth: 200, margin: '0 auto', lineHeight: 1.5 }}>
               {isPlayerMode
                 ? `Net PPP ${netPos ? '+' : ''}${tree.net_ppp} on-court this period.`
                 : `We score ${netPos ? '+' : ''}${tree.net_ppp} more points per possession than opponents.`}
             </div>
+            {isPlayerMode && selectedPlayer && (
+              <a
+                href={`/players/${selectedPlayer.id}`}
+                style={{ display: 'inline-block', marginTop: 10, fontSize: 10, fontWeight: 700, color: '#97cfdc', textDecoration: 'none', background: '#1e2f45', border: '1px solid #2a5a7e', borderRadius: 20, padding: '4px 12px', letterSpacing: '0.06em' }}
+              >
+                VIEW FULL PROFILE →
+              </a>
+            )}
           </div>
 
           <KPIStat
@@ -690,9 +863,9 @@ export default async function DashboardPage({
               <div style={{ display: 'flex', justifyContent: 'flex-start' }}>
                 <div style={{ width: '50%', borderTop: `2px solid ${LINE}`, borderRight: `2px solid ${LINE}`, height: 16 }} />
               </div>
-              <div style={{ background: CARD, border: `2px solid #8b5cf6`, borderRadius: 10, padding: '10px 16px', textAlign: 'center', width: 160, margin: '0 auto' }}>
-                <div style={{ fontSize: 12, fontWeight: 700, color: '#c4b5fd', letterSpacing: '0.1em' }}>{isPlayerMode ? 'DEFENSIVE' : 'DEFENCE PPP'}</div>
-                <div style={{ fontSize: 30, fontWeight: 800, color: '#c4b5fd' }}>{tree.def_ppp}</div>
+              <div style={{ background: CARD, border: `2px solid #97cfdc`, borderRadius: 10, padding: '10px 16px', textAlign: 'center', width: 160, margin: '0 auto' }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: '#7a9eb5', letterSpacing: '0.1em' }}>{isPlayerMode ? 'DEFENSIVE' : 'DEFENCE PPP'}</div>
+                <div style={{ fontSize: 30, fontWeight: 800, color: '#7a9eb5' }}>{tree.def_ppp}</div>
               </div>
             </div>
           </div>
@@ -726,13 +899,15 @@ export default async function DashboardPage({
             {tree.pillars.offensive.map((p, i) => (
               <PillarCard key={`off-${i}`} pillar={p} side="off"
                 vsLabel={isPlayerMode ? 'Team Avg' : 'Opp'}
-                sparkValues={[pillarSparks.shotEfficiency, pillarSparks.possessionControl, pillarSparks.extraPossessions, pillarSparks.pressureCreation][i]} />
+                sparkValues={[pillarSparks.shotEfficiency, pillarSparks.possessionControl, pillarSparks.extraPossessions, pillarSparks.pressureCreation][i]}
+                rank={pillarRanks?.[i]?.rank} totalRanked={pillarRanks?.[i]?.total} />
             ))}
             {tree.pillars.defensive.map((p, i) => (
               <PillarCard key={`def-${i}`} pillar={p} side="def"
                 vsLabel={isPlayerMode ? 'Team Avg' : 'Opp'}
                 estimated={!isPlayerMode && !hasOppData}
-                sparkValues={[pillarSparks.shotSuppression, pillarSparks.possessionEnding, pillarSparks.pressureDisruption, pillarSparks.discipline][i]} />
+                sparkValues={[pillarSparks.shotSuppression, pillarSparks.possessionEnding, pillarSparks.pressureDisruption, pillarSparks.discipline][i]}
+                rank={pillarRanks?.[4 + i]?.rank} totalRanked={pillarRanks?.[4 + i]?.total} />
             ))}
           </div>
         </div>
@@ -744,12 +919,12 @@ export default async function DashboardPage({
           <div style={{ background: CARD, border: '1px solid #1a4a2e', borderRadius: 12, padding: '18px 20px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
               <div style={{ width: 28, height: 28, background: '#14532d', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14 }}>📈</div>
-              <span style={{ fontSize: 13, fontWeight: 700, color: '#22c55e' }}>{isPlayerMode ? 'TOP CONTRIBUTIONS' : 'TOP POSITIVE DRIVERS'}</span>
+              <span style={{ fontSize: 13, fontWeight: 700, color: '#34d399' }}>{isPlayerMode ? 'TOP CONTRIBUTIONS' : 'TOP POSITIVE DRIVERS'}</span>
             </div>
             {tree.top_drivers.map((d, i) => (
               <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '7px 0', borderBottom: i < tree.top_drivers.length - 1 ? `1px solid ${BORDER}` : 'none' }}>
                 <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>• {d.pillar}</span>
-                <span style={{ fontSize: 12, fontWeight: 700, color: '#22c55e' }}>
+                <span style={{ fontSize: 12, fontWeight: 700, color: '#34d399' }}>
                   +{d.delta}
                   {!isPlayerMode && PILLAR_DELTA_UNIT[d.pillar] && (
                     <span style={{ fontSize: 10, fontWeight: 400, color: 'var(--text-muted)', marginLeft: 3 }}>
@@ -765,12 +940,12 @@ export default async function DashboardPage({
           <div style={{ background: CARD, border: '1px solid #4a1a1a', borderRadius: 12, padding: '18px 20px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
               <div style={{ width: 28, height: 28, background: '#7f1d1d', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14 }}>📉</div>
-              <span style={{ fontSize: 13, fontWeight: 700, color: '#ef4444' }}>{isPlayerMode ? 'DEVELOPMENT AREAS' : 'BIGGEST LEAKAGE AREAS'}</span>
+              <span style={{ fontSize: 13, fontWeight: 700, color: '#f87171' }}>{isPlayerMode ? 'DEVELOPMENT AREAS' : 'BIGGEST LEAKAGE AREAS'}</span>
             </div>
             {tree.leakage_areas.map((d, i) => (
               <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '7px 0', borderBottom: i < tree.leakage_areas.length - 1 ? `1px solid ${BORDER}` : 'none' }}>
                 <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>• {d.pillar}</span>
-                <span style={{ fontSize: 12, fontWeight: 700, color: '#ef4444' }}>
+                <span style={{ fontSize: 12, fontWeight: 700, color: '#f87171' }}>
                   {d.delta}
                   {!isPlayerMode && PILLAR_DELTA_UNIT[d.pillar] && (
                     <span style={{ fontSize: 10, fontWeight: 400, color: 'var(--text-muted)', marginLeft: 3 }}>
@@ -819,12 +994,12 @@ export default async function DashboardPage({
             return (
               <div style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: 12, padding: '18px 20px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
-                  <div style={{ width: 28, height: 28, background: '#1e3a5f', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14 }}>💡</div>
+                  <div style={{ width: 28, height: 28, background: '#1d3451', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14 }}>💡</div>
                   <span style={{ fontSize: 13, fontWeight: 700, color: '#97cfdc' }}>KEY TAKEAWAYS</span>
                 </div>
                 {takeaways.map((t, i) => (
                   <div key={i} style={{ display: 'flex', gap: 10, marginBottom: i < takeaways.length - 1 ? 10 : 0, alignItems: 'flex-start' }}>
-                    <div style={{ width: 20, height: 20, background: '#1e3a5f', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 700, color: '#97cfdc', flexShrink: 0, marginTop: 1 }}>
+                    <div style={{ width: 20, height: 20, background: '#1d3451', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 700, color: '#97cfdc', flexShrink: 0, marginTop: 1 }}>
                       {i + 1}
                     </div>
                     <p style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.6, margin: 0 }}>{t}</p>
@@ -835,7 +1010,7 @@ export default async function DashboardPage({
           })()}
 
           {/* AI Coaching Priorities */}
-          <div style={{ background: '#0a1f38', border: `1px solid #307b92`, borderRadius: 12, padding: '18px 20px' }}>
+          <div style={{ background: '#252d40', border: `1px solid #307b92`, borderRadius: 12, padding: '18px 20px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
               <div style={{ width: 28, height: 28, background: '#307b92', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14 }}>🤖</div>
               <span style={{ fontSize: 13, fontWeight: 700, color: '#97cfdc' }}>
@@ -852,6 +1027,26 @@ export default async function DashboardPage({
               </div>
             ))}
           </div>
+
+          {/* Recommended Drills */}
+          <div style={{ background: '#1f2537', border: `1px solid #1a3a5a`, borderRadius: 12, padding: '18px 20px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <div style={{ width: 28, height: 28, background: '#34d399', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14 }}>🏀</div>
+                <span style={{ fontSize: 13, fontWeight: 700, color: '#34d399' }}>RECOMMENDED DRILLS</span>
+                <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>
+                  {relevantDrills.length > 0
+                    ? `matched to ${isPlayerMode ? 'development' : 'leakage'} pillars · click to expand`
+                    : 'no leakage pillars identified'}
+                </span>
+              </div>
+              <a href="/drills" style={{
+                fontSize: 10, fontWeight: 600, color: '#34d399',
+                textDecoration: 'none', letterSpacing: '0.05em',
+              }}>FULL LIBRARY →</a>
+            </div>
+            <DashboardDrillCards drills={relevantDrills} />
+          </div>
         </div>
 
         {/* ── Footer ── */}
@@ -863,9 +1058,9 @@ export default async function DashboardPage({
                 : 'All metrics calculated from season totals. Comparison vs season average opponent. Data via Hoopsalytics.'}
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <div style={{ width: 1, height: 20, background: '#2a4a6e' }} />
+              <div style={{ width: 1, height: 20, background: '#2e374d' }} />
               <span style={{ fontSize: 12, color: 'var(--text-secondary)', fontWeight: 500 }}>Powered by</span>
-              <span style={{ fontSize: 13, fontWeight: 800, color: '#307b92', letterSpacing: '0.04em' }}>
+              <span style={{ fontSize: 13, fontWeight: 800, color: '#97cfdc', letterSpacing: '0.04em' }}>
                 CMD Sports Analytics
               </span>
             </div>

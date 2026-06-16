@@ -22,9 +22,9 @@ export function TeamSelector({ teams, currentTeamId }: { teams: TeamOption[]; cu
       value={currentTeamId}
       onChange={onChange}
       style={{
-        background: '#0d1b2e',
+        background: '#171c2a',
         border: '1px solid #2a4a6e',
-        color: '#e2e8f0',
+        color: '#e8eaf0',
         borderRadius: 6,
         padding: '4px 10px',
         fontSize: 12,

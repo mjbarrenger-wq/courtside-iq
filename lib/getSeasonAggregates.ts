@@ -52,6 +52,25 @@ export async function getSeasonAggregates(
   const stl          = playerStats.reduce((s: number, r: any) => s + (r.stl || 0), 0)
   const blk          = playerStats.reduce((s: number, r: any) => s + (r.blk || 0), 0)
   const def_fouls    = playerStats.reduce((s: number, r: any) => s + (r.def_fouls || 0), 0)
+  const plus_minus   = playerStats.reduce((s: number, r: any) => s + (r.plus_minus || 0), 0)
+
+  // VPS: use unweighted per-player average so each player counts equally
+  // (weighted sum / total rows would over-represent players with more games)
+  const playerVpsMap: Record<string, { sum: number; count: number }> = {}
+  for (const r of playerStats) {
+    const pid = r.player_id
+    if (!pid) continue
+    if (!playerVpsMap[pid]) playerVpsMap[pid] = { sum: 0, count: 0 }
+    playerVpsMap[pid].sum += r.vps || 0
+    playerVpsMap[pid].count++
+  }
+  const playerVpsAvgs = Object.values(playerVpsMap)
+    .filter(p => p.count > 0)
+    .map(p => p.sum / p.count)
+  // Scale by total rows so tppg(vps) = unweighted_avg (tppg divides by total rows)
+  const vps = playerVpsAvgs.length > 0
+    ? (playerVpsAvgs.reduce((s, v) => s + v, 0) / playerVpsAvgs.length) * playerStats.length
+    : playerStats.reduce((s: number, r: any) => s + (r.vps || 0), 0)
   const ftf          = ft_att
 
   const fga         = twopt_att + threept_att
@@ -66,7 +85,8 @@ export async function getSeasonAggregates(
   let opp_threept_made: number, opp_threept_att: number
   let opp_ft_made: number, opp_ft_att: number
   let opp_turnovers: number, opp_oreb: number, opp_dreb: number
-  let opp_def_fouls: number, opp_possessions: number
+  let opp_def_fouls: number, opp_possessions: number, opp_ast: number
+  let opp_stl: number, opp_blk: number
 
   if (hasOppData) {
     opp_twopt_made   = oppStats.reduce((s: number, r: any) => s + (r.opp_twopt_made || 0), 0)
@@ -80,6 +100,9 @@ export async function getSeasonAggregates(
     opp_dreb         = oppStats.reduce((s: number, r: any) => s + (r.opp_dreb || 0), 0)
     opp_def_fouls    = oppStats.reduce((s: number, r: any) => s + (r.opp_def_fouls || 0), 0)
     opp_possessions  = oppStats.reduce((s: number, r: any) => s + (r.opp_possessions || 0), 0)
+    opp_ast          = oppStats.reduce((s: number, r: any) => s + (r.opp_ast || 0), 0)
+    opp_stl          = oppStats.reduce((s: number, r: any) => s + (r.opp_stl || 0), 0)
+    opp_blk          = oppStats.reduce((s: number, r: any) => s + (r.opp_blk || 0), 0)
   } else {
     console.log('⚠️  Using hardcoded opponent estimates')
     opp_twopt_made   = g * 31.9
@@ -93,6 +116,9 @@ export async function getSeasonAggregates(
     opp_dreb         = g * 12.4
     opp_def_fouls    = g * 12.6
     opp_possessions  = possessions
+    opp_ast          = 0
+    opp_stl          = 0
+    opp_blk          = 0
   }
 
   return {
@@ -102,6 +128,6 @@ export async function getSeasonAggregates(
     opp_pts, opp_possessions, opp_twopt_made, opp_twopt_att,
     opp_threept_made, opp_threept_att, opp_ft_made, opp_ft_att,
     opp_turnovers, opp_oreb, opp_dreb, opp_def_fouls, dreb,
-    stl, blk, def_fouls,
+    stl, blk, def_fouls, plus_minus, vps, opp_ast, opp_stl, opp_blk,
   }
 }

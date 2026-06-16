@@ -20,7 +20,7 @@ const Q_CONFIG: Record<Quadrant, {
 }> = {
   'two-way': {
     label: 'Two-Way',
-    colour: '#22c55e',
+    colour: '#34d399',
     offLabel: 'Strong Offence',
     defLabel: 'Strong Defence',
     meaning: 'Above team average on both ends. Your most reliable rotation players.',
@@ -34,7 +34,7 @@ const Q_CONFIG: Record<Quadrant, {
   },
   'defensive': {
     label: 'Defensive Specialist',
-    colour: '#8b5cf6',
+    colour: '#60a5fa',
     offLabel: 'Lower Offence',
     defLabel: 'Strong Defence',
     meaning: 'Hold opponents below team average but haven\'t converted that into offensive output.',
@@ -169,9 +169,9 @@ function buildActions(classified: Classified[]): string[] {
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-const BG     = '#07111e'
-const BORDER = '#2a4a6e'
-const CARD   = '#0d1b2e'
+const BG     = '#0f1117'
+const BORDER = '#2e374d'
+const CARD   = '#171c2a'
 
 export default function SoWhatPanel({ players }: { players: PlayerBubble[] }) {
   if (players.length < 2) return null
@@ -210,7 +210,7 @@ export default function SoWhatPanel({ players }: { players: PlayerBubble[] }) {
         <span style={{ fontSize: 13, fontWeight: 700, color: '#97cfdc', letterSpacing: '0.06em' }}>
           SO WHAT?
         </span>
-        <span style={{ fontSize: 11, color: '#64748b' }}>
+        <span style={{ fontSize: 11, color: '#6d7894' }}>
           What this tells us — and what to do about it
         </span>
       </div>
@@ -246,7 +246,7 @@ export default function SoWhatPanel({ players }: { players: PlayerBubble[] }) {
                 </div>
 
                 {/* Sub-labels */}
-                <div style={{ fontSize: 10, color: '#475569', marginBottom: 10, lineHeight: 1.4 }}>
+                <div style={{ fontSize: 10, color: '#5c6880', marginBottom: 10, lineHeight: 1.4 }}>
                   {cfg.offLabel} · {cfg.defLabel}
                 </div>
 
@@ -255,12 +255,12 @@ export default function SoWhatPanel({ players }: { players: PlayerBubble[] }) {
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 5, marginBottom: 10 }}>
                     {members.map(p => (
                       <div key={p.name} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <span style={{ fontSize: 12, fontWeight: 600, color: '#e2e8f0' }}>
+                        <span style={{ fontSize: 12, fontWeight: 600, color: '#e8eaf0' }}>
                           {p.firstName}
                         </span>
                         <span style={{
                           fontSize: 10, fontWeight: 700,
-                          color: p.netPPP >= 0 ? '#22c55e' : '#ef4444',
+                          color: p.netPPP >= 0 ? '#34d399' : '#f87171',
                         }}>
                           {p.netPPP >= 0 ? '+' : ''}{p.netPPP.toFixed(3)}
                         </span>
@@ -273,7 +273,7 @@ export default function SoWhatPanel({ players }: { players: PlayerBubble[] }) {
                   </div>
                 )}
 
-                <div style={{ fontSize: 10, color: '#64748b', lineHeight: 1.5, borderTop: `1px solid ${BORDER}`, paddingTop: 8 }}>
+                <div style={{ fontSize: 10, color: '#6d7894', lineHeight: 1.5, borderTop: `1px solid ${BORDER}`, paddingTop: 8 }}>
                   {cfg.meaning}
                 </div>
               </div>
@@ -292,13 +292,13 @@ export default function SoWhatPanel({ players }: { players: PlayerBubble[] }) {
                 <div key={i} style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
                   <span style={{
                     width: 18, height: 18, borderRadius: '50%',
-                    background: '#0a1628', border: `1px solid ${BORDER}`,
+                    background: '#1f2537', border: `1px solid ${BORDER}`,
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    fontSize: 9, fontWeight: 700, color: '#64748b', flexShrink: 0, marginTop: 1,
+                    fontSize: 9, fontWeight: 700, color: '#6d7894', flexShrink: 0, marginTop: 1,
                   }}>
                     {i + 1}
                   </span>
-                  <p style={{ fontSize: 13, color: '#94a3b8', lineHeight: 1.65, margin: 0 }}>
+                  <p style={{ fontSize: 13, color: '#a0a8bc', lineHeight: 1.65, margin: 0 }}>
                     {obs}
                   </p>
                 </div>
@@ -310,7 +310,7 @@ export default function SoWhatPanel({ players }: { players: PlayerBubble[] }) {
         {/* Coaching actions */}
         {actions.length > 0 && (
           <div>
-            <div style={{ fontSize: 11, fontWeight: 700, color: '#c4b5fd', letterSpacing: '0.08em', marginBottom: 12 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: '#7a9eb5', letterSpacing: '0.08em', marginBottom: 12 }}>
               COACHING ACTIONS
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -319,14 +319,14 @@ export default function SoWhatPanel({ players }: { players: PlayerBubble[] }) {
                   display: 'flex', gap: 12, alignItems: 'flex-start',
                   background: BG,
                   border: `1px solid ${BORDER}`,
-                  borderLeft: '3px solid #c4b5fd',
+                  borderLeft: '3px solid #7a9eb5',
                   borderRadius: 8,
                   padding: '12px 14px',
                 }}>
-                  <span style={{ fontSize: 11, fontWeight: 700, color: '#c4b5fd', flexShrink: 0, marginTop: 1 }}>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: '#7a9eb5', flexShrink: 0, marginTop: 1 }}>
                     →
                   </span>
-                  <p style={{ fontSize: 13, color: '#e2e8f0', lineHeight: 1.65, margin: 0 }}>
+                  <p style={{ fontSize: 13, color: '#e8eaf0', lineHeight: 1.65, margin: 0 }}>
                     {action}
                   </p>
                 </div>

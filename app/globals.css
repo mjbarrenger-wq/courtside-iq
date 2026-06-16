@@ -13,9 +13,9 @@
   --brand-light: #97cfdc;
 
   /* Dashboard text hierarchy */
-  --text-primary:   #f1f5f9;   /* values, main labels */
-  --text-secondary: #cbd5e1;   /* supporting labels */
-  --text-muted:     #8fa3b8;   /* hints, vs-opp, footnotes */
+  --text-primary:   #e8eaf0;   /* values, main labels */
+  --text-secondary: #c5cde0;   /* supporting labels */
+  --text-muted:     #6d7894;   /* hints, vs-opp, footnotes */
   --text-hero:      #ffffff;   /* hero numbers only */
 }
 
@@ -33,7 +33,7 @@
     --foreground: #ededed;
     --card-bg: #1e2330;
     --card-border: #2d3447;
-    --muted: #9ca3af;
+    --muted: #6d7894;
     --row-alt: #181d29;
   }
 }
@@ -89,6 +89,15 @@ input[type="range"].date-slider-input::-moz-range-track {
 }
 
 /* Semantic utility classes using CSS vars */
+/* Game row hover — used on main page Recent Results */
+.game-row-link > div {
+  transition: border-color 0.15s, background 0.15s;
+}
+.game-row-link:hover > div {
+  border-color: #97cfdc !important;
+  background: #1a2a40 !important;
+}
+
 .card {
   background: var(--card-bg);
   border: 1px solid var(--card-border);
@@ -98,3 +107,13 @@ input[type="range"].date-slider-input::-moz-range-track {
 .text-muted { color: var(--muted); }
 .row-base   { background: var(--background); }
 .row-alt    { background: var(--row-alt); }
+
+/* Tabular numbers — all stat values and data tables */
+table, [class*="stat"], [class*="metric"], [class*="data"] {
+  font-variant-numeric: tabular-nums lining-nums;
+  font-feature-settings: 'tnum' 1, 'lnum' 1;
+}
+td, th {
+  font-variant-numeric: tabular-nums lining-nums;
+  font-feature-settings: 'tnum' 1, 'lnum' 1;
+}

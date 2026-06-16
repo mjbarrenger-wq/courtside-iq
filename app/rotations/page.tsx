@@ -1,0 +1,96 @@
+// Rotation Planner — Server Component
+// Fetches players + their performance data, renders RotationPlanner client component
+
+import type { Metadata } from 'next'
+import RotationPlanner from './RotationPlanner'
+import type { RotationPlayer } from './types'
+
+export const dynamic = 'force-dynamic'
+export const metadata: Metadata = { title: 'Rotation Planner — Courtside IQ' }
+
+const SB_URL  = process.env.NEXT_PUBLIC_SUPABASE_URL!
+const SB_KEY  = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+
+const BG     = '#0f1117'
+const BORDER = '#2e374d'
+const HEADER = '#1f2537'
+
+async function fetchJson(path: string) {
+  const res = await fetch(`${SB_URL}/rest/v1/${path}`, {
+    headers: { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}` },
+    cache: 'no-store',
+  })
+  return res.json()
+}
+
+export default async function RotationsPage() {
+  const [playersRaw, statsRaw] = await Promise.all([
+    fetchJson(`players?select=*&order=jersey_number.asc`),
+    fetchJson(`player_game_stats?select=player_id,points,oreb,dreb,turnovers,ft_att,twopt_att,threept_att`),
+  ])
+
+  const players: RotationPlayer[] = (Array.isArray(playersRaw) ? playersRaw : [])
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    .map((p: any) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const rows = (Array.isArray(statsRaw) ? statsRaw : []).filter((r: any) => r.player_id === p.id)
+      // Basic PPP approximation from available stats
+      // TODO: use getSeasonAggregates for proper Off/Def PPP once available per player
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const pts = rows.reduce((s: number, r: any) => s + (r.points || 0), 0)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const poss = rows.reduce((s: number, r: any) =>
+        s + (r.twopt_att || 0) + (r.threept_att || 0) + 0.44 * (r.ft_att || 0) + (r.turnovers || 0), 0)
+      return {
+        id: p.id,
+        name: `${p.first_name} ${p.last_name}`,
+        firstName: p.first_name,
+        jersey: p.jersey_number,
+        primaryPositions: p.primary_positions ?? [],
+        secondaryPositions: p.secondary_positions ?? [],
+        offPpp: poss > 0 ? Math.round((pts / poss) * 1000) / 1000 : undefined,
+      }
+    })
+
+  return (
+    <main style={{
+      background: BG, minHeight: '100vh', color: '#e8eaf0',
+      fontFamily: "'Inter', system-ui, sans-serif",
+      WebkitFontSmoothing: 'antialiased', padding: '0 0 64px',
+    }}>
+      {/* Header */}
+      <div style={{ background: HEADER, borderBottom: `1px solid ${BORDER}`, padding: '20px 32px' }}>
+        <div style={{ maxWidth: 1100, margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div>
+            <div style={{ fontSize: 22, fontWeight: 800, color: '#e8eaf0', letterSpacing: '0.05em' }}>
+              COURTSIDE IQ
+            </div>
+            <div style={{ fontSize: 12, color: '#a0a8bc', marginTop: 3 }}>
+              WGT 12.2 · U12 Basketball · Melbourne · Season 2025–26 &nbsp;·&nbsp;
+              <span style={{ color: '#97cfdc', fontWeight: 700 }}>CMD Sports Analytics</span>
+            </div>
+          </div>
+          <a href="/" style={{ fontSize: 13, color: '#97cfdc', textDecoration: 'none' }}>&larr; Home</a>
+        </div>
+      </div>
+
+      <div style={{ maxWidth: 1100, margin: '0 auto', padding: '32px 32px 0' }}>
+        {/* Page title */}
+        <div style={{ marginBottom: 28 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: '#97cfdc', letterSpacing: '0.08em', marginBottom: 6 }}>
+            ROTATION PLANNER
+          </div>
+          <h1 style={{ fontSize: 28, fontWeight: 800, color: '#e8eaf0', margin: 0, lineHeight: 1.2 }}>
+            Pre-Game Rotations
+          </h1>
+          <p style={{ fontSize: 14, color: '#a0a8bc', marginTop: 8, lineHeight: 1.6, maxWidth: 600 }}>
+            Set player constraints, generate an optimised rotation plan, and adjust until it fits your game plan.
+            The planner respects starter/closer roles, minimum minutes, position balance, and minimises referee sub calls.
+          </p>
+        </div>
+
+        <RotationPlanner players={players} teamId="b1000000-0000-0000-0000-000000000001" />
+      </div>
+    </main>
+  )
+}
