@@ -1,9 +1,10 @@
 'use client'
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useCallback } from 'react'
 import type { RotationPlayer, PlayerConstraint, OptimiserResult, Position, GameConfig } from './types'
 import { DEFAULT_GAME_CONFIG } from './types'
 import { solve } from './optimiser'
 import RotationGrid from './RotationGrid'
+import { savePlayerPositions } from './actions'
 
 interface Props { players: RotationPlayer[]; teamId: string }
 
@@ -151,6 +152,35 @@ export default function RotationPlanner({ players: initialPlayers, teamId: _team
   const [constraints, setConstraints] = useState<PlayerConstraint[]>(defaultConstraints(initialPlayers))
   const [result, setResult]           = useState<OptimiserResult | null>(null)
   const [showPositions, setShowPositions] = useState(false)
+
+  // Track DB-committed positions (initialized from server-fetched data).
+  // Used to detect unsaved changes per player.
+  const [savedPositions, setSavedPositions] = useState<Record<string, { primary: Position[]; secondary: Position[] }>>(
+    () => Object.fromEntries(initialPlayers.map(p => [p.id, { primary: p.primaryPositions, secondary: p.secondaryPositions }]))
+  )
+  const [saveStatus, setSaveStatus] = useState<Record<string, 'idle' | 'saving' | 'saved' | 'error'>>({})
+
+  const isPositionDirty = useCallback((p: RotationPlayer): boolean => {
+    const saved = savedPositions[p.id]
+    if (!saved) return false
+    const sameArr = (a: Position[], b: Position[]) =>
+      a.length === b.length && a.every((v, i) => v === b[i])
+    return !sameArr(p.primaryPositions, saved.primary) ||
+           !sameArr(p.secondaryPositions, saved.secondary)
+  }, [savedPositions])
+
+  async function handleSavePositions(p: RotationPlayer) {
+    setSaveStatus(s => ({ ...s, [p.id]: 'saving' }))
+    const res = await savePlayerPositions(p.id, p.primaryPositions, p.secondaryPositions)
+    if (res.success) {
+      setSavedPositions(s => ({ ...s, [p.id]: { primary: p.primaryPositions, secondary: p.secondaryPositions } }))
+      setSaveStatus(s => ({ ...s, [p.id]: 'saved' }))
+      // Clear "saved" tick after 2s
+      setTimeout(() => setSaveStatus(s => ({ ...s, [p.id]: 'idle' })), 2000)
+    } else {
+      setSaveStatus(s => ({ ...s, [p.id]: 'error' }))
+    }
+  }
 
   // Game config
   const [config, setConfig] = useState<GameConfig>(DEFAULT_GAME_CONFIG)
@@ -479,12 +509,43 @@ export default function RotationPlanner({ players: initialPlayers, teamId: _team
                       )}
                     </td>
 
-                    {showPositions && (
-                      <td style={{ padding: '6px 10px' }}>
-                        <PositionEditor primary={p.primaryPositions} secondary={p.secondaryPositions}
-                          onChange={(pri, sec) => updatePlayer(p.id, { primaryPositions: pri, secondaryPositions: sec })} />
-                      </td>
-                    )}
+                    {showPositions && (() => {
+                      const dirty  = isPositionDirty(p)
+                      const status = saveStatus[p.id] ?? 'idle'
+                      return (
+                        <td style={{ padding: '6px 10px' }}>
+                          <PositionEditor primary={p.primaryPositions} secondary={p.secondaryPositions}
+                            onChange={(pri, sec) => updatePlayer(p.id, { primaryPositions: pri, secondaryPositions: sec })} />
+                          {/* Save / status row */}
+                          <div style={{ marginTop: 4, display: 'flex', alignItems: 'center', gap: 6, minHeight: 18 }}>
+                            {status === 'saving' && (
+                              <span style={{ fontSize: 9, color: MUTED }}>Saving…</span>
+                            )}
+                            {status === 'saved' && (
+                              <span style={{ fontSize: 9, color: GREEN }}>✓ Saved</span>
+                            )}
+                            {status === 'error' && (
+                              <span style={{ fontSize: 9, color: RED }}>✗ Error</span>
+                            )}
+                            {status === 'idle' && dirty && (
+                              <button
+                                onClick={() => handleSavePositions(p)}
+                                style={{
+                                  fontSize: 9, fontWeight: 700, padding: '2px 8px',
+                                  background: TEAL, color: '#0f1117',
+                                  border: 'none', borderRadius: 4, cursor: 'pointer',
+                                }}
+                              >
+                                Save
+                              </button>
+                            )}
+                            {status === 'idle' && !dirty && (
+                              <span style={{ fontSize: 9, color: MUTED }}>No changes</span>
+                            )}
+                          </div>
+                        </td>
+                      )
+                    })()}
 
                     {/* Override column: checkbox + conditional min/max inputs */}
                     <td style={{ padding: '9px 10px' }}>
@@ -533,7 +594,8 @@ export default function RotationPlanner({ players: initialPlayers, teamId: _team
 
         {showPositions && (
           <div style={{ marginTop: 10, padding: '8px 12px', background: BG, borderRadius: 8, border: `1px solid ${BORDER}`, fontSize: 10, color: MUTED }}>
-            Top chip = primary position. <strong style={{ color: SEC }}>2nd</strong> = secondary (can fill if needed). Changes apply on next Generate.
+            Top chip = primary position. <strong style={{ color: SEC }}>2nd</strong> = secondary (can fill if needed).
+            Click <strong style={{ color: TEAL }}>Save</strong> to write positions permanently to the database.
           </div>
         )}
       </div>
