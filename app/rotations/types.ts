@@ -1,5 +1,4 @@
 // Rotation Planner — Domain Types
-// See ROTATIONS.md for full spec
 
 export type Position = 'PG' | 'SG' | 'SF' | 'PF' | 'C'
 export type PositionGroup = 'perimeter' | 'wing' | 'interior'
@@ -7,7 +6,6 @@ export type PositionGroup = 'perimeter' | 'wing' | 'interior'
 export const POSITION_NUMBER: Record<Position, number> = {
   PG: 1, SG: 2, SF: 3, PF: 4, C: 5,
 }
-
 export const POSITION_GROUP: Record<Position, PositionGroup> = {
   PG: 'perimeter', SG: 'perimeter',
   SF: 'wing',
@@ -21,29 +19,44 @@ export interface RotationPlayer {
   jersey: number
   primaryPositions: Position[]
   secondaryPositions: Position[]
-  // Performance data (optional — used for PPP-weighted optimisation)
   offPpp?: number
   defPpp?: number
 }
 
 export interface PlayerConstraint {
   playerId: string
-  isStarter: boolean       // must be on court for Q1 Slot A
-  isCloser: boolean        // must be on court for Q4 Slot B
-  minMinutes: number       // minimum total game minutes (default 10)
-  maxMinutes: number       // maximum total game minutes (default 40)
+  isStarter: boolean
+  isCloser: boolean
+  minMinutes: number      // effective value used by solver (may come from team default or override)
+  maxMinutes: number
   mustPlayEveryQuarter: boolean
-  unavailable: boolean     // injured/absent — exclude entirely
+  unavailable: boolean
 }
 
-export type Quarter = 1 | 2 | 3 | 4
-export type Slot = 'A' | 'B'
+export type Quarter = number   // period number (1-based)
+export type SubWindow = number  // window within a period (1-based, 1 minute each)
 
 export interface RotationSlot {
   quarter: Quarter
-  slot: Slot
-  playerIds: string[]      // exactly 5
+  window: SubWindow
+  playerIds: string[]
   estimatedPpp?: number
+}
+
+export interface GameConfig {
+  numPeriods: number      // typically 2 (halves) or 4 (quarters)
+  periodDuration: number  // minutes per period (e.g. 10, 12, 8)
+  noSubFirstMins: number  // no lineup changes in first N minutes of each period
+  noSubLastMins: number   // no lineup changes in last N minutes of each period
+  balanceMinutes: boolean // try to equalize playing time across available players
+}
+
+export const DEFAULT_GAME_CONFIG: GameConfig = {
+  numPeriods: 4,
+  periodDuration: 10,
+  noSubFirstMins: 2,
+  noSubLastMins: 2,
+  balanceMinutes: false,
 }
 
 export interface RotationPlan {
@@ -51,8 +64,9 @@ export interface RotationPlan {
   name: string
   teamId: string
   gameId?: string
-  slots: RotationSlot[]    // 8 total: Q1A, Q1B, Q2A, Q2B, Q3A, Q3B, Q4A, Q4B
+  slots: RotationSlot[]
   constraints: PlayerConstraint[]
+  config: GameConfig
 }
 
 export interface ConstraintReport {
@@ -70,8 +84,8 @@ export interface OptimiserResult {
   feasible: boolean
   plan: RotationSlot[]
   constraintReport: ConstraintReport[]
-  totalSubCalls: number    // number of slot transitions with ≥1 player change
+  totalSubCalls: number
   subCallsPerQuarter: number[]
   warnings: string[]
-  estimatedNetPpp?: number
+  config: GameConfig
 }
