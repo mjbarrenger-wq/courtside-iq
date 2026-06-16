@@ -192,6 +192,32 @@ export default function RotationPlanner({ players: initialPlayers, teamId: _team
     setConstraints(prev => prev.map(c => c.unavailable ? c : { ...c, mustPlayEveryQuarter: v }))
   }
   function generate() {
+    const totalPlayerMins = config.numPeriods * config.periodDuration * 5
+
+    // When balanceMinutes + overrides coexist: remove committed override mins from the
+    // pool and redistribute the remainder evenly across non-override available players.
+    if (config.balanceMinutes && overrideIds.size > 0) {
+      const unavailIds  = new Set(constraints.filter(c => c.unavailable).map(c => c.playerId))
+      const availC      = constraints.filter(c => !unavailIds.has(c.playerId))
+      const overrideC   = availC.filter(c => overrideIds.has(c.playerId))
+      const nonOvrC     = availC.filter(c => !overrideIds.has(c.playerId))
+      const committed   = overrideC.reduce((s, c) => s + c.minMinutes, 0)
+      const remaining   = Math.max(0, totalPlayerMins - committed)
+      const perPlayer   = nonOvrC.length > 0 ? remaining / nonOvrC.length : 0
+
+      const merged = constraints.map(c => overrideIds.has(c.playerId)
+        ? { ...c }
+        : {
+            ...c,
+            minMinutes: Math.floor(perPlayer),
+            maxMinutes: Math.ceil(perPlayer) + 2,
+          })
+      // Values pre-computed — pass balanceMinutes:false so solver doesn't overwrite them
+      setResult(solve(players, merged, { ...config, balanceMinutes: false }))
+      return
+    }
+
+    // Default path
     const merged = constraints.map(c => {
       const hasOverride = overrideIds.has(c.playerId)
       return {
@@ -268,6 +294,29 @@ export default function RotationPlanner({ players: initialPlayers, teamId: _team
               </span>
             </div>
           </div>
+
+          {/* Min sub gap */}
+          <div>
+            <div style={{ fontSize: 11, color: MUTED, marginBottom: 6 }}>Min gap between subs</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+              <NumInput value={config.minSubGapMins} min={0} max={config.periodDuration} width={52}
+                onChange={v => updateConfig({ minSubGapMins: v })} />
+              <span style={{ fontSize: 12, color: SEC }}>mins</span>
+              {config.minSubGapMins > 0 && effectiveSubs > 0 && (
+                <span style={{
+                  fontSize: 10, color: TEAL,
+                  background: 'rgba(151,207,220,0.1)',
+                  border: `1px solid rgba(151,207,220,0.3)`,
+                  borderRadius: 12, padding: '2px 8px',
+                }}>
+                  max {Math.floor(effectiveSubs / config.minSubGapMins)} sub{Math.floor(effectiveSubs / config.minSubGapMins) !== 1 ? 's' : ''} per period
+                </span>
+              )}
+              {config.minSubGapMins === 0 && (
+                <span style={{ fontSize: 10, color: MUTED }}>No gap limit</span>
+              )}
+            </div>
+          </div>
         </div>
       </div>
 
@@ -302,7 +351,7 @@ export default function RotationPlanner({ players: initialPlayers, teamId: _team
               onChange={v => setDefaultMax(v)} />
           </div>
 
-          {/* Balance toggle */}
+          {/* Balance across players toggle */}
           <div style={{
             display: 'flex', alignItems: 'center', gap: 10,
             padding: '10px 16px', background: config.balanceMinutes ? 'rgba(151,207,220,0.08)' : BG,
@@ -312,13 +361,31 @@ export default function RotationPlanner({ players: initialPlayers, teamId: _team
             <Check checked={config.balanceMinutes} onChange={v => updateConfig({ balanceMinutes: v })} />
             <div>
               <div style={{ fontSize: 12, fontWeight: 600, color: config.balanceMinutes ? TEAL : SEC }}>
-                Balance playing time
+                Balance across players
               </div>
               {config.balanceMinutes && availablePlayers.length > 0 && (
                 <div style={{ fontSize: 10, color: MUTED, marginTop: 2 }}>
                   Target: {targetMins.toFixed(1)} min ({availablePlayers.length} players)
                 </div>
               )}
+            </div>
+          </div>
+
+          {/* Balance across periods toggle */}
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 10,
+            padding: '10px 16px', background: config.balanceByPeriod ? 'rgba(151,207,220,0.08)' : BG,
+            border: `1px solid ${config.balanceByPeriod ? TEAL : BORDER}`,
+            borderRadius: 8, cursor: 'pointer', flexShrink: 0,
+          }} onClick={() => updateConfig({ balanceByPeriod: !config.balanceByPeriod })}>
+            <Check checked={config.balanceByPeriod} onChange={v => updateConfig({ balanceByPeriod: v })} />
+            <div>
+              <div style={{ fontSize: 12, fontWeight: 600, color: config.balanceByPeriod ? TEAL : SEC }}>
+                Balance by {config.numPeriods === 2 ? 'half' : 'quarter'}
+              </div>
+              <div style={{ fontSize: 10, color: MUTED, marginTop: 2 }}>
+                Spread each player's mins evenly
+              </div>
             </div>
           </div>
         </div>
@@ -411,12 +478,13 @@ export default function RotationPlanner({ players: initialPlayers, teamId: _team
                         <Check checked={hasOvr} onChange={v => toggleOverride(p.id, v)} />
                         {hasOvr ? (
                           <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                            <span style={{ fontSize: 9, color: MUTED }}>min</span>
                             <NumInput value={c.minMinutes} min={0} max={c.maxMinutes} width={48}
                               onChange={v => updateConstraint(p.id, { minMinutes: v })} />
                             <span style={{ fontSize: 9, color: MUTED }}>–</span>
                             <NumInput value={c.maxMinutes} min={c.minMinutes} max={totalGameMins} width={48}
                               onChange={v => updateConstraint(p.id, { maxMinutes: v })} />
-                            <span style={{ fontSize: 9, color: MUTED }}>min</span>
+                            <span style={{ fontSize: 9, color: MUTED }}>max</span>
                           </div>
                         ) : (
                           <span style={{ fontSize: 10, color: MUTED, fontVariantNumeric: 'tabular-nums' }}>

@@ -98,6 +98,8 @@ function TimelineView({ result, players }: { result: OptimiserResult; players: R
   const { numPeriods, periodDuration, noSubFirstMins, noSubLastMins } = config
   const NAME_W = 110
 
+  const [hoveredSlot, setHoveredSlot] = useState<{ q: number; w: number } | null>(null)
+
   // Build period array and window array
   const periods  = Array.from({ length: numPeriods },  (_, i) => i + 1)
   const windows  = Array.from({ length: periodDuration }, (_, i) => i + 1)
@@ -107,7 +109,7 @@ function TimelineView({ result, players }: { result: OptimiserResult; players: R
   const labelEvery = periodDuration <= 8 ? 2 : periodDuration <= 12 ? 2 : 3
 
   return (
-    <div style={{ overflowX: 'auto' }}>
+    <div style={{ overflowX: 'auto' }} onMouseLeave={() => setHoveredSlot(null)}>
 
       {/* Period headers */}
       <div style={{ display: 'flex', marginLeft: NAME_W, marginBottom: 4 }}>
@@ -140,6 +142,34 @@ function TimelineView({ result, players }: { result: OptimiserResult; players: R
         ))}
       </div>
 
+      {/* Hover tooltip — shows period + time + on-court players for hovered cell */}
+      <div style={{
+        height: 28, marginBottom: 8, display: 'flex', alignItems: 'center',
+        paddingLeft: NAME_W, transition: 'opacity 0.1s',
+        opacity: hoveredSlot ? 1 : 0, pointerEvents: 'none',
+      }}>
+        {hoveredSlot && (() => {
+          const slot = slotOf(plan, hoveredSlot.q, hoveredSlot.w)
+          const time = windowTimeLabel(hoveredSlot.w, periodDuration)
+          const onCourt = slot?.playerIds.map(id => playerName(players, id)).join('  ·  ') ?? ''
+          return (
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 12,
+              fontSize: 11, background: 'rgba(151,207,220,0.08)',
+              border: `1px solid rgba(151,207,220,0.2)`,
+              borderRadius: 6, padding: '4px 10px',
+            }}>
+              <span style={{ color: TEAL, fontWeight: 700 }}>
+                {periodAbbr(numPeriods, hoveredSlot.q)} · {time} remaining
+              </span>
+              {onCourt && (
+                <span style={{ color: SEC }}>{onCourt}</span>
+              )}
+            </div>
+          )
+        })()}
+      </div>
+
       {/* Player rows */}
       {players.map((p, idx) => {
         const color = PLAYER_COLORS[idx % PLAYER_COLORS.length]
@@ -168,13 +198,16 @@ function TimelineView({ result, players }: { result: OptimiserResult; players: R
                   const isSubOut = !onCourt && prevSlot != null && prevSlot.playerIds.includes(p.id)
 
                   return (
-                    <div key={w} style={{ flex: 1, position: 'relative', minWidth: 4 }}>
+                    <div key={w} style={{ flex: 1, position: 'relative', minWidth: 4 }}
+                      onMouseEnter={() => setHoveredSlot({ q: period, w })}>
                       <div style={{
                         height: 24,
+                        // Locked bench cells get a stripe pattern — use background shorthand only
+                        // (mixing background + backgroundImage on the same element causes React warnings)
                         background: onCourt
                           ? (locked ? color + 'bb' : color)
                           : locked
-                            ? 'rgba(255,255,255,0.015)'
+                            ? 'repeating-linear-gradient(45deg, transparent, transparent 3px, rgba(255,255,255,0.015) 3px, rgba(255,255,255,0.015) 6px)'
                             : 'rgba(255,255,255,0.04)',
                         borderRadius: 3,
                         border: onCourt
@@ -182,10 +215,6 @@ function TimelineView({ result, players }: { result: OptimiserResult; players: R
                           : `1px solid ${locked ? '#1e2535' : BORDER}`,
                         opacity: onCourt ? 1 : 0.3,
                         boxShadow: isSubIn ? `inset 3px 0 0 rgba(255,255,255,0.8)` : 'none',
-                        // Locked zone: subtle diagonal stripe overlay
-                        backgroundImage: !onCourt && locked
-                          ? 'repeating-linear-gradient(45deg, transparent, transparent 3px, rgba(255,255,255,0.015) 3px, rgba(255,255,255,0.015) 6px)'
-                          : 'none',
                         transition: 'opacity 0.1s',
                       }} />
                       {/* Sub call marker */}
@@ -379,9 +408,59 @@ export default function RotationGrid({ result, players }: Props) {
         {result.feasible ? (
           <span style={{ fontSize: 11, color: GREEN, fontWeight: 600 }}>✓ All constraints met</span>
         ) : (
-          <span style={{ fontSize: 11, color: AMBER, fontWeight: 600 }}>⚠ Some constraints unmet</span>
+          <span style={{ fontSize: 11, color: AMBER, fontWeight: 600 }}>
+            ⚠ {result.constraintReport.filter(r =>
+              !r.minMinutesMet || !r.maxMinutesMet || !r.starterMet || !r.closerMet || !r.everyQuarterMet
+            ).length} constraint{result.constraintReport.filter(r =>
+              !r.minMinutesMet || !r.maxMinutesMet || !r.starterMet || !r.closerMet || !r.everyQuarterMet
+            ).length !== 1 ? 's' : ''} unmet
+          </span>
         )}
       </div>
+
+      {/* Constraint violations panel */}
+      {!result.feasible && (() => {
+        const violations = result.constraintReport.flatMap(r => {
+          const v: { player: string; msg: string; type: 'hard' | 'soft' }[] = []
+          if (!r.minMinutesMet)
+            v.push({ player: r.name, type: 'hard',
+              msg: `min minutes unmet — ${r.minutesAssigned} assigned, ${r.minMinutes} required` })
+          if (!r.maxMinutesMet)
+            v.push({ player: r.name, type: 'soft',
+              msg: `max minutes exceeded — ${r.minutesAssigned} assigned, cap is ${r.maxMinutes}` })
+          if (!r.starterMet)
+            v.push({ player: r.name, type: 'hard', msg: 'not in starting lineup as required' })
+          if (!r.closerMet)
+            v.push({ player: r.name, type: 'hard', msg: 'not in closing lineup as required' })
+          if (!r.everyQuarterMet)
+            v.push({ player: r.name, type: 'hard',
+              msg: `not in every ${numPeriods === 2 ? 'half' : 'quarter'} — played ${numPeriods === 2 ? 'H' : 'Q'}${r.quartersPlayed.join(`, ${numPeriods === 2 ? 'H' : 'Q'}`)} only` })
+          return v
+        })
+        return (
+          <div style={{
+            marginBottom: 16, padding: '12px 16px',
+            background: 'rgba(251,191,36,0.05)', border: `1px solid rgba(251,191,36,0.25)`,
+            borderRadius: 10,
+          }}>
+            <div style={{ fontSize: 10, fontWeight: 700, color: AMBER, letterSpacing: '0.06em', marginBottom: 10 }}>
+              CONSTRAINT VIOLATIONS
+            </div>
+            {violations.map((v, i) => (
+              <div key={i} style={{
+                display: 'flex', alignItems: 'baseline', gap: 8,
+                paddingBottom: i < violations.length - 1 ? 6 : 0,
+                marginBottom: i < violations.length - 1 ? 6 : 0,
+                borderBottom: i < violations.length - 1 ? `1px solid rgba(251,191,36,0.12)` : 'none',
+              }}>
+                <span style={{ fontSize: 11, color: AMBER }}>⚠</span>
+                <span style={{ fontSize: 12, fontWeight: 700, color: PRIMARY, minWidth: 120 }}>{v.player}</span>
+                <span style={{ fontSize: 12, color: '#c9a84c' }}>{v.msg}</span>
+              </div>
+            ))}
+          </div>
+        )
+      })()}
 
       {/* Tabs */}
       <div style={{ display: 'flex', borderBottom: `1px solid ${BORDER}`, marginBottom: 20 }}>

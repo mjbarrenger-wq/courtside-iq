@@ -44,11 +44,13 @@ export interface RotationSlot {
 }
 
 export interface GameConfig {
-  numPeriods: number      // typically 2 (halves) or 4 (quarters)
-  periodDuration: number  // minutes per period (e.g. 10, 12, 8)
-  noSubFirstMins: number  // no lineup changes in first N minutes of each period
-  noSubLastMins: number   // no lineup changes in last N minutes of each period
-  balanceMinutes: boolean // try to equalize playing time across available players
+  numPeriods: number       // typically 2 (halves) or 4 (quarters)
+  periodDuration: number   // minutes per period (e.g. 10, 12, 8)
+  noSubFirstMins: number   // no lineup changes in first N minutes of each period
+  noSubLastMins: number    // no lineup changes in last N minutes of each period
+  minSubGapMins: number    // minimum minutes between consecutive sub calls within a period (0 = no limit)
+  balanceMinutes: boolean  // try to equalize playing time across available players
+  balanceByPeriod: boolean // try to spread each player's minutes evenly across periods
 }
 
 export const DEFAULT_GAME_CONFIG: GameConfig = {
@@ -56,7 +58,9 @@ export const DEFAULT_GAME_CONFIG: GameConfig = {
   periodDuration: 10,
   noSubFirstMins: 2,
   noSubLastMins: 2,
+  minSubGapMins: 2,
   balanceMinutes: false,
+  balanceByPeriod: true,
 }
 
 export interface RotationPlan {
@@ -73,7 +77,10 @@ export interface ConstraintReport {
   playerId: string
   name: string
   minutesAssigned: number
+  minMinutes: number       // effective target (for display)
+  maxMinutes: number       // effective cap (for display)
   minMinutesMet: boolean
+  maxMinutesMet: boolean
   quartersPlayed: number[]
   everyQuarterMet: boolean
   starterMet: boolean
