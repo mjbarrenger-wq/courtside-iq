@@ -112,13 +112,14 @@ function TimelineView({ result, players }: { result: OptimiserResult; players: R
     <div style={{ overflowX: 'auto' }} onMouseLeave={() => setHoveredSlot(null)}>
 
       {/* Period headers */}
-      <div style={{ display: 'flex', marginLeft: NAME_W, marginBottom: 4 }}>
-        {periods.map((p, pi) => (
+      <div style={{ display: 'flex', marginLeft: NAME_W, marginBottom: 4, gap: 8 }}>
+        {periods.map((p) => (
           <div key={p} style={{
             flex: 1, textAlign: 'center',
             fontSize: 11, fontWeight: 700, color: TEAL, letterSpacing: '0.06em',
-            borderLeft: pi > 0 ? `1px solid ${BORDER}` : 'none',
-            paddingLeft: pi > 0 ? 4 : 0,
+            background: 'rgba(151,207,220,0.06)',
+            borderRadius: '4px 4px 0 0',
+            padding: '3px 0',
           }}>
             {periodAbbr(numPeriods, p)}
           </div>
@@ -126,9 +127,9 @@ function TimelineView({ result, players }: { result: OptimiserResult; players: R
       </div>
 
       {/* Window time labels */}
-      <div style={{ display: 'flex', marginLeft: NAME_W, marginBottom: 8 }}>
-        {periods.map((p, pi) => (
-          <div key={p} style={{ flex: 1, display: 'flex', borderLeft: pi > 0 ? `1px solid ${BORDER}` : 'none', paddingLeft: pi > 0 ? 4 : 0 }}>
+      <div style={{ display: 'flex', marginLeft: NAME_W, marginBottom: 8, gap: 8 }}>
+        {periods.map((p) => (
+          <div key={p} style={{ flex: 1, display: 'flex' }}>
             {windows.map((w) => {
               const locked = isLockedWindow(w, noSubFirstMins, noSubLastMins, periodDuration)
               const showLabel = (w === 1) || (w % labelEvery === 0) || (w === periodDuration)
@@ -177,7 +178,7 @@ function TimelineView({ result, players }: { result: OptimiserResult; players: R
         if (!hasAnySlot) return null
 
         return (
-          <div key={p.id} style={{ display: 'flex', alignItems: 'center', marginBottom: 4 }}>
+          <div key={p.id} style={{ display: 'flex', alignItems: 'center', marginBottom: 4, gap: 8 }}>
             {/* Name column */}
             <div style={{ width: NAME_W, flexShrink: 0, fontSize: 11, color: SEC, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
               <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: color, marginRight: 5 }} />
@@ -185,8 +186,8 @@ function TimelineView({ result, players }: { result: OptimiserResult; players: R
             </div>
 
             {/* Period segments */}
-            {periods.map((period, pi) => (
-              <div key={period} style={{ flex: 1, display: 'flex', gap: 1, borderLeft: pi > 0 ? `1px solid ${BORDER}` : 'none', paddingLeft: pi > 0 ? 4 : 0 }}>
+            {periods.map((period) => (
+              <div key={period} style={{ flex: 1, display: 'flex', gap: 1, background: 'rgba(255,255,255,0.015)', borderRadius: 4, padding: '2px 3px' }}>
                 {windows.map(w => {
                   const slot    = slotOf(plan, period, w)
                   const onCourt = slot?.playerIds.includes(p.id) ?? false
@@ -410,9 +411,9 @@ export default function RotationGrid({ result, players }: Props) {
         ) : (
           <span style={{ fontSize: 11, color: AMBER, fontWeight: 600 }}>
             ⚠ {result.constraintReport.filter(r =>
-              !r.minMinutesMet || !r.maxMinutesMet || !r.starterMet || !r.closerMet || !r.everyQuarterMet
+              !r.minMinutesMet || !r.maxMinutesMet || !r.starterMet || !r.closerMet || !r.everyQuarterMet || !r.minStintMet
             ).length} constraint{result.constraintReport.filter(r =>
-              !r.minMinutesMet || !r.maxMinutesMet || !r.starterMet || !r.closerMet || !r.everyQuarterMet
+              !r.minMinutesMet || !r.maxMinutesMet || !r.starterMet || !r.closerMet || !r.everyQuarterMet || !r.minStintMet
             ).length !== 1 ? 's' : ''} unmet
           </span>
         )}
@@ -435,6 +436,9 @@ export default function RotationGrid({ result, players }: Props) {
           if (!r.everyQuarterMet)
             v.push({ player: r.name, type: 'hard',
               msg: `not in every ${numPeriods === 2 ? 'half' : 'quarter'} — played ${numPeriods === 2 ? 'H' : 'Q'}${r.quartersPlayed.join(`, ${numPeriods === 2 ? 'H' : 'Q'}`)} only` })
+          if (!r.minStintMet)
+            v.push({ player: r.name, type: 'soft',
+              msg: `${r.shortStintCount} short stint${r.shortStintCount !== 1 ? 's' : ''} — subbed out before ${result.config.minStintMins} min minimum` })
           return v
         })
         return (

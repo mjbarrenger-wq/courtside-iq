@@ -8,21 +8,25 @@ import type {
 import { DEFAULT_GAME_CONFIG, POSITION_GROUP } from './types'
 
 const PER_SLOT    = 5
-const NUM_STARTS  = 80   // random restarts
+const NUM_STARTS  = 120  // random restarts
 const LOCAL_ITERS = 30   // hill-climbing passes per start (each pass = one accepted improvement)
 
 // ── Score weights ─────────────────────────────────────────────────────────────
 
 const W = {
-  minMinutes:    120,  // per missing minute (hard)
-  maxMinutes:    15,   // per excess minute (soft)
-  starterMiss:   600,  // flat per player (hard)
-  closerMiss:    600,  // flat per player (hard)
-  everyPeriod:   250,  // per period missed (hard)
-  posBalance:    40,   // per slot with invalid position mix (hard)
-  subCall:       3,    // per sub call to ref (soft — minimise)
-  timeVariance:  6,    // per minute deviation from target across players (balanceMinutes)
-  periodBalance: 50,   // per minute deviation from per-period target per player (balanceByPeriod)
+  minMinutes:      120,  // per missing minute (hard)
+  maxMinutes:       15,  // per excess minute (soft)
+  starterMiss:     600,  // flat per player (hard)
+  closerMiss:      600,  // flat per player (hard)
+  everyPeriod:     250,  // per period missed (hard)
+  posBalance:       40,  // per slot with invalid position mix (hard)
+  subCall:           3,  // per sub call to ref (soft — minimise)
+  timeVariance:      6,  // per minute deviation from target across players (balanceMinutes)
+  periodBalance:    80,  // per minute deviation from per-period target per player (balanceByPeriod)
+  quarterImbalance: 80,  // per excess minute beyond maxQtrImbalance (max-min across quarters)
+  splitStint:      100,  // per broken stint per player per quarter (on→off→on)
+  shortStint:       30,  // per minute under minStintMins when subbed out early
+  crossQuarterPlay: 40,  // per player playing the last slot of Q and first slot of Q+1 (no break)
 }
 
 // ── Position helpers ──────────────────────────────────────────────────────────
@@ -86,6 +90,47 @@ function isGapLocked(window: number, lastSubWindow: number, minSubGapMins: numbe
   return window < lastSubWindow + minSubGapMins
 }
 
+// Returns a boolean[] — true means the slot can have a lineup change (not locked by no-sub zone
+// or gap constraint). Recomputed from the current assignments so repairs don't attempt slots
+// that enforceFreeze would immediately revert. Must be called fresh each repair iteration
+// because each successful repair changes assignments, which may shift gap-lock boundaries.
+function computeModifiable(
+  assignments:    string[][],
+  slotOrder:      { quarter: number; window: number }[],
+  periodDuration: number,
+  noSubFirstMins: number,
+  noSubLastMins:  number,
+  minSubGapMins:  number,
+): boolean[] {
+  const modifiable: boolean[] = []
+  const lastSub = new Map<number, number>()  // quarter → last sub window
+
+  for (let i = 0; i < assignments.length; i++) {
+    const { quarter, window } = slotOrder[i]
+
+    if (i === 0 || isPeriodStart(i, periodDuration)) {
+      lastSub.set(quarter, 0)
+      modifiable.push(true)  // period starts are always free to change
+      continue
+    }
+
+    const noSubZone = isLockedWindow(window, noSubFirstMins, noSubLastMins, periodDuration)
+    const gapZone   = isGapLocked(window, lastSub.get(quarter) ?? 0, minSubGapMins)
+
+    modifiable.push(!noSubZone && !gapZone)
+
+    // Update last sub window tracker only for free slots where a sub actually occurred
+    if (!noSubZone && !gapZone) {
+      const prevSet = new Set(assignments[i - 1])
+      if (assignments[i].some(id => !prevSet.has(id))) {
+        lastSub.set(quarter, window)
+      }
+    }
+  }
+
+  return modifiable
+}
+
 // ── Urgency ───────────────────────────────────────────────────────────────────
 
 function urgency(
@@ -119,12 +164,14 @@ function pickLineup(params: {
   periodPlayed?:       Map<string, number>   // slots played so far in current period
   periodMinTarget?:    Map<string, number>   // target slots per period per player
   windowsLeftInPeriod?: number
+  prevQuarterLastLineup?: string[]           // last lineup of the previous quarter (for cross-quarter fatigue)
   warnings:            string[]
 }): string[] {
   const {
     eligible, prevLineup, locked, byId, slotsPlayed, minSlots,
     slotIndex, totalSlots, jitter, maxStagger,
     periodPlayed, periodMinTarget, windowsLeftInPeriod,
+    prevQuarterLastLineup,
     warnings,
   } = params
   const eligSet = new Set(eligible.map(p => p.id))
@@ -150,7 +197,38 @@ function pickLineup(params: {
       // Strength 2.5 ensures period balance dominates sub-call-minimisation noise.
       periodScore = Math.max(-1.5, -(diff / Math.max(1, windowsLeftInPeriod))) * 2.5
     }
-    return base + periodScore + (jitter > 0 ? Math.random() * jitter : 0)
+    // Global pace signal: compare actual played vs proportional share of the game so far.
+    // Prevents players from consistently occupying 6-min stint slots across multiple quarters —
+    // which is what happens when jitter swamps the small base-urgency difference between
+    // players who differ by just 2 min played.
+    //
+    // Example at Q2 start (slotIndex=10, totalSlots=40):
+    //   proportionalExpected = 20 * 10/40 = 5
+    //   Cooper played 4 → pace = -1 → paceScore = +0.20  (boosted)
+    //   Mitch  played 6 → pace = +1 → paceScore = -0.20  (suppressed)
+    //   Gap = 0.40 — five times larger than jitter (0.08), so reliably preserved.
+    const globalPlayed = slotsPlayed.get(id) ?? 0
+    const proportionalExpected = slotIndex > 0
+      ? (minSlots.get(id) ?? 0) * (slotIndex / totalSlots)
+      : 0
+    const pace      = globalPlayed - proportionalExpected   // positive = ahead, negative = behind
+    const paceScore = Math.max(-1.5, -pace * 0.20)         // cap at ±1.5 to avoid dominating hard constraints
+
+    // Cross-quarter rest signal: at period starts, softly discourage players who just played
+    // the final slot of the previous quarter from immediately starting the next one.
+    // This reduces the "10 consecutive minutes" problem at quarter boundaries.
+    //
+    // Calibration: -0.5 is deliberately moderate.
+    //   - Strong enough to reliably shift the greedy away from Q-end players at period starts
+    //     when rested players exist at similar urgency (6× jitter, so almost always applied).
+    //   - Weak enough that a player significantly behind their minute target (paceScore > 0.5)
+    //     can still start the next quarter if the solver genuinely needs them there.
+    //   - This was -0.7 previously (too strong — locked rested players into the starting role
+    //     every quarter, preventing minute balance) and +0.8 (wrong direction — actively pushed
+    //     Q-end players into Q+1 start). -0.5 is the right middle ground.
+    const fatigueScore = prevQuarterLastLineup?.includes(id) ? -0.5 : 0
+
+    return base + periodScore + paceScore + fatigueScore + (jitter > 0 ? Math.random() * jitter : 0)
   }
 
   let carryIds: string[] = []
@@ -260,25 +338,60 @@ function repairMinutes(
   periodDuration: number,
   noSubFirstMins: number,
   noSubLastMins:  number,
+  minSubGapMins:  number,
   maxStagger:     number,
   warnings:       string[],
+  config:         GameConfig,
 ): void {
   const LAST = assignments.length - 1
+  // Track players we've failed to fix so we continue to the next under-player rather than
+  // aborting the entire repair loop (original break-on-failure abandoned all fixable players).
+  const unfixable = new Set<string>()
+
   for (let iter = 0; iter < 300; iter++) {
-    const under = available.find(p => (slotsPlayed.get(p.id) ?? 0) < (minSlots.get(p.id) ?? 0))
+    const under = available.find(p =>
+      (slotsPlayed.get(p.id) ?? 0) < (minSlots.get(p.id) ?? 0) && !unfixable.has(p.id)
+    )
     if (!under) break
 
+    // Recompute modifiable slots each iteration: each successful repair changes assignments,
+    // which can shift gap-lock boundaries. Using only isLockedWindow caused repairs to place
+    // players in gap-locked slots that enforceFreeze would later revert, producing 19-min
+    // violations even though 20 is achievable.
+    const modifiable = computeModifiable(assignments, slotOrder, periodDuration, noSubFirstMins, noSubLastMins, minSubGapMins)
+
+    // Quarter-aware candidate sort: prefer slots in quarters where this player
+    // is most behind their per-quarter target. This prevents repairMinutes from
+    // stuffing all repair minutes into the last quarter (whichever happens to have
+    // swappable slots), which is the main cause of uneven quarter distributions.
+    const perQTarget = (minSlots.get(under.id) ?? 0) / config.numPeriods
+    const underQPlayed: Record<number, number> = {}
+    for (let i = 0; i < assignments.length; i++) {
+      const q = slotOrder[i].quarter
+      underQPlayed[q] = (underQPlayed[q] ?? 0) + (assignments[i].includes(under.id) ? 1 : 0)
+    }
+    const candidateSlots = Array.from({ length: assignments.length }, (_, i) => i)
+      .filter(s => !assignments[s].includes(under.id) && modifiable[s])
+      .sort((a, b) => {
+        // Most-behind quarter first (largest deficit = lowest played vs target)
+        const qa = slotOrder[a].quarter, qb = slotOrder[b].quarter
+        const defA = perQTarget - (underQPlayed[qa] ?? 0)
+        const defB = perQTarget - (underQPlayed[qb] ?? 0)
+        return defB - defA  // descending deficit → most-behind quarter first
+      })
+
     let ok = false
-    for (let s = 0; s < assignments.length; s++) {
-      if (assignments[s].includes(under.id)) continue
-      if (isLockedWindow(slotOrder[s].window, noSubFirstMins, noSubLastMins, periodDuration)) continue
+    for (const s of candidateSlots) {
 
       const swappable = assignments[s]
         .filter(id => {
           const c = cMap.get(id)
           if (s === 0    && c?.isStarter) return false
           if (s === LAST && c?.isCloser)  return false
-          return true
+          // Anti-cycling: only remove players who are strictly above their minimum.
+          // Prevents the A↔B minute-swap loop where both players sit at exactly their
+          // minimum target and the repair oscillates between them indefinitely.
+          return (slotsPlayed.get(id) ?? 0) > (minSlots.get(id) ?? 0)
         })
         .sort((a, b) =>
           (slotsPlayed.get(b) ?? 0) / (maxSlots.get(b) ?? 1) -
@@ -296,15 +409,20 @@ function repairMinutes(
       if (!prevOk || !nextOk || !posValid(newLineup, byId)) continue
 
       assignments[s] = newLineup
-      slotsPlayed.set(under.id, (slotsPlayed.get(under.id) ?? 0) + 1)
-      slotsPlayed.set(toRemove, Math.max(0, (slotsPlayed.get(toRemove) ?? 0) - 1))
+      // Enforce freeze immediately so carries propagate before the next iteration.
+      // Without this, slotsPlayed drifts: repair tracks ±1 per swap but enforceFreeze
+      // can cascade into adjacent slots (e.g. gap-carry at s+1), causing the next
+      // iteration to see incorrect counts and produce odd totals like 19.
+      enforceFreeze(assignments, slotOrder, config)
+      available.forEach(p => slotsPlayed.set(p.id, 0))
+      assignments.forEach(lineup => lineup.forEach(id => slotsPlayed.set(id, (slotsPlayed.get(id) ?? 0) + 1)))
       ok = true
       break
     }
 
     if (!ok) {
       warnings.push(`${under.name} could not reach minimum minutes — constraints may be over-specified`)
-      break
+      unfixable.add(under.id)  // skip this player next iteration; continue to others
     }
   }
 }
@@ -321,8 +439,10 @@ function repairEveryQuarter(
   periodDuration: number,
   noSubFirstMins: number,
   noSubLastMins:  number,
+  minSubGapMins:  number,
   maxStagger:     number,
   warnings:       string[],
+  config:         GameConfig,
 ): void {
   const LAST  = assignments.length - 1
   const everyQ = available.filter(p => cMap.get(p.id)?.mustPlayEveryQuarter)
@@ -332,9 +452,13 @@ function repairEveryQuarter(
       const qIdxs = slotOrder.map((s, i) => ({ ...s, i })).filter(s => s.quarter === q)
       if (qIdxs.some(s => assignments[s.i].includes(player.id))) continue
 
+      // Recompute modifiable slots for the current assignment state — gap-aware, same
+      // fix as repairMinutes to avoid placing players in slots enforceFreeze will revert.
+      const modifiable = computeModifiable(assignments, slotOrder, periodDuration, noSubFirstMins, noSubLastMins, minSubGapMins)
+
       let inserted = false
       for (const { i } of qIdxs) {
-        if (isLockedWindow(slotOrder[i].window, noSubFirstMins, noSubLastMins, periodDuration)) continue
+        if (!modifiable[i]) continue
         const swappable = assignments[i]
           .filter(id => {
             const c = cMap.get(id)
@@ -355,8 +479,9 @@ function repairEveryQuarter(
         if (!prevOk || !nextOk || !posValid(newLineup, byId)) continue
 
         assignments[i] = newLineup
-        slotsPlayed.set(player.id, (slotsPlayed.get(player.id) ?? 0) + 1)
-        slotsPlayed.set(toRemove, Math.max(0, (slotsPlayed.get(toRemove) ?? 0) - 1))
+        enforceFreeze(assignments, slotOrder, config)
+        available.forEach(p => slotsPlayed.set(p.id, 0))
+        assignments.forEach(lineup => lineup.forEach(id => slotsPlayed.set(id, (slotsPlayed.get(id) ?? 0) + 1)))
         inserted = true
         break
       }
@@ -439,10 +564,79 @@ function scoreAssignments(
       const total = played.get(p.id) ?? 0
       if (total === 0) continue
       const targetPerPeriod = total / config.numPeriods
-      for (let q = 1; q <= config.numPeriods; q++) {
-        const minsInQ = slotOrder.filter((s, i) => s.quarter === q && assignments[i]?.includes(p.id)).length
+      const perQMins = Array.from({ length: config.numPeriods }, (_, qi) =>
+        slotOrder.filter((s, i) => s.quarter === qi + 1 && assignments[i]?.includes(p.id)).length
+      )
+      for (const minsInQ of perQMins) {
         score -= Math.abs(minsInQ - targetPerPeriod) * W.periodBalance
       }
+
+      // Quarter imbalance penalty: strongly penalise solutions where the spread between
+      // the player's best and worst quarter exceeds maxQtrImbalance.
+      // e.g. with maxQtrImbalance=2: a 2+10+4+4 spread (range 8) gets penalised 480pts;
+      // a 4+6+5+5 spread (range 2) gets 0 penalty. Drives local search toward 5+5+5+5.
+      if (config.maxQtrImbalance >= 0) {
+        const maxQ   = Math.max(...perQMins)
+        const minQ   = Math.min(...perQMins)
+        const excess = Math.max(0, (maxQ - minQ) - config.maxQtrImbalance)
+        score -= excess * W.quarterImbalance
+      }
+    }
+  }
+
+  // Split stint penalty — penalise any quarter where a player appears, disappears, then
+  // reappears. This guides the solver toward continuous stints (soft — can be broken when
+  // position coverage or other hard constraints require it).
+  for (const p of available) {
+    for (let q = 1; q <= config.numPeriods; q++) {
+      const qSlots = slotOrder
+        .map((s, i) => ({ on: assignments[i]?.includes(p.id) ?? false, quarter: s.quarter }))
+        .filter(s => s.quarter === q)
+      let wasOn = false
+      let wasOff = false
+      for (const s of qSlots) {
+        if (s.on && wasOff && wasOn) {
+          score -= W.splitStint
+          wasOff = false  // only count each re-entry once
+        }
+        if (s.on)  wasOn  = true
+        if (!s.on && wasOn) wasOff = true
+      }
+    }
+  }
+
+  // Short stint penalty — penalise subbing a player out before they've completed minStintMins.
+  // Measured for each player removed at each sub call within a period.
+  if (config.minStintMins > 0) {
+    for (let i = 1; i < assignments.length; i++) {
+      if (slotOrder[i].quarter !== slotOrder[i - 1].quarter) continue
+      const subbedOut = assignments[i - 1].filter(id => !assignments[i].includes(id))
+      for (const id of subbedOut) {
+        // Count consecutive slots this player was on before slot i (same quarter)
+        let stintLen = 0
+        const q = slotOrder[i].quarter
+        for (let j = i - 1; j >= 0 && slotOrder[j].quarter === q; j--) {
+          if (assignments[j].includes(id)) stintLen++
+          else break
+        }
+        if (stintLen < config.minStintMins) {
+          score -= (config.minStintMins - stintLen) * W.shortStint
+        }
+      }
+    }
+  }
+
+  // Cross-quarter continuous play penalty — penalise any player who appears in both
+  // the last slot of quarter Q and the first slot of quarter Q+1 (no break at all).
+  // A player entering at Q window 5 plays 6 consecutive minutes; if they also start
+  // Q+1 they go straight to 10 minutes without rest, which is poor practice.
+  // The penalty guides the solver toward rotating those players out at quarter breaks.
+  for (let i = 1; i < assignments.length; i++) {
+    if (!isPeriodStart(i, config.periodDuration)) continue
+    const prevLineup = assignments[i - 1]
+    const nextLineup = assignments[i]
+    for (const id of nextLineup) {
+      if (prevLineup.includes(id)) score -= W.crossQuarterPlay
     }
   }
 
@@ -535,8 +729,23 @@ function localSearch(
           if (!prevOk || !nextOk) continue
           if (!posValid(candidate, byId)) continue
 
-          // Evaluate
-          const trial = current.map((l, i) => i === s ? candidate : [...l])
+          // Build trial.
+          // At period starts, also propagate the candidate through the immediately
+          // following frozen slots (no-sub zone at the start of the new quarter).
+          // Without this, scoreAssignments sees a "lineup change" from the new
+          // period-start lineup to the old frozen slots, creating phantom short-stint
+          // and split-stint penalties that dwarf the cross-quarter improvement and
+          // cause the swap to be incorrectly rejected.
+          const trial = current.map((l, i) => {
+            if (i === s) return candidate
+            if (pStart && i > s && frozenSlots[i] && !isPeriodStart(i, periodDuration)) {
+              // Check we're still inside the same quarter's opening no-sub zone
+              const qS = Math.floor(s / periodDuration)
+              const qI = Math.floor(i / periodDuration)
+              if (qS === qI) return [...candidate]
+            }
+            return [...l]
+          })
           const trialScore = scoreAssignments(trial, slotOrder, available, byId, cMap, minSlots, maxSlots, config)
 
           if (trialScore > currentScore) {
@@ -688,7 +897,7 @@ function solveOnce(
     frozenSlots.push(false)
     const prevLineup = periodStart ? [] : (i > 0 ? assignments[i - 1] : [])
 
-    const eligible = available.filter(p => {
+    let eligible = available.filter(p => {
       const played = slotsPlayed.get(p.id) ?? 0
       const max    = maxSlots.get(p.id) ?? TOTAL_SLOTS
       if (played >= max) return false
@@ -700,6 +909,28 @@ function solveOnce(
       }
       return true
     })
+
+    // Safety valve: if per-period caps exhaust the eligible pool, relax them for the
+    // least-played players until we have PER_SLOT candidates. Without this, a free sub
+    // window in Q4 (or any late quarter) can produce an empty lineup when all players
+    // simultaneously hit their period budget — enforceFreeze then carries the empty
+    // lineup through the no-sub zone, leaving nobody on court for the rest of the game.
+    if (eligible.length < PER_SLOT) {
+      const periodCapBlocked = available
+        .filter(p => {
+          if (eligible.includes(p)) return false
+          const played = slotsPlayed.get(p.id) ?? 0
+          const max    = maxSlots.get(p.id) ?? TOTAL_SLOTS
+          if (played >= max) return false  // hard max still blocks
+          if (!config.balanceByPeriod)     return false
+          const inPeriod = slotsPlayedThisPeriod.get(p.id) ?? 0
+          const cap      = periodCaps.get(p.id) ?? periodDuration
+          return inPeriod >= cap            // only period-cap-blocked, not hard-max
+        })
+        .sort((a, b) => (slotsPlayed.get(a.id) ?? 0) - (slotsPlayed.get(b.id) ?? 0))
+      const needed = PER_SLOT - eligible.length
+      eligible = [...eligible, ...periodCapBlocked.slice(0, needed)]
+    }
 
     const locked: string[] = []
     if (i === 0)    locked.push(...starterIds.slice(0, PER_SLOT))
@@ -714,6 +945,10 @@ function solveOnce(
       periodPlayed:        config.balanceByPeriod ? slotsPlayedThisPeriod : undefined,
       periodMinTarget:     config.balanceByPeriod ? periodTargets : undefined,
       windowsLeftInPeriod: config.balanceByPeriod ? windowsLeftInPeriod : undefined,
+      // At period starts, pass the last lineup of the previous quarter so the urgency
+      // function can penalise players who just played — preventing 10-minute continuous
+      // stints across the quarter boundary.
+      prevQuarterLastLineup: (periodStart && i > 0) ? assignments[i - 1] : undefined,
       warnings,
     })
 
@@ -733,16 +968,40 @@ function solveOnce(
     assignments.push(lineup)
   }
 
-  // Repairs
+  // Repairs — two-pass approach:
+  // Pass 1: fix obvious under-players from the greedy result.
+  // Freeze: apply enforceFreeze to get a gap-consistent state, then recompute slotsPlayed
+  //         from actual assignments (greedy slotsPlayed tracking can drift when gap-locked
+  //         carries propagate). Pass 2: fix any remaining violations on the frozen state.
   const byId2  = new Map(players.map(p => [p.id, p]))
   const cMap2  = new Map(constraints.map(c => [c.playerId, c]))
   repairMinutes(
     assignments, slotOrder, available, byId2, minSlots, maxSlots,
-    slotsPlayed, cMap2, periodDuration, noSubFirstMins, noSubLastMins, config.maxStagger, warnings,
+    slotsPlayed, cMap2, periodDuration, noSubFirstMins, noSubLastMins,
+    minSubGapMins, config.maxStagger, warnings, config,
   )
   repairEveryQuarter(
     assignments, slotOrder, available, byId2, cMap2, slotsPlayed, minSlots,
-    numPeriods, periodDuration, noSubFirstMins, noSubLastMins, config.maxStagger, warnings,
+    numPeriods, periodDuration, noSubFirstMins, noSubLastMins,
+    minSubGapMins, config.maxStagger, warnings, config,
+  )
+
+  // Intermediate freeze + recount: ensures repair pass 2 starts from a fully
+  // consistent state. (repairMinutes already enforces after each swap, but this
+  // guarantees the starting slotsPlayed is correct for the second pass.)
+  enforceFreeze(assignments, slotOrder, config)
+  slotsPlayed.forEach((_, id) => slotsPlayed.set(id, 0))
+  assignments.forEach(lineup => lineup.forEach(id => slotsPlayed.set(id, (slotsPlayed.get(id) ?? 0) + 1)))
+
+  repairMinutes(
+    assignments, slotOrder, available, byId2, minSlots, maxSlots,
+    slotsPlayed, cMap2, periodDuration, noSubFirstMins, noSubLastMins,
+    minSubGapMins, config.maxStagger, warnings, config,
+  )
+  repairEveryQuarter(
+    assignments, slotOrder, available, byId2, cMap2, slotsPlayed, minSlots,
+    numPeriods, periodDuration, noSubFirstMins, noSubLastMins,
+    minSubGapMins, config.maxStagger, warnings, config,
   )
 
   return { assignments, frozenSlots, slotsPlayed, warnings }
@@ -817,6 +1076,36 @@ export function solve(
     baseWarnings.push(`Minimum minutes exceed total capacity — some players will fall short`)
   }
 
+  // "Every Q" feasibility check — warn when the sub constraint math makes it impossible
+  // to fit all every-quarter players into a single period.
+  //
+  // With noSubFirst=F, noSubLast=L, minSubGap=G in a D-minute period:
+  //   effectiveWindow = D - F - L
+  //   maxSubsPerPeriod = floor(effectiveWindow / G)  [or floor(effectiveWindow / 1) if G=0]
+  //   maxUniquePlayers = 5 (period start) + maxStagger × maxSubsPerPeriod
+  //
+  // If everyQ players > maxUnique, it's mathematically impossible — some will be missing
+  // from at least one quarter no matter how the solver allocates them.
+  const everyQCount = available.filter(p => constraints.find(c => c.playerId === p.id)?.mustPlayEveryQuarter).length
+  const cfgMaxStagger = config.maxStagger
+  if (everyQCount > 0 && effectiveSubWindows >= 1) {
+    const gapDiv = minSubGapMins > 0 ? minSubGapMins : 1
+    const maxSubsPerPeriod = Math.floor(effectiveSubWindows / gapDiv)
+    const maxUniquePlayers = PER_SLOT + cfgMaxStagger * maxSubsPerPeriod
+    if (everyQCount > maxUniquePlayers) {
+      const neededStagger = maxSubsPerPeriod > 0
+        ? Math.ceil((everyQCount - PER_SLOT) / maxSubsPerPeriod)
+        : everyQCount
+      baseWarnings.push(
+        `"Every quarter" is set for ${everyQCount} players, but the current settings allow at most ` +
+        `${maxUniquePlayers} unique players per quarter ` +
+        `(5 starters + ${cfgMaxStagger} per sub × ${maxSubsPerPeriod} sub${maxSubsPerPeriod !== 1 ? 's' : ''} per quarter). ` +
+        `To fit all ${everyQCount}, increase "Max players per sub" to ${neededStagger}` +
+        (noSubLastMins > 2 ? ` or reduce the end no-sub zone below ${noSubLastMins} min.` : `.`)
+      )
+    }
+  }
+
   // ── Multi-start ────────────────────────────────────────────────────────────
 
   let bestAssignments: string[][] | null = null
@@ -844,13 +1133,29 @@ export function solve(
     // forces carries wherever constraints require it.
     enforceFreeze(improved, slotOrder, config)
 
+    // Post-freeze repair: local search can introduce new gap-locks (by subbing at a
+    // free window) that enforceFreeze then resolves by carrying the previous lineup —
+    // removing a player who was correctly placed there and dropping them to an odd
+    // (mathematically impossible with even chunks) minute total like 19.
+    // Run one more repair pass on the now-frozen state so any lost minutes are recovered.
+    // computeModifiable inside repairMinutes ensures only truly-free slots are touched,
+    // so the subsequent enforceFreeze won't revert anything.
+    const postFreezePlayed = new Map(available.map(p => [p.id, 0]))
+    improved.forEach(lineup => lineup.forEach(id => postFreezePlayed.set(id, (postFreezePlayed.get(id) ?? 0) + 1)))
+    const postRepairWarnings: string[] = []
+    repairMinutes(
+      improved, slotOrder, available, byId, minSlots, maxSlots, postFreezePlayed, cMap,
+      periodDuration, noSubFirstMins, noSubLastMins, minSubGapMins, config.maxStagger, postRepairWarnings, config,
+    )
+    enforceFreeze(improved, slotOrder, config)  // final safety freeze
+
     const score = scoreAssignments(improved, slotOrder, available, byId, cMap, minSlots, maxSlots, config)
 
     if (score > bestScore) {
       bestScore       = score
       bestAssignments = improved
       bestFrozen      = frozenSlots
-      bestWarnings    = warnings
+      bestWarnings    = [...warnings, ...postRepairWarnings]
     }
   }
 
@@ -882,6 +1187,24 @@ export function solve(
     const everyQMet  = !c?.mustPlayEveryQuarter ||
       Array.from({ length: numPeriods }, (_, i) => i + 1).every(q => qPlayed.includes(q))
 
+    // Min stint check — only intra-quarter sub-outs count (period-end exits are fine)
+    let shortStintCount = 0
+    if (config.minStintMins > 0) {
+      for (let i = 1; i < assignments.length; i++) {
+        if (slotOrder[i].quarter !== slotOrder[i - 1].quarter) continue
+        const wasOn = assignments[i - 1]?.includes(p.id) ?? false
+        const isOn  = assignments[i]?.includes(p.id)    ?? false
+        if (!wasOn || isOn) continue  // not a sub-out for this player
+        let stintLen = 0
+        const q = slotOrder[i].quarter
+        for (let j = i - 1; j >= 0 && slotOrder[j].quarter === q; j--) {
+          if (assignments[j].includes(p.id)) stintLen++
+          else break
+        }
+        if (stintLen < config.minStintMins) shortStintCount++
+      }
+    }
+
     return {
       playerId: p.id, name: p.name,
       minutesAssigned: played,
@@ -892,11 +1215,13 @@ export function solve(
       quartersPlayed: qPlayed,
       everyQuarterMet: everyQMet,
       starterMet, closerMet,
+      minStintMet: shortStintCount === 0,
+      shortStintCount,
     }
   })
 
   const feasible = constraintReport.every(r =>
-    r.minMinutesMet && r.maxMinutesMet && r.starterMet && r.closerMet && r.everyQuarterMet
+    r.minMinutesMet && r.maxMinutesMet && r.starterMet && r.closerMet && r.everyQuarterMet && r.minStintMet
   )
 
   return {

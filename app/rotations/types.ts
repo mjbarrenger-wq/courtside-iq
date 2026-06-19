@@ -50,6 +50,8 @@ export interface GameConfig {
   noSubLastMins: number    // no lineup changes in last N minutes of each period
   minSubGapMins: number    // minimum minutes between consecutive sub calls within a period (0 = no limit)
   maxStagger: number       // max player changes per sub window (1–4; 5 = full lineup swap, disallowed)
+  minStintMins: number     // minimum consecutive minutes per on-court stint (0 = no limit)
+  maxQtrImbalance: number  // max allowed minute difference between any two quarters per player (0 = strict equal)
   balanceMinutes: boolean  // try to equalize playing time across available players
   balanceByPeriod: boolean // try to spread each player's minutes evenly across periods
 }
@@ -61,6 +63,8 @@ export const DEFAULT_GAME_CONFIG: GameConfig = {
   noSubLastMins: 2,
   minSubGapMins: 2,
   maxStagger: 3,
+  minStintMins: 4,
+  maxQtrImbalance: 2,
   balanceMinutes: false,
   balanceByPeriod: true,
 }
@@ -87,6 +91,8 @@ export interface ConstraintReport {
   everyQuarterMet: boolean
   starterMet: boolean
   closerMet: boolean
+  minStintMet: boolean     // true if no intra-quarter sub-outs before minStintMins
+  shortStintCount: number  // number of stints that ended before minStintMins
 }
 
 export interface OptimiserResult {

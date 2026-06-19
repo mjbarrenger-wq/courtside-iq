@@ -185,6 +185,8 @@ export default function RotationPlanner({ players: initialPlayers, teamId: _team
   // Game config
   const [config, setConfig] = useState<GameConfig>(DEFAULT_GAME_CONFIG)
   const updateConfig = (u: Partial<GameConfig>) => setConfig(c => ({ ...c, ...u }))
+  const [minStintMins, setMinStintMins]       = useState(DEFAULT_GAME_CONFIG.minStintMins)
+  const [maxQtrImbalance, setMaxQtrImbalance] = useState(DEFAULT_GAME_CONFIG.maxQtrImbalance)
 
   // Team-level defaults
   const [defaultMin, setDefaultMin] = useState(10)
@@ -243,7 +245,7 @@ export default function RotationPlanner({ players: initialPlayers, teamId: _team
             maxMinutes: Math.ceil(perPlayer) + 2,
           })
       // Values pre-computed — pass balanceMinutes:false so solver doesn't overwrite them
-      setResult(solve(players, merged, { ...config, balanceMinutes: false }))
+      setResult(solve(players, merged, { ...config, minStintMins, maxQtrImbalance, balanceMinutes: false }))
       return
     }
 
@@ -256,7 +258,7 @@ export default function RotationPlanner({ players: initialPlayers, teamId: _team
         maxMinutes: hasOverride ? c.maxMinutes : defaultMax,
       }
     })
-    setResult(solve(players, merged, config))
+    setResult(solve(players, merged, { ...config, minStintMins, maxQtrImbalance }))
   }
 
   // Period label for Every Q / table header
@@ -347,6 +349,40 @@ export default function RotationPlanner({ players: initialPlayers, teamId: _team
               )}
             </div>
           </div>
+
+          {/* Min stint time */}
+          <div>
+            <div style={{ fontSize: 11, color: MUTED, marginBottom: 6 }}>Min stint time</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+              <NumInput value={minStintMins} min={0} max={8} step={1} width={52}
+                onChange={v => setMinStintMins(v)} />
+              <span style={{ fontSize: 12, color: SEC }}>mins</span>
+              {minStintMins === 0 ? (
+                <span style={{ fontSize: 10, color: MUTED }}>no limit</span>
+              ) : (
+                <span style={{ fontSize: 10, color: MUTED }}>{minStintMins} min minimum</span>
+              )}
+            </div>
+          </div>
+
+          {/* Max quarter imbalance — only meaningful with balanceByPeriod on */}
+          {config.balanceByPeriod && (
+            <div>
+              <div style={{ fontSize: 11, color: MUTED, marginBottom: 6 }}>Max quarter spread</div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                <NumInput value={maxQtrImbalance} min={0} max={5} step={1} width={52}
+                  onChange={v => setMaxQtrImbalance(v)} />
+                <span style={{ fontSize: 12, color: SEC }}>min difference</span>
+                <span style={{ fontSize: 10, color: MUTED }}>
+                  {maxQtrImbalance === 0
+                    ? 'strict equal'
+                    : maxQtrImbalance <= 2
+                      ? `≤${maxQtrImbalance} min spread (rec.)`
+                      : `≤${maxQtrImbalance} min spread`}
+                </span>
+              </div>
+            </div>
+          )}
 
           {/* Max players per sub */}
           <div>
