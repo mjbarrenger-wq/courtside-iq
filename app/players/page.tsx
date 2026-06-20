@@ -5,8 +5,8 @@ import { FilterBar } from '../dashboard/FilterBar'
 import { DateSlider } from '../dashboard/DateSlider'
 import { GamePicker } from '../dashboard/GamePicker'
 import type { PickerGame } from '../dashboard/GamePicker'
-import type { FilterKey } from '../dashboard/filterConfig'
-import { FILTER_CONFIG } from '../dashboard/filterConfig'
+import type { FilterKey, GameTypeKey } from '../dashboard/filterConfig'
+import { FILTER_CONFIG, GAME_TYPE_CONFIG } from '../dashboard/filterConfig'
 
 export const dynamic = 'force-dynamic'
 
@@ -32,7 +32,6 @@ function applyFilter(allGames: any[], filter: FilterKey): any[] {
     case 'last10':      return sorted.slice(0, 10)
     case 'wins':        return sorted.filter(g => g.result === 'W')
     case 'losses':      return sorted.filter(g => g.result === 'L')
-    case 'last3losses': return sorted.filter(g => g.result === 'L').slice(0, 3)
     case 'close_games': return sorted.filter(g =>
       g.team_score != null && g.opponent_score != null &&
       Math.abs(g.team_score - g.opponent_score) < 6
@@ -58,15 +57,16 @@ function contextLabel(games: any[], filter: FilterKey, isCustom: boolean): strin
 export default async function PlayerQuadrantsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ filter?: string; games?: string }>
+  searchParams: Promise<{ filter?: string; type?: string; games?: string }>
 }) {
-  const { filter: rawFilter = 'all', games: gamesParam } = await searchParams
+  const { filter: rawFilter = 'all', type: rawType = 'all_types', games: gamesParam } = await searchParams
   const isCustom = !!gamesParam
-  const filter = (FILTER_CONFIG.some(f => f.key === rawFilter) ? rawFilter : 'all') as FilterKey
+  const filter   = (FILTER_CONFIG.some(f => f.key === rawFilter) ? rawFilter : 'all') as FilterKey
+  const gameType = (GAME_TYPE_CONFIG.some(t => t.key === rawType) ? rawType : 'all_types') as GameTypeKey
 
   // All games (for slider + picker)
   const allGamesRaw = await fetchJson(
-    `games?team_id=eq.${TEAM_ID}&select=id,game_date,result,team_score,opponent_score,opponents(full_name)&order=game_date.asc`
+    `games?team_id=eq.${TEAM_ID}&select=id,game_date,result,team_score,opponent_score,game_type,opponents(full_name)&order=game_date.asc`
   )
   const allGames: any[] = Array.isArray(allGamesRaw) ? allGamesRaw : []
 
@@ -77,6 +77,9 @@ export default async function PlayerQuadrantsPage({
     filteredGames = allGames.filter(g => specificIds.includes(g.id))
   } else {
     filteredGames = applyFilter(allGames, filter)
+    if (gameType !== 'all_types') {
+      filteredGames = filteredGames.filter(g => g.game_type === gameType)
+    }
   }
 
   const gameIds = filteredGames.map((g: any) => g.id)
@@ -160,7 +163,7 @@ export default async function PlayerQuadrantsPage({
           </div>
           <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
             <Suspense fallback={<div style={{ width: 200, height: 28 }} />}>
-              <FilterBar current={isCustom ? 'all' : filter} />
+              <FilterBar current={isCustom ? 'all' : filter} currentType={isCustom ? 'all_types' : gameType} />
             </Suspense>
             <Suspense fallback={<div style={{ width: 100, height: 28 }} />}>
               <GamePicker games={pickerGames} />

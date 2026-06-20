@@ -9,8 +9,8 @@ import { COACHING_WRITING_STANDARDS } from '@/lib/writingStandards'
 import PlayerDrillCards, { type PlayerDrill } from './PlayerDrillCards'
 import { FilterBar } from '@/app/dashboard/FilterBar'
 import { GamePicker, type PickerGame } from '@/app/dashboard/GamePicker'
-import type { FilterKey } from '@/app/dashboard/filterConfig'
-import { FILTER_CONFIG } from '@/app/dashboard/filterConfig'
+import type { FilterKey, GameTypeKey } from '@/app/dashboard/filterConfig'
+import { FILTER_CONFIG, GAME_TYPE_CONFIG } from '@/app/dashboard/filterConfig'
 
 // ── Tooltip content ───────────────────────────────────────────────────────────
 const PILLAR_TOOLTIPS: Record<string, string> = {
@@ -457,7 +457,6 @@ function applyFilter(allGames: any[], filter: FilterKey): any[] {
     case 'last10':      return sorted.slice(0, 10)
     case 'wins':        return sorted.filter(g => g.result === 'W')
     case 'losses':      return sorted.filter(g => g.result === 'L')
-    case 'last3losses': return sorted.filter(g => g.result === 'L').slice(0, 3)
     case 'close_games': return sorted.filter(g =>
       g.team_score != null && g.opponent_score != null &&
       Math.abs(g.team_score - g.opponent_score) < 6
@@ -485,12 +484,13 @@ export default async function PlayerProfilePage({
   searchParams,
 }: {
   params: Promise<{ id: string }>
-  searchParams: Promise<{ filter?: string; games?: string }>
+  searchParams: Promise<{ filter?: string; type?: string; games?: string }>
 }) {
   const { id }                      = await params
-  const { filter: rawFilter = 'all', games: gamesParam } = await searchParams
+  const { filter: rawFilter = 'all', type: rawType = 'all_types', games: gamesParam } = await searchParams
   const isCustom = !!gamesParam
-  const filter = (FILTER_CONFIG.some(f => f.key === rawFilter) ? rawFilter : 'all') as FilterKey
+  const filter   = (FILTER_CONFIG.some(f => f.key === rawFilter) ? rawFilter : 'all') as FilterKey
+  const gameType = (GAME_TYPE_CONFIG.some(t => t.key === rawType) ? rawType : 'all_types') as GameTypeKey
 
   const BG     = '#0f1117'
   const CARD   = '#171c2a'
@@ -498,7 +498,7 @@ export default async function PlayerProfilePage({
 
   // ── Phase 1: fetch all games to build filter ──────────────────────────────
   const allGamesRaw = await fetchJson(
-    `games?team_id=eq.${TEAM_ID}&select=id,game_date,result,team_score,opponent_score,opponents(full_name)&order=game_date.asc`
+    `games?team_id=eq.${TEAM_ID}&select=id,game_date,result,team_score,opponent_score,game_type,opponents(full_name)&order=game_date.asc`
   )
   const allGames: any[] = Array.isArray(allGamesRaw) ? allGamesRaw : []
 
@@ -509,6 +509,9 @@ export default async function PlayerProfilePage({
     filteredGames = allGames.filter(g => specificIds.includes(g.id))
   } else {
     filteredGames = applyFilter(allGames, filter)
+    if (gameType !== 'all_types') {
+      filteredGames = filteredGames.filter(g => g.game_type === gameType)
+    }
   }
   const filteredGameIds = filteredGames.map(g => g.id)
   const filteredIdList  = `(${filteredGameIds.join(',') || 'null'})`
@@ -855,7 +858,7 @@ export default async function PlayerProfilePage({
       {/* ── Filter bar ── */}
       <div style={{ background: '#0f1117', borderBottom: `1px solid ${BORDER}`, padding: '8px 28px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-          <FilterBar current={filter} />
+          <FilterBar current={filter} currentType={isCustom ? 'all_types' : gameType} />
           <GamePicker games={pickerGames} />
           {(filter !== 'all' || isCustom) && (
             <span style={{ fontSize: 10, color: '#6d7894', marginLeft: 4 }}>
