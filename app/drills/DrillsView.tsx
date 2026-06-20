@@ -267,7 +267,7 @@ export default function DrillsView({ drills, pillarDeltaMap }: Props) {
             Drills Library
           </h1>
           <p style={{ color: '#6d7894', fontSize: 13, marginTop: 6 }}>
-            80 drills across 8 performance pillars — recommended by driver tree insights.
+            {drillList.length} drills across 8 performance pillars — recommended by driver tree insights.
           </p>
         </div>
 

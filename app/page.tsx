@@ -19,11 +19,13 @@ const CARD   = '#171c2a'
 const HEADER = '#1f2537'
 
 export default async function Home() {
-  const [gamesRaw, stats, players] = await Promise.all([
+  const [gamesRaw, stats, players, drillsRaw] = await Promise.all([
     fetchJson('games?select=*,opponents(full_name)&order=game_date.asc'),
     fetchJson('player_game_stats?select=player_id,points,oreb,dreb,ast,stl,blk,turnovers,ft_made,ft_att'),
     fetchJson('players?select=*&order=jersey_number.asc'),
+    fetchJson('drills?select=id'),
   ])
+  const drillCount = Array.isArray(drillsRaw) ? drillsRaw.length : 0
 
   const games = (Array.isArray(gamesRaw) ? gamesRaw : []).map((g: any) => ({
     ...g,
@@ -185,11 +187,11 @@ export default async function Home() {
                 Drills Library
               </div>
               <div style={{ fontSize: 13, color: '#a0a8bc', lineHeight: 1.7, flex: 1 }}>
-                80 drills across all 8 driver pillars — ranked by your team's current performance
+                {drillCount} drills across all 8 driver pillars — ranked by your team's current performance
                 data. Worst-performing areas surface first.
               </div>
               <div style={{ marginTop: 18, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                {['80 Drills', 'Data-Ranked', 'All Pillars'].map(tag => (
+                {[`${drillCount} Drills`, 'Data-Ranked', 'All Pillars'].map(tag => (
                   <span key={tag} style={{
                     background: '#1f2537', border: `1px solid ${BORDER}`,
                     borderRadius: 20, padding: '3px 10px', fontSize: 10,
