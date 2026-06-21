@@ -19,8 +19,8 @@ export interface PlayerRow {
 type SortKey = keyof Omit<PlayerRow, 'id' | 'name'>
 type SortDir = 'asc' | 'desc'
 
-const BORDER = '#2e374d'
-const CARD   = '#171c2a'
+const BORDER = '#e2e5eb'
+const CARD   = '#ffffff'
 
 const COLS: { key: SortKey; label: string; title: string; lowerBetter?: boolean }[] = [
   { key: 'jersey', label: '#',     title: 'Jersey number' },
@@ -56,20 +56,20 @@ export default function PlayerStatsTable({ players }: { players: PlayerRow[] }) 
   })
 
   const arrow = (key: SortKey) => {
-    if (key !== sortKey) return <span style={{ color: '#2e374d', marginLeft: 3 }}>↕</span>
-    return <span style={{ color: '#97cfdc', marginLeft: 3 }}>{sortDir === 'desc' ? '↓' : '↑'}</span>
+    if (key !== sortKey) return <span style={{ color: '#e2e5eb', marginLeft: 3 }}>↕</span>
+    return <span style={{ color: '#307b92', marginLeft: 3 }}>{sortDir === 'desc' ? '↓' : '↑'}</span>
   }
 
   return (
     <div style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: 14, overflow: 'hidden', marginBottom: 28 }}>
       <div style={{ padding: '14px 20px', borderBottom: `1px solid ${BORDER}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <span style={{ fontSize: 13, fontWeight: 700, color: '#97cfdc' }}>SEASON PLAYER AVERAGES</span>
-        <span style={{ fontSize: 11, color: '#6d7894' }}>Click any column to sort</span>
+        <span style={{ fontSize: 13, fontWeight: 700, color: '#307b92' }}>SEASON PLAYER AVERAGES</span>
+        <span style={{ fontSize: 11, color: '#6b7280' }}>Click any column to sort</span>
       </div>
       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
         <thead>
-          <tr style={{ background: '#1f2537' }}>
-            <th style={{ padding: '10px 14px', textAlign: 'left', fontSize: 10, fontWeight: 700, color: '#6d7894', textTransform: 'uppercase', letterSpacing: '0.08em', borderBottom: `1px solid ${BORDER}` }}>
+          <tr style={{ background: '#f0f2f7' }}>
+            <th style={{ padding: '10px 14px', textAlign: 'left', fontSize: 10, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.08em', borderBottom: `1px solid ${BORDER}` }}>
               Player
             </th>
             {COLS.map(col => (
@@ -80,7 +80,7 @@ export default function PlayerStatsTable({ players }: { players: PlayerRow[] }) 
                 style={{
                   padding: '10px 14px', textAlign: 'center',
                   fontSize: 10, fontWeight: 700,
-                  color: col.key === sortKey ? '#97cfdc' : '#6d7894',
+                  color: col.key === sortKey ? '#307b92' : '#6b7280',
                   textTransform: 'uppercase', letterSpacing: '0.08em',
                   borderBottom: `1px solid ${BORDER}`,
                   cursor: 'pointer', userSelect: 'none',
@@ -96,10 +96,10 @@ export default function PlayerStatsTable({ players }: { players: PlayerRow[] }) 
           {sorted.map((p, i) => (
             <tr
               key={p.id}
-              style={{ borderBottom: `1px solid ${BORDER}`, background: i % 2 === 0 ? 'transparent' : '#1f2537' }}
+              style={{ borderBottom: `1px solid ${BORDER}`, background: i % 2 === 0 ? 'transparent' : '#f8f9fb' }}
             >
               <td style={{ padding: '10px 14px', fontWeight: 600 }}>
-                <a href={`/players/${p.id}`} style={{ color: '#97cfdc', textDecoration: 'none', fontWeight: 700 }}>
+                <a href={`/players/${p.id}`} style={{ color: '#307b92', textDecoration: 'none', fontWeight: 700 }}>
                   #{p.jersey} {p.name}
                 </a>
               </td>
@@ -116,7 +116,7 @@ export default function PlayerStatsTable({ players }: { players: PlayerRow[] }) 
                     key={col.key}
                     style={{
                       padding: '10px 14px', textAlign: 'center',
-                      color: isActive ? '#e8eaf0' : '#c5cde0',
+                      color: isActive ? '#1a1f2e' : '#374151',
                       fontWeight: isActive ? 700 : 400,
                     }}
                   >

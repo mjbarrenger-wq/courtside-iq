@@ -300,16 +300,16 @@ const CATEGORIES: Category[] = [
 ]
 
 const CATEGORY_SIDE = {
-  'Core':                 { color: '#97cfdc', bg: 'rgba(151,207,220,0.12)' },
-  'Shot Efficiency':      { color: '#34d399', bg: 'rgba(52,211,153,0.10)'  },
-  'Possession Control':   { color: '#f59e0b', bg: 'rgba(245,158,11,0.10)' },
-  'Extra Possessions':    { color: '#3b82f6', bg: 'rgba(59,130,246,0.10)' },
-  'Rim Pressure':         { color: '#fbbf24', bg: 'rgba(251,191,36,0.10)' },
-  'Shot Suppression':     { color: '#7a9eb5', bg: 'rgba(122,158,181,0.10)'},
-  'Possession Ending':    { color: '#06b6d4', bg: 'rgba(6,182,212,0.10)'  },
-  'Pressure & Disruption':{ color: '#f97316', bg: 'rgba(249,115,22,0.10)' },
-  'Discipline':           { color: '#f87171', bg: 'rgba(248,113,113,0.10)'  },
-  'General':              { color: '#a0a8bc', bg: 'rgba(148,163,184,0.10)'},
+  'Core':                 { color: '#307b92', bg: 'rgba(48,123,146,0.10)'  },
+  'Shot Efficiency':      { color: '#059669', bg: 'rgba(5,150,105,0.10)'   },
+  'Possession Control':   { color: '#d97706', bg: 'rgba(217,119,6,0.10)'  },
+  'Extra Possessions':    { color: '#2563eb', bg: 'rgba(37,99,235,0.10)'  },
+  'Rim Pressure':         { color: '#d97706', bg: 'rgba(217,119,6,0.10)'  },
+  'Shot Suppression':     { color: '#4b7a96', bg: 'rgba(75,122,150,0.10)' },
+  'Possession Ending':    { color: '#0891b2', bg: 'rgba(8,145,178,0.10)'  },
+  'Pressure & Disruption':{ color: '#ea580c', bg: 'rgba(234,88,12,0.10)'  },
+  'Discipline':           { color: '#dc2626', bg: 'rgba(220,38,38,0.10)'  },
+  'General':              { color: '#6b7280', bg: 'rgba(107,114,128,0.10)'},
 } as const
 
 export default function GlossaryPage() {
@@ -335,35 +335,35 @@ export default function GlossaryPage() {
     return CATEGORIES.filter(c => map[c]?.length).map(c => ({ category: c, terms: map[c]! }))
   }, [filtered])
 
-  const BG     = '#0f1117'
-  const CARD   = '#171c2a'
-  const BORDER = '#2e374d'
+  const BG     = '#f4f5f7'
+  const CARD   = '#ffffff'
+  const BORDER = '#e2e5eb'
 
   return (
     <main style={{
       background: BG,
       minHeight: '100vh',
-      color: '#e8eaf0',
+      color: '#1a1f2e',
       fontFamily: "'Inter', system-ui, sans-serif",
       WebkitFontSmoothing: 'antialiased',
       paddingBottom: 60,
     }}>
 
       {/* ── Header ── */}
-      <div style={{ background: '#1f2537', borderBottom: `1px solid ${BORDER}`, padding: '12px 28px' }}>
+      <div style={{ background: '#ffffff', borderBottom: `1px solid ${BORDER}`, padding: '12px 28px' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
           <div>
-            <div style={{ fontSize: 20, fontWeight: 800, color: '#e8eaf0', letterSpacing: '0.05em' }}>
+            <div style={{ fontSize: 20, fontWeight: 800, color: '#1a1f2e', letterSpacing: '0.05em' }}>
               GLOSSARY
             </div>
-            <div style={{ fontSize: 12, color: '#6d7894', marginTop: 2 }}>
+            <div style={{ fontSize: 12, color: '#6b7280', marginTop: 2 }}>
               Definitions for every metric used in Courtside IQ &nbsp;·&nbsp;
-              <span style={{ color: '#97cfdc', fontWeight: 700 }}>CMD Sports Analytics</span>
+              <span style={{ color: '#307b92', fontWeight: 700 }}>CMD Sports Analytics</span>
             </div>
           </div>
           <div style={{ display: 'flex', gap: 10 }}>
-            <a href="/dashboard" style={{ color: '#e8eaf0', fontSize: 11, textDecoration: 'none', background: '#1e2f45', border: `1px solid ${BORDER}`, borderRadius: 20, padding: '5px 11px', fontWeight: 500 }}>← Driver Tree</a>
-            <a href="/" style={{ color: '#e8eaf0', fontSize: 11, textDecoration: 'none', background: '#1e2f45', border: `1px solid ${BORDER}`, borderRadius: 20, padding: '5px 11px', fontWeight: 500 }}>← Overview</a>
+            <a href="/dashboard" style={{ color: '#374151', fontSize: 11, textDecoration: 'none', background: '#eef1f6', border: '1px solid #c5d5e8', borderRadius: 20, padding: '5px 11px', fontWeight: 500 }}>← Driver Tree</a>
+            <a href="/" style={{ color: '#374151', fontSize: 11, textDecoration: 'none', background: '#eef1f6', border: '1px solid #c5d5e8', borderRadius: 20, padding: '5px 11px', fontWeight: 500 }}>← Overview</a>
           </div>
         </div>
       </div>
@@ -384,7 +384,7 @@ export default function GlossaryPage() {
               borderRadius: 8,
               padding: '10px 14px',
               fontSize: 13,
-              color: '#e8eaf0',
+              color: '#1a1f2e',
               outline: 'none',
               boxSizing: 'border-box',
             }}
@@ -405,14 +405,14 @@ export default function GlossaryPage() {
                   padding: '5px 12px', borderRadius: 20,
                   cursor: 'pointer',
                   border: active
-                    ? `1px solid ${style?.color ?? '#97cfdc'}`
-                    : `1px solid ${BORDER}`,
+                    ? `1px solid ${style?.color ?? '#307b92'}`
+                    : `1px solid #e2e5eb`,
                   background: active
-                    ? (style?.bg ?? 'rgba(151,207,220,0.15)')
-                    : 'transparent',
+                    ? (style?.bg ?? 'rgba(48,123,146,0.12)')
+                    : '#eef1f6',
                   color: active
-                    ? (style?.color ?? '#97cfdc')
-                    : '#6d7894',
+                    ? (style?.color ?? '#307b92')
+                    : '#6b7280',
                   transition: 'all 0.15s',
                   letterSpacing: '0.04em',
                   textTransform: 'uppercase',
@@ -425,14 +425,14 @@ export default function GlossaryPage() {
         </div>
 
         {/* ── Term count ── */}
-        <div style={{ fontSize: 11, color: '#6d7894', marginBottom: 16 }}>
+        <div style={{ fontSize: 11, color: '#6b7280', marginBottom: 16 }}>
           {filtered.length} {filtered.length === 1 ? 'metric' : 'metrics'}
           {search || activeCategory !== 'All' ? ' matching filters' : ' total'}
         </div>
 
         {/* ── Grouped terms ── */}
         {grouped.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: '60px 0', color: '#6d7894', fontSize: 13 }}>
+          <div style={{ textAlign: 'center', padding: '60px 0', color: '#6b7280', fontSize: 13 }}>
             No metrics match your search.
           </div>
         ) : (
@@ -476,13 +476,13 @@ export default function GlossaryPage() {
                         <span style={{ fontSize: 15, fontWeight: 800, color, fontFamily: 'monospace' }}>
                           {term.abbr}
                         </span>
-                        <span style={{ fontSize: 13, color: '#a0a8bc', fontWeight: 500 }}>
+                        <span style={{ fontSize: 13, color: '#6b7280', fontWeight: 500 }}>
                           {term.full}
                         </span>
                         {term.formula && (
                           <span style={{
-                            fontSize: 11, color: '#6d7894',
-                            background: '#1f2537',
+                            fontSize: 11, color: '#6b7280',
+                            background: '#f0f2f7',
                             border: `1px solid ${BORDER}`,
                             borderRadius: 4,
                             padding: '2px 7px',
@@ -495,16 +495,16 @@ export default function GlossaryPage() {
                       </div>
 
                       {/* Definition */}
-                      <p style={{ fontSize: 13, color: '#c5cde0', margin: '0 0 8px', lineHeight: 1.6 }}>
+                      <p style={{ fontSize: 13, color: '#374151', margin: '0 0 8px', lineHeight: 1.6 }}>
                         {term.definition}
                       </p>
 
                       {/* Basketball meaning */}
                       <p style={{
-                        fontSize: 12, color: '#6d7894', margin: 0, lineHeight: 1.6,
+                        fontSize: 12, color: '#6b7280', margin: 0, lineHeight: 1.6,
                         paddingTop: 8, borderTop: `1px solid ${BORDER}`,
                       }}>
-                        <span style={{ color: '#5c6880', fontWeight: 700, fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.06em', marginRight: 6 }}>
+                        <span style={{ color: '#6b7280', fontWeight: 700, fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.06em', marginRight: 6 }}>
                           On the floor:
                         </span>
                         {term.basketball}

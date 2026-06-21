@@ -107,12 +107,12 @@ export default function BubbleChart({ players }: { players: PlayerBubble[] }) {
   // ── Colours ───────────────────────────────────────────────────────────────────
   const color = (p: PlayerBubble) => PLAYER_COLORS[p.name] ?? '#6d7894'
 
-  const CARD_BG    = '#0f1117'
-  const GRID_LINE  = '#1d3451'
-  const TEXT_DIM   = '#6d7894'
-  const TEXT_MED   = '#a0a8bc'
-  const TEXT_LIGHT = '#e8eaf0'
-  const AVG_LINE   = '#97cfdc'
+  const CARD_BG    = '#f8f9fb'
+  const GRID_LINE  = '#e2e5eb'
+  const TEXT_DIM   = '#6b7280'
+  const TEXT_MED   = '#374151'
+  const TEXT_LIGHT = '#1a1f2e'
+  const AVG_LINE   = '#307b92'
 
   return (
     <div style={{ width: '100%', maxWidth: W, margin: '0 auto', position: 'relative' }}>
@@ -151,7 +151,7 @@ export default function BubbleChart({ players }: { players: PlayerBubble[] }) {
         {/* Team avg marker */}
         <g>
           <circle cx={avgX} cy={avgY} r={5} fill={AVG_LINE} opacity={0.9} />
-          <rect x={avgX + 8} y={avgY - 10} width={78} height={18} rx={3} fill="#0a1628" />
+          <rect x={avgX + 8} y={avgY - 10} width={78} height={18} rx={3} fill="#eef1f6" />
           <text x={avgX + 47} y={avgY + 3} textAnchor="middle"
             fontSize={10} fontWeight={700} fill={AVG_LINE}>TEAM AVG</text>
         </g>
@@ -271,8 +271,9 @@ export default function BubbleChart({ players }: { players: PlayerBubble[] }) {
         return (
           <div style={{
             position: 'absolute', top: 8, right: 8,
-            background: '#171c2a',
-            border: `1px solid ${PLAYER_COLORS[p.name] ?? '#334155'}`,
+            background: '#ffffff',
+            border: `1px solid ${PLAYER_COLORS[p.name] ?? '#e2e5eb'}`,
+            boxShadow: 'rgba(0,0,0,0.1) 0px 4px 12px',
             borderRadius: 10, padding: '12px 16px',
             minWidth: 180,
             pointerEvents: 'none',

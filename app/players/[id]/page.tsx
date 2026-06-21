@@ -225,7 +225,7 @@ WORKONS — 3 specific training priorities that follow directly from the develop
 
 // ── Sparkline ─────────────────────────────────────────────────────────────────
 // Static SVG — no client component needed. Renders a mini trend line.
-function Sparkline({ values, color = '#97cfdc', width = 64, height = 22 }: {
+function Sparkline({ values, color = '#307b92', width = 64, height = 22 }: {
   values: number[]
   color?: string
   width?: number
@@ -257,7 +257,7 @@ function Sparkline({ values, color = '#97cfdc', width = 64, height = 22 }: {
   const lastAvg  = values.slice(half).reduce((s, v) => s + v, 0) / (values.length - half)
   const trending = lastAvg > firstAvg + range * 0.05 ? 'up'
     : lastAvg < firstAvg - range * 0.05 ? 'down' : 'flat'
-  const dotColor = trending === 'up' ? '#34d399' : trending === 'down' ? '#f87171' : color
+  const dotColor = trending === 'up' ? '#059669' : trending === 'down' ? '#dc2626' : color
 
   return (
     <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} style={{ display: 'block', flexShrink: 0 }}>
@@ -283,12 +283,12 @@ function PillarCard({ pillar, rank, totalRanked, sparklines }: {
   sparklines?: Record<string, number[]>
 }) {
   const pos = pillar.delta >= 0
-  const borderColor = pos ? '#34d399' : '#f87171'
+  const borderColor = pos ? '#059669' : '#dc2626'
   const tooltip = PILLAR_TOOLTIPS[pillar.name]
 
   return (
     <div style={{
-      background: '#1a2a40',
+      background: '#ffffff',
       border: `2px solid ${borderColor}`,
       borderRadius: 12,
       padding: '16px 14px',
@@ -297,7 +297,7 @@ function PillarCard({ pillar, rank, totalRanked, sparklines }: {
     }}>
       <div style={{ textAlign: 'center', marginBottom: 10 }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: '#a0a8bc', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: '#6b7280', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
             {pillar.name}
           </div>
           {tooltip && (
@@ -307,33 +307,33 @@ function PillarCard({ pillar, rank, totalRanked, sparklines }: {
             </div>
           )}
         </div>
-        <div style={{ fontSize: 28, fontWeight: 800, color: '#97cfdc', margin: '6px 0 2px' }}>
+        <div style={{ fontSize: 28, fontWeight: 800, color: '#307b92', margin: '6px 0 2px' }}>
           {pillar.score}
         </div>
-        <div style={{ fontSize: 10, color: '#6d7894' }}>team avg: {pillar.opp_score}</div>
-        <div style={{ fontSize: 13, fontWeight: 700, color: pos ? '#34d399' : '#f87171', marginTop: 2 }}>
+        <div style={{ fontSize: 10, color: '#6b7280' }}>team avg: {pillar.opp_score}</div>
+        <div style={{ fontSize: 13, fontWeight: 700, color: pos ? '#059669' : '#dc2626', marginTop: 2 }}>
           {pos ? '+' : ''}{pillar.delta}
         </div>
       </div>
 
-      <div style={{ borderTop: '1px solid #1e3a5f', paddingTop: 10, flex: 1 }}>
+      <div style={{ borderTop: '1px solid #e2e5eb', paddingTop: 10, flex: 1 }}>
         {pillar.metrics.map((m, i) => (
           <MetricRow key={i} m={m} sparkline={sparklines?.[m.name]} />
         ))}
       </div>
 
       {rank != null && totalRanked != null && (
-        <div style={{ borderTop: '1px solid #1e3a5f', marginTop: 8, paddingTop: 6, textAlign: 'center' }}>
+        <div style={{ borderTop: '1px solid #e2e5eb', marginTop: 8, paddingTop: 6, textAlign: 'center' }}>
           <span style={{
             fontSize: 11, fontWeight: 700,
             color: rank === 1 ? '#fbbf24'
-              : rank <= Math.ceil(totalRanked / 3) ? '#34d399'
-              : rank > Math.floor(totalRanked * 2 / 3) ? '#f87171'
-              : '#a0a8bc',
+              : rank <= Math.ceil(totalRanked / 3) ? '#059669'
+              : rank > Math.floor(totalRanked * 2 / 3) ? '#dc2626'
+              : '#6b7280',
           }}>
             #{rank} of {totalRanked}
           </span>
-          <div style={{ fontSize: 9, color: '#6d7894', marginTop: 1 }}>team rank</div>
+          <div style={{ fontSize: 9, color: '#6b7280', marginTop: 1 }}>team rank</div>
         </div>
       )}
     </div>
@@ -346,24 +346,24 @@ function MetricRow({ m, sparkline }: { m: MetricScore; sparkline?: number[] }) {
   return (
     <div style={{ marginBottom: 10 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 3 }}>
-        <span style={{ fontSize: 10, color: '#a0a8bc', fontWeight: 600 }}>{m.name}</span>
+        <span style={{ fontSize: 10, color: '#6b7280', fontWeight: 600 }}>{m.name}</span>
         <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-          <span style={{ fontSize: 11, fontWeight: 700, color: '#e8eaf0' }}>{m.value}{m.format === 'pct' ? '%' : ''}</span>
-          <span style={{ fontSize: 9, color: '#6d7894' }}>avg {m.opp_value}{m.format === 'pct' ? '%' : ''}</span>
-          <span style={{ fontSize: 10, fontWeight: 700, color: pos ? '#34d399' : '#f87171' }}>{pos ? '+' : ''}{m.delta}</span>
+          <span style={{ fontSize: 11, fontWeight: 700, color: '#1a1f2e' }}>{m.value}{m.format === 'pct' ? '%' : ''}</span>
+          <span style={{ fontSize: 9, color: '#6b7280' }}>avg {m.opp_value}{m.format === 'pct' ? '%' : ''}</span>
+          <span style={{ fontSize: 10, fontWeight: 700, color: pos ? '#059669' : '#dc2626' }}>{pos ? '+' : ''}{m.delta}</span>
         </div>
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 2 }}>
-          <div style={{ height: 3, background: '#1d3451', borderRadius: 2, overflow: 'hidden' }}>
-            <div style={{ height: '100%', width: `${Math.min((m.value / maxVal) * 100, 100)}%`, background: '#97cfdc', borderRadius: 2 }} />
+          <div style={{ height: 3, background: '#e2e5eb', borderRadius: 2, overflow: 'hidden' }}>
+            <div style={{ height: '100%', width: `${Math.min((m.value / maxVal) * 100, 100)}%`, background: '#307b92', borderRadius: 2 }} />
           </div>
-          <div style={{ height: 3, background: '#1d3451', borderRadius: 2, overflow: 'hidden' }}>
-            <div style={{ height: '100%', width: `${Math.min((m.opp_value / maxVal) * 100, 100)}%`, background: '#2e374d', borderRadius: 2 }} />
+          <div style={{ height: 3, background: '#e2e5eb', borderRadius: 2, overflow: 'hidden' }}>
+            <div style={{ height: '100%', width: `${Math.min((m.opp_value / maxVal) * 100, 100)}%`, background: '#e2e5eb', borderRadius: 2 }} />
           </div>
         </div>
         {sparkline && sparkline.length >= 2 && (
-          <Sparkline values={sparkline} color="#97cfdc" width={56} height={20} />
+          <Sparkline values={sparkline} color="#307b92" width={56} height={20} />
         )}
       </div>
     </div>
@@ -377,21 +377,21 @@ function DefStat({ label, value, teamAvg, higherBetter = true, rank, totalRanked
 }) {
   const delta = Math.round((value - teamAvg) * 10) / 10
   const positive = higherBetter ? delta >= 0 : delta <= 0
-  const color = positive ? '#34d399' : '#f87171'
+  const color = positive ? '#059669' : '#dc2626'
   const maxVal = Math.max(value, teamAvg, 0.01)
   const tooltip = DEF_STAT_TOOLTIPS[label]
 
   return (
     <div style={{
-      background: '#1a2a40',
-      border: '1px solid #2a4a6e',
+      background: '#ffffff',
+      border: '2px solid #e2e5eb',
       borderLeft: `3px solid ${color}`,
       borderRadius: 8,
       padding: '14px 16px',
       display: 'flex', flexDirection: 'column', gap: 6,
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-        <div style={{ fontSize: 10, fontWeight: 700, color: '#a0a8bc', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+        <div style={{ fontSize: 10, fontWeight: 700, color: '#6b7280', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
           {label}
         </div>
         {tooltip && (
@@ -402,8 +402,8 @@ function DefStat({ label, value, teamAvg, higherBetter = true, rank, totalRanked
         )}
       </div>
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
-        <span style={{ fontSize: 26, fontWeight: 800, color: '#7a9eb5' }}>{value}</span>
-        <span style={{ fontSize: 10, color: '#6d7894' }}>/ game</span>
+        <span style={{ fontSize: 26, fontWeight: 800, color: '#1e6a82' }}>{value}</span>
+        <span style={{ fontSize: 10, color: '#6b7280' }}>/ game</span>
         <span style={{ fontSize: 11, fontWeight: 700, color, marginLeft: 'auto' }}>
           {delta >= 0 ? '+' : ''}{delta} vs avg
         </span>
@@ -411,36 +411,36 @@ function DefStat({ label, value, teamAvg, higherBetter = true, rank, totalRanked
       <div style={{ display: 'flex', alignItems: 'flex-end', gap: 8 }}>
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 3 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <span style={{ fontSize: 9, color: '#a0a8bc', width: 38, textAlign: 'right' }}>Player</span>
-            <div style={{ flex: 1, height: 6, background: '#1d3451', borderRadius: 3, overflow: 'hidden' }}>
-              <div style={{ height: '100%', width: `${Math.min((value / maxVal) * 100, 100)}%`, background: '#7a9eb5', borderRadius: 3 }} />
+            <span style={{ fontSize: 9, color: '#6b7280', width: 38, textAlign: 'right' }}>Player</span>
+            <div style={{ flex: 1, height: 6, background: '#e2e5eb', borderRadius: 3, overflow: 'hidden' }}>
+              <div style={{ height: '100%', width: `${Math.min((value / maxVal) * 100, 100)}%`, background: '#1e6a82', borderRadius: 3 }} />
             </div>
-            <span style={{ fontSize: 9, color: '#a0a8bc', width: 22 }}>{value}</span>
+            <span style={{ fontSize: 9, color: '#6b7280', width: 22 }}>{value}</span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <span style={{ fontSize: 9, color: '#6d7894', width: 38, textAlign: 'right' }}>Avg</span>
-            <div style={{ flex: 1, height: 6, background: '#1d3451', borderRadius: 3, overflow: 'hidden' }}>
-              <div style={{ height: '100%', width: `${Math.min((teamAvg / maxVal) * 100, 100)}%`, background: '#2e374d', borderRadius: 3 }} />
+            <span style={{ fontSize: 9, color: '#6b7280', width: 38, textAlign: 'right' }}>Avg</span>
+            <div style={{ flex: 1, height: 6, background: '#e2e5eb', borderRadius: 3, overflow: 'hidden' }}>
+              <div style={{ height: '100%', width: `${Math.min((teamAvg / maxVal) * 100, 100)}%`, background: '#e2e5eb', borderRadius: 3 }} />
             </div>
-            <span style={{ fontSize: 9, color: '#6d7894', width: 22 }}>{teamAvg}</span>
+            <span style={{ fontSize: 9, color: '#6b7280', width: 22 }}>{teamAvg}</span>
           </div>
         </div>
         {sparkline && sparkline.length >= 2 && (
-          <Sparkline values={sparkline} color="#7a9eb5" width={56} height={28} />
+          <Sparkline values={sparkline} color="#1e6a82" width={56} height={28} />
         )}
       </div>
       {rank != null && totalRanked != null && (
-        <div style={{ borderTop: '1px solid #1e3a5f', marginTop: 2, paddingTop: 5, textAlign: 'center' }}>
+        <div style={{ borderTop: '1px solid #e2e5eb', marginTop: 2, paddingTop: 5, textAlign: 'center' }}>
           <span style={{
             fontSize: 10, fontWeight: 700,
             color: rank === 1 ? '#fbbf24'
-              : rank <= Math.ceil(totalRanked / 3) ? '#34d399'
-              : rank > Math.floor(totalRanked * 2 / 3) ? '#f87171'
-              : '#a0a8bc',
+              : rank <= Math.ceil(totalRanked / 3) ? '#059669'
+              : rank > Math.floor(totalRanked * 2 / 3) ? '#dc2626'
+              : '#6b7280',
           }}>
             #{rank} of {totalRanked}
           </span>
-          <div style={{ fontSize: 9, color: '#6d7894', marginTop: 1 }}>team rank</div>
+          <div style={{ fontSize: 9, color: '#6b7280', marginTop: 1 }}>team rank</div>
         </div>
       )}
     </div>
@@ -492,9 +492,9 @@ export default async function PlayerProfilePage({
   const filter   = (FILTER_CONFIG.some(f => f.key === rawFilter) ? rawFilter : 'all') as FilterKey
   const gameType = (GAME_TYPE_CONFIG.some(t => t.key === rawType) ? rawType : 'all_types') as GameTypeKey
 
-  const BG     = '#0f1117'
-  const CARD   = '#171c2a'
-  const BORDER = '#2e374d'
+  const BG     = '#f4f5f7'
+  const CARD   = '#ffffff'
+  const BORDER = '#e2e5eb'
 
   // ── Phase 1: fetch all games to build filter ──────────────────────────────
   const allGamesRaw = await fetchJson(
@@ -545,9 +545,9 @@ export default async function PlayerProfilePage({
 
   if (!player || rows.length === 0) {
     return (
-      <main style={{ background: BG, minHeight: '100vh', color: '#e8eaf0', padding: 40, fontFamily: 'Inter, system-ui, sans-serif' }}>
-        <div style={{ color: '#a0a8bc' }}>Player not found.</div>
-        <a href="/dashboard" style={{ color: '#97cfdc', fontSize: 13, marginTop: 16, display: 'block' }}>← Back to Dashboard</a>
+      <main style={{ background: BG, minHeight: '100vh', color: '#1a1f2e', padding: 40, fontFamily: 'Inter, system-ui, sans-serif' }}>
+        <div style={{ color: '#374151' }}>Player not found.</div>
+        <a href="/dashboard" style={{ color: '#307b92', fontSize: 13, marginTop: 16, display: 'block' }}>← Back to Dashboard</a>
       </main>
     )
   }
@@ -798,7 +798,7 @@ export default async function PlayerProfilePage({
 
   return (
     <main style={{
-      background: BG, minHeight: '100vh', color: '#e8eaf0',
+      background: BG, minHeight: '100vh', color: '#1a1f2e',
       fontFamily: "'Inter', system-ui, sans-serif",
       WebkitFontSmoothing: 'antialiased', padding: '0 0 60px',
     }}>
@@ -806,8 +806,8 @@ export default async function PlayerProfilePage({
         .pillar-info { position: relative; display: inline-flex; align-items: center; cursor: help; }
         .pillar-info-icon {
           width: 13px; height: 13px; border-radius: 50%;
-          background: #1a3a54; border: 1px solid #3a5a7a;
-          color: #94a3b8; font-size: 8px; font-weight: 800;
+          background: #eef1f6; border: 1px solid #c5d5e8;
+          color: #374151; font-size: 8px; font-weight: 800;
           display: inline-flex; align-items: center; justify-content: center;
           font-style: italic; line-height: 1; flex-shrink: 0;
         }
@@ -815,32 +815,32 @@ export default async function PlayerProfilePage({
           visibility: hidden; opacity: 0;
           position: absolute; bottom: calc(100% + 6px); left: 50%;
           transform: translateX(-50%);
-          background: #07111e; border: 1px solid #3a5a7a;
+          background: #ffffff; border: 1px solid #e2e5eb;
           border-radius: 8px; padding: 9px 11px;
-          font-size: 11px; color: #cbd5e1; line-height: 1.55;
+          font-size: 11px; color: #374151; line-height: 1.55;
           width: 220px; text-align: left; z-index: 200;
           transition: opacity 0.15s ease;
           pointer-events: none;
-          box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+          box-shadow: 0 4px 20px rgba(0,0,0,0.12);
           font-weight: 400; text-transform: none; letter-spacing: 0;
         }
         .pillar-info:hover .pillar-info-tooltip { visibility: visible; opacity: 1; }
       `}</style>
 
       {/* ── Player selector bar ── */}
-      <div style={{ background: '#050e1a', borderBottom: `1px solid ${BORDER}`, padding: '10px 28px', overflowX: 'auto' }}>
+      <div style={{ background: '#ffffff', borderBottom: `1px solid ${BORDER}`, padding: '10px 28px', overflowX: 'auto' }}>
         <div style={{ display: 'flex', gap: 6, alignItems: 'center', minWidth: 'max-content' }}>
-          <span style={{ fontSize: 10, fontWeight: 700, color: '#6d7894', textTransform: 'uppercase', letterSpacing: '0.08em', marginRight: 4 }}>Players:</span>
+          <span style={{ fontSize: 10, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.08em', marginRight: 4 }}>Players:</span>
           {players.map((p: any) => (
             <a
               key={p.id}
               href={`/players/${p.id}${filterQs}`}
               style={{
                 fontSize: 11, fontWeight: p.id === id ? 700 : 400,
-                color: p.id === id ? '#0f1117' : '#a0a8bc',
+                color: p.id === id ? '#ffffff' : '#374151',
                 textDecoration: 'none',
-                background: p.id === id ? '#97cfdc' : 'transparent',
-                border: `1px solid ${p.id === id ? '#97cfdc' : BORDER}`,
+                background: p.id === id ? '#307b92' : '#eef1f6',
+                border: `1px solid ${p.id === id ? '#307b92' : '#e2e5eb'}`,
                 borderRadius: 20, padding: '4px 11px',
                 whiteSpace: 'nowrap',
               }}
@@ -849,46 +849,46 @@ export default async function PlayerProfilePage({
             </a>
           ))}
           <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, paddingLeft: 16 }}>
-            <a href="/dashboard" style={{ color: '#a0a8bc', fontSize: 11, textDecoration: 'none', background: '#1e2f45', border: `1px solid ${BORDER}`, borderRadius: 20, padding: '4px 11px', whiteSpace: 'nowrap' }}>← Team Dashboard</a>
-            <a href={`/dashboard?player=${id}`} style={{ color: '#a0a8bc', fontSize: 11, textDecoration: 'none', background: '#1e2f45', border: `1px solid ${BORDER}`, borderRadius: 20, padding: '4px 11px', whiteSpace: 'nowrap' }}>Driver Tree View</a>
+            <a href="/dashboard" style={{ color: '#374151', fontSize: 11, textDecoration: 'none', background: '#eef1f6', border: `1px solid #c5d5e8`, borderRadius: 20, padding: '4px 11px', whiteSpace: 'nowrap' }}>← Team Dashboard</a>
+            <a href={`/dashboard?player=${id}`} style={{ color: '#374151', fontSize: 11, textDecoration: 'none', background: '#eef1f6', border: `1px solid #c5d5e8`, borderRadius: 20, padding: '4px 11px', whiteSpace: 'nowrap' }}>Driver Tree View</a>
           </div>
         </div>
       </div>
 
       {/* ── Filter bar ── */}
-      <div style={{ background: '#0f1117', borderBottom: `1px solid ${BORDER}`, padding: '8px 28px' }}>
+      <div style={{ background: '#f4f5f7', borderBottom: `1px solid ${BORDER}`, padding: '8px 28px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
           <FilterBar current={filter} currentType={isCustom ? 'all_types' : gameType} />
           <GamePicker games={pickerGames} />
           {(filter !== 'all' || isCustom) && (
-            <span style={{ fontSize: 10, color: '#6d7894', marginLeft: 4 }}>
+            <span style={{ fontSize: 10, color: '#6b7280', marginLeft: 4 }}>
               {contextLabel(filteredGames, filter, isCustom)}
               &nbsp;·&nbsp;
-              <a href={`/players/${id}`} style={{ color: '#97cfdc', textDecoration: 'none' }}>Clear</a>
+              <a href={`/players/${id}`} style={{ color: '#307b92', textDecoration: 'none' }}>Clear</a>
             </span>
           )}
         </div>
       </div>
 
       {/* ── Header ── */}
-      <div style={{ background: '#1f2537', borderBottom: `1px solid ${BORDER}`, padding: '16px 28px' }}>
+      <div style={{ background: '#ffffff', borderBottom: `1px solid ${BORDER}`, padding: '16px 28px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 18 }}>
           <div style={{
             width: 58, height: 58, borderRadius: '50%',
-            background: 'linear-gradient(135deg, #1a3a54, #0f2d44)',
+            background: 'linear-gradient(135deg, #d0eaf2, #b8dce8)',
             border: `2px solid ${BORDER}`,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: 20, fontWeight: 800, color: '#97cfdc', flexShrink: 0,
+            fontSize: 20, fontWeight: 800, color: '#307b92', flexShrink: 0,
           }}>
             #{player.jersey_number}
           </div>
           <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 24, fontWeight: 800, color: '#f1f5f9', letterSpacing: '0.03em' }}>
+            <div style={{ fontSize: 24, fontWeight: 800, color: '#1a1f2e', letterSpacing: '0.03em' }}>
               {fullName.toUpperCase()}
             </div>
-            <div style={{ fontSize: 12, color: '#a0a8bc', marginTop: 3 }}>
+            <div style={{ fontSize: 12, color: '#374151', marginTop: 3 }}>
               WGT 12.2 &nbsp;·&nbsp; {g} game{g !== 1 ? 's' : ''} &nbsp;·&nbsp;
-              <span style={{ color: '#97cfdc', fontWeight: 700 }}>
+              <span style={{ color: '#307b92', fontWeight: 700 }}>
                 {filter !== 'all' || isCustom
                   ? FILTER_CONFIG.find(f => f.key === filter)?.label ?? 'Custom Range'
                   : 'Player Development Profile'}
@@ -897,12 +897,12 @@ export default async function PlayerProfilePage({
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
             {prevPlayer && (
-              <a href={`/players/${prevPlayer.id}${filterQs}`} style={{ color: '#a0a8bc', fontSize: 11, textDecoration: 'none', background: '#1e2f45', border: `1px solid ${BORDER}`, borderRadius: 20, padding: '6px 12px' }}>
+              <a href={`/players/${prevPlayer.id}${filterQs}`} style={{ color: '#374151', fontSize: 11, textDecoration: 'none', background: '#eef1f6', border: `1px solid #c5d5e8`, borderRadius: 20, padding: '6px 12px' }}>
                 ← #{prevPlayer.jersey_number} {prevPlayer.first_name}
               </a>
             )}
             {nextPlayer && (
-              <a href={`/players/${nextPlayer.id}${filterQs}`} style={{ color: '#a0a8bc', fontSize: 11, textDecoration: 'none', background: '#1e2f45', border: `1px solid ${BORDER}`, borderRadius: 20, padding: '6px 12px' }}>
+              <a href={`/players/${nextPlayer.id}${filterQs}`} style={{ color: '#374151', fontSize: 11, textDecoration: 'none', background: '#eef1f6', border: `1px solid #c5d5e8`, borderRadius: 20, padding: '6px 12px' }}>
                 #{nextPlayer.jersey_number} {nextPlayer.first_name} →
               </a>
             )}
@@ -916,14 +916,14 @@ export default async function PlayerProfilePage({
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 10, marginBottom: 24 }}>
           {[
             { label: 'PPG',         value: pg(ps.pts),                        color: '#fbbf24' },
-            { label: 'TS%',         value: `${ts_pct}%`,                      color: '#97cfdc' },
-            { label: 'Off PPP',     value: ps.off_ppp.toFixed(3),             color: '#97cfdc' },
-            { label: 'Def PPP',     value: ps.def_ppp.toFixed(3),             color: '#7a9eb5' },
-            { label: 'Net PPP',     value: `${netPos ? '+' : ''}${netPPP.toFixed(3)}`, color: netPos ? '#34d399' : '#f87171' },
-            { label: 'Games',       value: g,                                 color: '#a0a8bc' },
+            { label: 'TS%',         value: `${ts_pct}%`,                      color: '#307b92' },
+            { label: 'Off PPP',     value: ps.off_ppp.toFixed(3),             color: '#307b92' },
+            { label: 'Def PPP',     value: ps.def_ppp.toFixed(3),             color: '#1e6a82' },
+            { label: 'Net PPP',     value: `${netPos ? '+' : ''}${netPPP.toFixed(3)}`, color: netPos ? '#059669' : '#dc2626' },
+            { label: 'Games',       value: g,                                 color: '#6b7280' },
           ].map(({ label, value, color }) => (
             <div key={label} style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: 10, padding: '14px 16px', textAlign: 'center' }}>
-              <div style={{ fontSize: 10, fontWeight: 700, color: '#6d7894', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 6 }}>{label}</div>
+              <div style={{ fontSize: 10, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 6 }}>{label}</div>
               <div style={{ fontSize: 24, fontWeight: 800, color }}>{value}</div>
             </div>
           ))}
@@ -933,13 +933,13 @@ export default async function PlayerProfilePage({
         <div style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: 14, padding: '20px 24px', marginBottom: 20 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
             <span style={{ fontSize: 16 }}>💡</span>
-            <span style={{ fontSize: 13, fontWeight: 700, color: '#fbbf24', letterSpacing: '0.08em' }}>KEY INSIGHTS</span>
+            <span style={{ fontSize: 13, fontWeight: 700, color: '#d97706', letterSpacing: '0.08em' }}>KEY INSIGHTS</span>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
             {devContent.insights.map((insight, i) => (
-              <div key={i} style={{ background: '#1f2537', border: `1px solid ${BORDER}`, borderRadius: 8, padding: '14px 16px' }}>
-                <div style={{ fontSize: 18, fontWeight: 800, color: '#fbbf24', opacity: 0.4, marginBottom: 6 }}>{i + 1}</div>
-                <div style={{ fontSize: 13, color: '#e8eaf0', lineHeight: 1.6 }}>{insight}</div>
+              <div key={i} style={{ background: '#f0f2f7', border: `1px solid ${BORDER}`, borderRadius: 8, padding: '14px 16px' }}>
+                <div style={{ fontSize: 18, fontWeight: 800, color: '#d97706', opacity: 0.4, marginBottom: 6 }}>{i + 1}</div>
+                <div style={{ fontSize: 13, color: '#374151', lineHeight: 1.6 }}>{insight}</div>
               </div>
             ))}
           </div>
@@ -948,9 +948,9 @@ export default async function PlayerProfilePage({
         {/* ── Offensive Pillars ── */}
         <div style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: 14, padding: '20px 20px 24px', marginBottom: 20 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
-            <div style={{ width: 3, height: 18, background: '#97cfdc', borderRadius: 2 }} />
-            <span style={{ fontSize: 13, fontWeight: 700, color: '#97cfdc', letterSpacing: '0.08em' }}>OFFENSIVE CONTRIBUTIONS</span>
-            <span style={{ fontSize: 11, color: '#6d7894', marginLeft: 4 }}>vs team average · ranked among squad</span>
+            <div style={{ width: 3, height: 18, background: '#307b92', borderRadius: 2 }} />
+            <span style={{ fontSize: 13, fontWeight: 700, color: '#307b92', letterSpacing: '0.08em' }}>OFFENSIVE CONTRIBUTIONS</span>
+            <span style={{ fontSize: 11, color: '#6b7280', marginLeft: 4 }}>vs team average · ranked among squad</span>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
             {tree.pillars.offensive.map((p, i) => (
@@ -962,9 +962,9 @@ export default async function PlayerProfilePage({
         {/* ── Defensive Contributions ── */}
         <div style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: 14, padding: '20px 20px 24px', marginBottom: 20 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
-            <div style={{ width: 3, height: 18, background: '#7a9eb5', borderRadius: 2 }} />
-            <span style={{ fontSize: 13, fontWeight: 700, color: '#7a9eb5', letterSpacing: '0.08em' }}>DEFENSIVE CONTRIBUTIONS</span>
-            <span style={{ fontSize: 11, color: '#6d7894', marginLeft: 4 }}>vs team average · ranked among squad</span>
+            <div style={{ width: 3, height: 18, background: '#1e6a82', borderRadius: 2 }} />
+            <span style={{ fontSize: 13, fontWeight: 700, color: '#1e6a82', letterSpacing: '0.08em' }}>DEFENSIVE CONTRIBUTIONS</span>
+            <span style={{ fontSize: 11, color: '#6b7280', marginLeft: 4 }}>vs team average · ranked among squad</span>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 10 }}>
             <DefStat label="Blocks / Game"        value={pg(ps.blk)}       teamAvg={tppg(aggregates.blk)}       higherBetter={true}  rank={ranks[4]?.rank} totalRanked={ranks[4]?.total} sparkline={sparklines['Blocks / Game']} />
@@ -973,7 +973,7 @@ export default async function PlayerProfilePage({
             <DefStat label="Def Fouls / Game"     value={pg(ps.def_fouls)} teamAvg={tppg(aggregates.def_fouls)} higherBetter={false} rank={ranks[7]?.rank} totalRanked={ranks[7]?.total} sparkline={sparklines['Def Fouls / Game']} />
             <DefStat label="Off Fouls / Game"     value={pg(ps.off_fouls)} teamAvg={tppg(aggregates.off_fouls)} higherBetter={false} sparkline={sparklines['Off Fouls / Game']} />
           </div>
-          <div style={{ marginTop: 10, padding: '8px 12px', background: '#1f2537', borderRadius: 6, fontSize: 11, color: '#6d7894', fontStyle: 'italic' }}>
+          <div style={{ marginTop: 10, padding: '8px 12px', background: '#f0f2f7', borderRadius: 6, fontSize: 11, color: '#6b7280', fontStyle: 'italic' }}>
             Individual tracking only. Contested shots, opponent FG% when guarded, and screen quality are not captured in this dataset.
           </div>
         </div>
@@ -982,37 +982,37 @@ export default async function PlayerProfilePage({
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 20 }}>
 
           {/* Coaching priorities */}
-          <div style={{ background: CARD, border: '1px solid #3a2a1a', borderRadius: 14, padding: '20px 24px' }}>
+          <div style={{ background: CARD, border: '1px solid #e2e5eb', borderRadius: 14, padding: '20px 24px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
               <span style={{ fontSize: 16 }}>🎯</span>
-              <span style={{ fontSize: 13, fontWeight: 700, color: '#fbbf24', letterSpacing: '0.08em' }}>WORK ONS</span>
-              <span style={{ fontSize: 11, color: '#6d7894', marginLeft: 4 }}>coaching priorities this week</span>
+              <span style={{ fontSize: 13, fontWeight: 700, color: '#d97706', letterSpacing: '0.08em' }}>WORK ONS</span>
+              <span style={{ fontSize: 11, color: '#6b7280', marginLeft: 4 }}>coaching priorities this week</span>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               {devContent.workOns.map((item, i) => (
                 <div key={i} style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
                   <div style={{
-                    width: 24, height: 24, borderRadius: '50%', background: '#2a1a0a',
-                    border: '1px solid #fb923c', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    fontSize: 11, fontWeight: 700, color: '#fbbf24', flexShrink: 0, marginTop: 1,
+                    width: 24, height: 24, borderRadius: '50%', background: '#fffbeb',
+                    border: '1px solid #fcd34d', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: 11, fontWeight: 700, color: '#d97706', flexShrink: 0, marginTop: 1,
                   }}>{i + 1}</div>
-                  <div style={{ fontSize: 13, color: '#f1f5f9', lineHeight: 1.6 }}>{item}</div>
+                  <div style={{ fontSize: 13, color: '#374151', lineHeight: 1.6 }}>{item}</div>
                 </div>
               ))}
             </div>
           </div>
 
           {/* Suggested drills */}
-          <div style={{ background: CARD, border: '1px solid #1a2a3a', borderRadius: 14, padding: '20px 24px' }}>
+          <div style={{ background: CARD, border: '1px solid #e2e5eb', borderRadius: 14, padding: '20px 24px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
               <span style={{ fontSize: 16 }}>🏀</span>
-              <span style={{ fontSize: 13, fontWeight: 700, color: '#97cfdc', letterSpacing: '0.08em' }}>SUGGESTED DRILLS</span>
-              <span style={{ fontSize: 11, color: '#6d7894', marginLeft: 4 }}>click to expand</span>
+              <span style={{ fontSize: 13, fontWeight: 700, color: '#307b92', letterSpacing: '0.08em' }}>SUGGESTED DRILLS</span>
+              <span style={{ fontSize: 11, color: '#6b7280', marginLeft: 4 }}>click to expand</span>
             </div>
             <PlayerDrillCards drills={relevantDrills} />
             <a href="/drills" style={{
               display: 'inline-block', marginTop: 14,
-              fontSize: 10, fontWeight: 600, color: '#97cfdc',
+              fontSize: 10, fontWeight: 600, color: '#307b92',
               textDecoration: 'none', letterSpacing: '0.06em',
             }}>VIEW ALL DRILLS →</a>
           </div>
@@ -1021,35 +1021,35 @@ export default async function PlayerProfilePage({
 
         {/* ── Top contributions & development areas ── */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-          <div style={{ background: CARD, border: '1px solid #1a4a2e', borderRadius: 12, padding: '18px 20px' }}>
+          <div style={{ background: CARD, border: '1px solid #a7f3d0', borderRadius: 12, padding: '18px 20px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
               <span style={{ fontSize: 14 }}>📈</span>
-              <span style={{ fontSize: 13, fontWeight: 700, color: '#34d399' }}>TOP CONTRIBUTIONS</span>
+              <span style={{ fontSize: 13, fontWeight: 700, color: '#059669' }}>TOP CONTRIBUTIONS</span>
             </div>
             {tree.top_drivers.map((d, i) => (
               <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: i < tree.top_drivers.length - 1 ? `1px solid ${BORDER}` : 'none' }}>
-                <span style={{ fontSize: 12, color: '#c5cde0' }}>• {d.pillar}</span>
-                <span style={{ fontSize: 12, fontWeight: 700, color: '#34d399' }}>+{d.delta}</span>
+                <span style={{ fontSize: 12, color: '#374151' }}>• {d.pillar}</span>
+                <span style={{ fontSize: 12, fontWeight: 700, color: '#059669' }}>+{d.delta}</span>
               </div>
             ))}
             {tree.top_drivers.length === 0 && (
-              <div style={{ fontSize: 12, color: '#6d7894' }}>No contributions above team average.</div>
+              <div style={{ fontSize: 12, color: '#6b7280' }}>No contributions above team average.</div>
             )}
           </div>
 
-          <div style={{ background: CARD, border: '1px solid #4a1a1a', borderRadius: 12, padding: '18px 20px' }}>
+          <div style={{ background: CARD, border: '1px solid #fca5a5', borderRadius: 12, padding: '18px 20px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
               <span style={{ fontSize: 14 }}>📉</span>
-              <span style={{ fontSize: 13, fontWeight: 700, color: '#f87171' }}>DEVELOPMENT AREAS</span>
+              <span style={{ fontSize: 13, fontWeight: 700, color: '#dc2626' }}>DEVELOPMENT AREAS</span>
             </div>
             {tree.leakage_areas.map((d, i) => (
               <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: i < tree.leakage_areas.length - 1 ? `1px solid ${BORDER}` : 'none' }}>
-                <span style={{ fontSize: 12, color: '#c5cde0' }}>• {d.pillar}</span>
-                <span style={{ fontSize: 12, fontWeight: 700, color: '#f87171' }}>{d.delta}</span>
+                <span style={{ fontSize: 12, color: '#374151' }}>• {d.pillar}</span>
+                <span style={{ fontSize: 12, fontWeight: 700, color: '#dc2626' }}>{d.delta}</span>
               </div>
             ))}
             {tree.leakage_areas.length === 0 && (
-              <div style={{ fontSize: 12, color: '#6d7894' }}>No areas below team average.</div>
+              <div style={{ fontSize: 12, color: '#6b7280' }}>No areas below team average.</div>
             )}
           </div>
         </div>

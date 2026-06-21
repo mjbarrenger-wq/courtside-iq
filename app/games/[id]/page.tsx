@@ -24,10 +24,10 @@ function pct(made: number, att: number): string {
 }
 
 // ── Layout constants ──────────────────────────────────────────────────────────
-const BG     = '#0f1117'
-const BORDER = '#2e374d'
-const CARD   = '#171c2a'
-const HEADER = '#1f2537'
+const BG     = '#f4f5f7'
+const BORDER = '#e2e5eb'
+const CARD   = '#ffffff'
+const HEADER = '#ffffff'
 
 export default async function BoxScorePage({
   params,
@@ -48,9 +48,9 @@ export default async function BoxScorePage({
 
   if (!game) {
     return (
-      <main style={{ background: BG, minHeight: '100vh', color: '#e8eaf0', fontFamily: "'Inter', system-ui, sans-serif", padding: 40 }}>
-        <p style={{ color: '#6d7894' }}>Game not found.</p>
-        <a href="/" style={{ color: '#97cfdc', fontSize: 12 }}>← Back to overview</a>
+      <main style={{ background: BG, minHeight: '100vh', color: '#1a1f2e', fontFamily: "'Inter', system-ui, sans-serif", padding: 40 }}>
+        <p style={{ color: '#6b7280' }}>Game not found.</p>
+        <a href="/" style={{ color: '#307b92', fontSize: 12 }}>← Back to overview</a>
       </main>
     )
   }
@@ -135,7 +135,7 @@ export default async function BoxScorePage({
 
   return (
     <main style={{
-      background: BG, minHeight: '100vh', color: '#e8eaf0',
+      background: BG, minHeight: '100vh', color: '#1a1f2e',
       fontFamily: "'Inter', system-ui, sans-serif",
       WebkitFontSmoothing: 'antialiased', padding: '0 0 64px',
     }}>
@@ -145,21 +145,21 @@ export default async function BoxScorePage({
         <div style={{ maxWidth: 1060, margin: '0 auto' }}>
 
           {/* Breadcrumb */}
-          <div style={{ fontSize: 11, color: '#6d7894', marginBottom: 10 }}>
-            <a href="/" style={{ color: '#6d7894', textDecoration: 'none' }}>Overview</a>
+          <div style={{ fontSize: 11, color: '#6b7280', marginBottom: 10 }}>
+            <a href="/" style={{ color: '#6b7280', textDecoration: 'none' }}>Overview</a>
             <span style={{ margin: '0 6px' }}>›</span>
-            <span style={{ color: '#97cfdc' }}>Box Score</span>
+            <span style={{ color: '#307b92' }}>Box Score</span>
           </div>
 
           {/* Game headline */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
             <div>
-              <div style={{ fontSize: 11, fontWeight: 700, color: '#6d7894', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 6 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: '#6b7280', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 6 }}>
                 WGT 12.2 · {gameDate}
               </div>
-              <div style={{ fontSize: 20, fontWeight: 800, color: '#e8eaf0' }}>
+              <div style={{ fontSize: 20, fontWeight: 800, color: '#1a1f2e' }}>
                 WGT 12.2 &nbsp;
-                <span style={{ color: '#6d7894', fontWeight: 400, fontSize: 16 }}>{homeAway}</span>
+                <span style={{ color: '#6b7280', fontWeight: 400, fontSize: 16 }}>{homeAway}</span>
                 &nbsp; {opponentName}
               </div>
             </div>
@@ -167,25 +167,25 @@ export default async function BoxScorePage({
             {/* Final score */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
               <div style={{ textAlign: 'center' }}>
-                <div style={{ fontSize: 36, fontWeight: 900, color: isWin ? '#34d399' : '#f87171', lineHeight: 1 }}>
+                <div style={{ fontSize: 36, fontWeight: 900, color: isWin ? '#059669' : '#dc2626', lineHeight: 1 }}>
                   {game.team_score}
                 </div>
-                <div style={{ fontSize: 10, color: '#6d7894', fontWeight: 700, letterSpacing: '0.08em', marginTop: 2 }}>WGT</div>
+                <div style={{ fontSize: 10, color: '#6b7280', fontWeight: 700, letterSpacing: '0.08em', marginTop: 2 }}>WGT</div>
               </div>
-              <div style={{ fontSize: 22, color: '#5c6880', fontWeight: 300 }}>–</div>
+              <div style={{ fontSize: 22, color: '#6b7280', fontWeight: 300 }}>–</div>
               <div style={{ textAlign: 'center' }}>
-                <div style={{ fontSize: 36, fontWeight: 900, color: '#a0a8bc', lineHeight: 1 }}>
+                <div style={{ fontSize: 36, fontWeight: 900, color: '#6b7280', lineHeight: 1 }}>
                   {game.opponent_score}
                 </div>
-                <div style={{ fontSize: 10, color: '#6d7894', fontWeight: 700, letterSpacing: '0.08em', marginTop: 2 }}>OPP</div>
+                <div style={{ fontSize: 10, color: '#6b7280', fontWeight: 700, letterSpacing: '0.08em', marginTop: 2 }}>OPP</div>
               </div>
               <div style={{
                 marginLeft: 8,
-                background: isWin ? '#052e16' : '#2d0a0a',
-                border: `1px solid ${isWin ? '#16a34a' : '#7f1d1d'}`,
+                background: isWin ? '#ecfdf5' : '#fef2f2',
+                border: `1px solid ${isWin ? '#059669' : '#dc2626'}`,
                 borderRadius: 8, padding: '6px 14px',
                 fontSize: 15, fontWeight: 800,
-                color: isWin ? '#34d399' : '#f87171',
+                color: isWin ? '#059669' : '#dc2626',
               }}>{isWin ? 'WIN' : 'LOSS'}</div>
             </div>
           </div>
@@ -198,8 +198,8 @@ export default async function BoxScorePage({
 
           {/* Section label */}
           <div style={{ padding: '13px 20px', borderBottom: `1px solid ${BORDER}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <span style={{ fontSize: 13, fontWeight: 700, color: '#97cfdc' }}>BOX SCORE — WGT 12.2</span>
-            <span style={{ fontSize: 10, color: '#6d7894' }}>
+            <span style={{ fontSize: 13, fontWeight: 700, color: '#307b92' }}>BOX SCORE — WGT 12.2</span>
+            <span style={{ fontSize: 10, color: '#6b7280' }}>
               {rows.length} players · click a player to view their development profile
             </span>
           </div>
@@ -207,20 +207,20 @@ export default async function BoxScorePage({
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 820 }}>
               <thead>
-                <tr style={{ background: '#0f1117' }}>
+                <tr style={{ background: '#f0f2f7' }}>
                   {/* Player col */}
                   <th style={{
                     padding: '9px 14px', textAlign: 'left',
-                    fontSize: 10, fontWeight: 700, color: '#6d7894',
+                    fontSize: 10, fontWeight: 700, color: '#6b7280',
                     textTransform: 'uppercase', letterSpacing: '0.08em',
                     borderBottom: `1px solid ${BORDER}`,
-                    position: 'sticky', left: 0, background: '#0f1117', zIndex: 1,
+                    position: 'sticky', left: 0, background: '#f0f2f7', zIndex: 1,
                   }}>Player</th>
 
                   {columns.slice(1).map(col => (
                     <th key={col.key} style={{
                       padding: '9px 12px', textAlign: 'center',
-                      fontSize: 10, fontWeight: 700, color: '#6d7894',
+                      fontSize: 10, fontWeight: 700, color: '#6b7280',
                       textTransform: 'uppercase', letterSpacing: '0.08em',
                       borderBottom: `1px solid ${BORDER}`, whiteSpace: 'nowrap',
                     }}>{col.label}</th>
@@ -229,96 +229,96 @@ export default async function BoxScorePage({
               </thead>
               <tbody>
                 {rows.map((r: BoxRow, i: number) => {
-                  const pmColour = r.pm == null ? '#6d7894' : r.pm > 0 ? '#34d399' : r.pm < 0 ? '#f87171' : '#a0a8bc'
+                  const pmColour = r.pm == null ? '#6b7280' : r.pm > 0 ? '#059669' : r.pm < 0 ? '#dc2626' : '#374151'
                   const pmDisplay = r.pm == null ? '—' : r.pm > 0 ? `+${r.pm}` : String(r.pm)
                   return (
                     <tr key={r.id} style={{
-                      background: i % 2 === 0 ? 'transparent' : '#1f2537',
+                      background: i % 2 === 0 ? 'transparent' : '#f8f9fb',
                     }}>
                       {/* Player cell — sticky + linked */}
                       <td style={{
                         padding: '9px 14px',
                         borderBottom: `1px solid ${BORDER}`,
                         position: 'sticky', left: 0,
-                        background: i % 2 === 0 ? CARD : '#1f2537',
+                        background: i % 2 === 0 ? CARD : '#f8f9fb',
                         zIndex: 1,
                         whiteSpace: 'nowrap',
                       }}>
                         <a href={`/players/${r.id}`} style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 8 }}>
-                          <span style={{ fontSize: 10, color: '#5c6880', width: 24 }}>#{r.jersey}</span>
-                          <span style={{ fontSize: 12, fontWeight: 600, color: '#e8eaf0' }}>{r.name}</span>
+                          <span style={{ fontSize: 10, color: '#6b7280', width: 24 }}>#{r.jersey}</span>
+                          <span style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>{r.name}</span>
                         </a>
                       </td>
 
-                      <td style={{ padding: '9px 12px', textAlign: 'center', fontSize: 12, color: '#6d7894', borderBottom: `1px solid ${BORDER}` }}>{r.mins}</td>
+                      <td style={{ padding: '9px 12px', textAlign: 'center', fontSize: 12, color: '#6b7280', borderBottom: `1px solid ${BORDER}` }}>{r.mins}</td>
 
                       {/* PTS — highlighted */}
-                      <td style={{ padding: '9px 12px', textAlign: 'center', fontSize: 13, fontWeight: 800, color: '#e8eaf0', borderBottom: `1px solid ${BORDER}` }}>{r.pts}</td>
+                      <td style={{ padding: '9px 12px', textAlign: 'center', fontSize: 13, fontWeight: 800, color: '#1a1f2e', borderBottom: `1px solid ${BORDER}` }}>{r.pts}</td>
 
                       {/* FGM-FGA */}
-                      <td style={{ padding: '9px 12px', textAlign: 'center', fontSize: 12, color: '#a0a8bc', borderBottom: `1px solid ${BORDER}` }}>
+                      <td style={{ padding: '9px 12px', textAlign: 'center', fontSize: 12, color: '#374151', borderBottom: `1px solid ${BORDER}` }}>
                         {r.fgm}-{r.fga}
                       </td>
                       {/* FG% */}
-                      <td style={{ padding: '9px 12px', textAlign: 'center', fontSize: 11, color: '#6d7894', borderBottom: `1px solid ${BORDER}` }}>
+                      <td style={{ padding: '9px 12px', textAlign: 'center', fontSize: 11, color: '#6b7280', borderBottom: `1px solid ${BORDER}` }}>
                         {pct(r.fgm, r.fga)}
                       </td>
 
                       {/* 3PM-3PA */}
-                      <td style={{ padding: '9px 12px', textAlign: 'center', fontSize: 12, color: '#a0a8bc', borderBottom: `1px solid ${BORDER}` }}>
+                      <td style={{ padding: '9px 12px', textAlign: 'center', fontSize: 12, color: '#374151', borderBottom: `1px solid ${BORDER}` }}>
                         {r.tpm}-{r.tpa}
                       </td>
 
                       {/* FTM-FTA */}
-                      <td style={{ padding: '9px 12px', textAlign: 'center', fontSize: 12, color: '#a0a8bc', borderBottom: `1px solid ${BORDER}` }}>
+                      <td style={{ padding: '9px 12px', textAlign: 'center', fontSize: 12, color: '#374151', borderBottom: `1px solid ${BORDER}` }}>
                         {r.ftm}-{r.fta}
                       </td>
                       {/* FT% */}
-                      <td style={{ padding: '9px 12px', textAlign: 'center', fontSize: 11, color: '#6d7894', borderBottom: `1px solid ${BORDER}` }}>
+                      <td style={{ padding: '9px 12px', textAlign: 'center', fontSize: 11, color: '#6b7280', borderBottom: `1px solid ${BORDER}` }}>
                         {pct(r.ftm, r.fta)}
                       </td>
 
                       {/* REB with OReb/DReb breakdown on hover via title */}
-                      <td title={`OReb: ${r.oreb}  DReb: ${r.dreb}`} style={{ padding: '9px 12px', textAlign: 'center', fontSize: 12, fontWeight: 600, color: '#97cfdc', borderBottom: `1px solid ${BORDER}`, cursor: 'default' }}>
+                      <td title={`OReb: ${r.oreb}  DReb: ${r.dreb}`} style={{ padding: '9px 12px', textAlign: 'center', fontSize: 12, fontWeight: 600, color: '#307b92', borderBottom: `1px solid ${BORDER}`, cursor: 'default' }}>
                         {r.reb}
                       </td>
 
-                      <td style={{ padding: '9px 12px', textAlign: 'center', fontSize: 12, color: '#a0a8bc', borderBottom: `1px solid ${BORDER}` }}>{r.ast}</td>
-                      <td style={{ padding: '9px 12px', textAlign: 'center', fontSize: 12, color: '#a0a8bc', borderBottom: `1px solid ${BORDER}` }}>{r.stl}</td>
-                      <td style={{ padding: '9px 12px', textAlign: 'center', fontSize: 12, color: '#a0a8bc', borderBottom: `1px solid ${BORDER}` }}>{r.blk}</td>
-                      <td style={{ padding: '9px 12px', textAlign: 'center', fontSize: 12, color: r.to > 4 ? '#f87171' : '#a0a8bc', borderBottom: `1px solid ${BORDER}` }}>{r.to}</td>
+                      <td style={{ padding: '9px 12px', textAlign: 'center', fontSize: 12, color: '#374151', borderBottom: `1px solid ${BORDER}` }}>{r.ast}</td>
+                      <td style={{ padding: '9px 12px', textAlign: 'center', fontSize: 12, color: '#374151', borderBottom: `1px solid ${BORDER}` }}>{r.stl}</td>
+                      <td style={{ padding: '9px 12px', textAlign: 'center', fontSize: 12, color: '#374151', borderBottom: `1px solid ${BORDER}` }}>{r.blk}</td>
+                      <td style={{ padding: '9px 12px', textAlign: 'center', fontSize: 12, color: r.to > 4 ? '#dc2626' : '#374151', borderBottom: `1px solid ${BORDER}` }}>{r.to}</td>
                       <td style={{ padding: '9px 12px', textAlign: 'center', fontSize: 12, fontWeight: 700, color: pmColour, borderBottom: `1px solid ${BORDER}` }}>{pmDisplay}</td>
                     </tr>
                   )
                 })}
 
                 {/* ── Team totals row ── */}
-                <tr style={{ background: '#0f1117', borderTop: `2px solid ${BORDER}` }}>
+                <tr style={{ background: '#f0f2f7', borderTop: `2px solid ${BORDER}` }}>
                   <td style={{
                     padding: '10px 14px', fontSize: 11, fontWeight: 700,
-                    color: '#97cfdc', letterSpacing: '0.06em',
-                    position: 'sticky', left: 0, background: '#0f1117',
+                    color: '#307b92', letterSpacing: '0.06em',
+                    position: 'sticky', left: 0, background: '#f0f2f7',
                   }}>TEAM TOTALS</td>
-                  <td style={{ padding: '10px 12px', textAlign: 'center', fontSize: 11, color: '#6d7894' }}>—</td>
-                  <td style={{ padding: '10px 12px', textAlign: 'center', fontSize: 13, fontWeight: 800, color: '#e8eaf0' }}>{totals.pts}</td>
-                  <td style={{ padding: '10px 12px', textAlign: 'center', fontSize: 11, fontWeight: 700, color: '#a0a8bc' }}>{totals.fgm}-{totals.fga}</td>
-                  <td style={{ padding: '10px 12px', textAlign: 'center', fontSize: 11, color: '#6d7894' }}>{pct(totals.fgm, totals.fga)}</td>
-                  <td style={{ padding: '10px 12px', textAlign: 'center', fontSize: 11, fontWeight: 700, color: '#a0a8bc' }}>{totals.tpm}-{totals.tpa}</td>
-                  <td style={{ padding: '10px 12px', textAlign: 'center', fontSize: 11, fontWeight: 700, color: '#a0a8bc' }}>{totals.ftm}-{totals.fta}</td>
-                  <td style={{ padding: '10px 12px', textAlign: 'center', fontSize: 11, color: '#6d7894' }}>{pct(totals.ftm, totals.fta)}</td>
-                  <td style={{ padding: '10px 12px', textAlign: 'center', fontSize: 11, fontWeight: 700, color: '#97cfdc' }}>{totals.reb}</td>
-                  <td style={{ padding: '10px 12px', textAlign: 'center', fontSize: 11, fontWeight: 700, color: '#a0a8bc' }}>{totals.ast}</td>
-                  <td style={{ padding: '10px 12px', textAlign: 'center', fontSize: 11, fontWeight: 700, color: '#a0a8bc' }}>{totals.stl}</td>
-                  <td style={{ padding: '10px 12px', textAlign: 'center', fontSize: 11, fontWeight: 700, color: '#a0a8bc' }}>{totals.blk}</td>
-                  <td style={{ padding: '10px 12px', textAlign: 'center', fontSize: 11, fontWeight: 700, color: '#a0a8bc' }}>{totals.to}</td>
-                  <td style={{ padding: '10px 12px', textAlign: 'center', fontSize: 11, color: '#6d7894' }}>—</td>
+                  <td style={{ padding: '10px 12px', textAlign: 'center', fontSize: 11, color: '#6b7280' }}>—</td>
+                  <td style={{ padding: '10px 12px', textAlign: 'center', fontSize: 13, fontWeight: 800, color: '#1a1f2e' }}>{totals.pts}</td>
+                  <td style={{ padding: '10px 12px', textAlign: 'center', fontSize: 11, fontWeight: 700, color: '#374151' }}>{totals.fgm}-{totals.fga}</td>
+                  <td style={{ padding: '10px 12px', textAlign: 'center', fontSize: 11, color: '#6b7280' }}>{pct(totals.fgm, totals.fga)}</td>
+                  <td style={{ padding: '10px 12px', textAlign: 'center', fontSize: 11, fontWeight: 700, color: '#374151' }}>{totals.tpm}-{totals.tpa}</td>
+                  <td style={{ padding: '10px 12px', textAlign: 'center', fontSize: 11, fontWeight: 700, color: '#374151' }}>{totals.ftm}-{totals.fta}</td>
+                  <td style={{ padding: '10px 12px', textAlign: 'center', fontSize: 11, color: '#6b7280' }}>{pct(totals.ftm, totals.fta)}</td>
+                  <td style={{ padding: '10px 12px', textAlign: 'center', fontSize: 11, fontWeight: 700, color: '#307b92' }}>{totals.reb}</td>
+                  <td style={{ padding: '10px 12px', textAlign: 'center', fontSize: 11, fontWeight: 700, color: '#374151' }}>{totals.ast}</td>
+                  <td style={{ padding: '10px 12px', textAlign: 'center', fontSize: 11, fontWeight: 700, color: '#374151' }}>{totals.stl}</td>
+                  <td style={{ padding: '10px 12px', textAlign: 'center', fontSize: 11, fontWeight: 700, color: '#374151' }}>{totals.blk}</td>
+                  <td style={{ padding: '10px 12px', textAlign: 'center', fontSize: 11, fontWeight: 700, color: '#374151' }}>{totals.to}</td>
+                  <td style={{ padding: '10px 12px', textAlign: 'center', fontSize: 11, color: '#6b7280' }}>—</td>
                 </tr>
               </tbody>
             </table>
           </div>
 
           {/* Footer note */}
-          <div style={{ padding: '10px 20px', borderTop: `1px solid ${BORDER}`, fontSize: 10, color: '#5c6880' }}>
+          <div style={{ padding: '10px 20px', borderTop: `1px solid ${BORDER}`, fontSize: 10, color: '#6b7280' }}>
             REB hover shows offensive / defensive split · TO highlighted red when &gt; 4 · Click any player name to view their development profile
           </div>
         </div>

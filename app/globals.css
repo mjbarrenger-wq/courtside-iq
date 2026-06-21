@@ -1,22 +1,22 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
-  --card-bg: #f3f4f6;
-  --card-border: #e5e7eb;
+  --background: #f4f5f7;
+  --foreground: #1a1f2e;
+  --card-bg: #ffffff;
+  --card-border: #e2e5eb;
   --muted: #6b7280;
-  --row-alt: #f9fafb;
+  --row-alt: #f0f2f7;
 
   /* Brand palette */
   --brand-primary: #307b92;
-  --brand-light: #97cfdc;
+  --brand-light: #1e6a82;
 
   /* Dashboard text hierarchy */
-  --text-primary:   #e8eaf0;   /* values, main labels */
-  --text-secondary: #c5cde0;   /* supporting labels */
-  --text-muted:     #6d7894;   /* hints, vs-opp, footnotes */
-  --text-hero:      #ffffff;   /* hero numbers only */
+  --text-primary:   #1a1f2e;   /* values, main labels */
+  --text-secondary: #374151;   /* supporting labels */
+  --text-muted:     #6b7280;   /* hints, vs-opp, footnotes */
+  --text-hero:      #1a1f2e;   /* hero numbers */
 }
 
 @theme inline {
@@ -25,17 +25,6 @@
   --color-brand-primary: var(--brand-primary);
   --color-brand-light: var(--brand-light);
   --font-sans: var(--font-inter);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0f1117;
-    --foreground: #ededed;
-    --card-bg: #1e2330;
-    --card-border: #2d3447;
-    --muted: #6d7894;
-    --row-alt: #181d29;
-  }
 }
 
 body {
@@ -94,8 +83,8 @@ input[type="range"].date-slider-input::-moz-range-track {
   transition: border-color 0.15s, background 0.15s;
 }
 .game-row-link:hover > div {
-  border-color: #97cfdc !important;
-  background: #1a2a40 !important;
+  border-color: #307b92 !important;
+  background: #eef1f6 !important;
 }
 
 .card {

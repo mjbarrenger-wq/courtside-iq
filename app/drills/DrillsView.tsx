@@ -18,9 +18,9 @@ const PILLAR_CONFIG: Record<string, { label: string; color: string; side: 'offen
 }
 
 const DIFFICULTY_CONFIG = {
-  foundation:  { label: 'Foundation', color: '#34d399', order: 1 },
-  developing:  { label: 'Developing', color: '#fbbf24', order: 2 },
-  competitive: { label: 'Competitive',color: '#f87171', order: 3 },
+  foundation:  { label: 'Foundation', color: '#059669', order: 1 },
+  developing:  { label: 'Developing', color: '#d97706', order: 2 },
+  competitive: { label: 'Competitive',color: '#dc2626', order: 3 },
 }
 
 // Priority tier based on delta
@@ -37,9 +37,9 @@ const PRIORITY_LABEL: Record<string, string> = {
 }
 
 const PRIORITY_COLOR: Record<string, string> = {
-  high:   '#f87171',
-  medium: '#fbbf24',
-  low:    '#34d399',
+  high:   '#dc2626',
+  medium: '#d97706',
+  low:    '#059669',
 }
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -61,8 +61,8 @@ function DrillCard({ drill, delta }: { drill: Drill; delta: number }) {
 
   return (
     <div style={{
-      background: '#171c2a',
-      border: `1px solid #2a4a6e`,
+      background: '#ffffff',
+      border: `1px solid #e2e5eb`,
       borderLeft: `3px solid ${PRIORITY_COLOR[priority]}`,
       borderRadius: 8,
       overflow: 'hidden',
@@ -79,7 +79,7 @@ function DrillCard({ drill, delta }: { drill: Drill; delta: number }) {
         <div style={{ flex: 1, minWidth: 0 }}>
           {/* Top row: name + difficulty badge */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 6 }}>
-            <span style={{ color: '#e8f4f8', fontWeight: 600, fontSize: 14 }}>
+            <span style={{ color: '#1a1f2e', fontWeight: 600, fontSize: 14 }}>
               {drill.name}
             </span>
             <span style={{
@@ -99,10 +99,10 @@ function DrillCard({ drill, delta }: { drill: Drill; delta: number }) {
             }}>
               {config.label}
             </span>
-            <span style={{ fontSize: 11, color: '#6d7894' }}>
+            <span style={{ fontSize: 11, color: '#6b7280' }}>
               ⏱ {drill.duration_mins} min
             </span>
-            <span style={{ fontSize: 11, color: '#6d7894' }}>
+            <span style={{ fontSize: 11, color: '#6b7280' }}>
               👥 {drill.players_min}–{drill.players_max} players
             </span>
             <span style={{
@@ -115,7 +115,7 @@ function DrillCard({ drill, delta }: { drill: Drill; delta: number }) {
         </div>
         {/* Expand chevron */}
         <span style={{
-          color: '#6d7894', fontSize: 16, flexShrink: 0,
+          color: '#6b7280', fontSize: 16, flexShrink: 0,
           transform: open ? 'rotate(180deg)' : 'rotate(0deg)',
           transition: 'transform 0.2s',
           marginTop: 2,
@@ -124,7 +124,7 @@ function DrillCard({ drill, delta }: { drill: Drill; delta: number }) {
 
       {/* Expanded content */}
       {open && (
-        <div style={{ padding: '0 16px 16px', borderTop: '1px solid #1a3a5a' }}>
+        <div style={{ padding: '0 16px 16px', borderTop: '1px solid #e2e5eb' }}>
           {/* Why recommended */}
           <div style={{
             marginTop: 12, padding: '8px 12px',
@@ -135,7 +135,7 @@ function DrillCard({ drill, delta }: { drill: Drill; delta: number }) {
             <span style={{ fontSize: 11, color: PRIORITY_COLOR[priority], fontWeight: 600 }}>
               WHY RECOMMENDED
             </span>
-            <p style={{ margin: '3px 0 0', fontSize: 12, color: '#a8c8d8', lineHeight: 1.5 }}>
+            <p style={{ margin: '3px 0 0', fontSize: 12, color: '#374151', lineHeight: 1.5 }}>
               {config.label} delta: {delta > 0 ? '+' : ''}{delta}
               {delta < 0
                 ? ` — this is a leakage area. Prioritise this pillar at training.`
@@ -146,16 +146,16 @@ function DrillCard({ drill, delta }: { drill: Drill; delta: number }) {
           {/* Setup */}
           <Section label="Setup">
             {drill.equipment && (
-              <p style={{ fontSize: 12, color: '#6d7894', marginBottom: 4 }}>
+              <p style={{ fontSize: 12, color: '#6b7280', marginBottom: 4 }}>
                 Equipment: {drill.equipment}
               </p>
             )}
-            <p style={{ fontSize: 13, color: '#b0d0e0', lineHeight: 1.6 }}>{drill.setup}</p>
+            <p style={{ fontSize: 13, color: '#374151', lineHeight: 1.6 }}>{drill.setup}</p>
           </Section>
 
           {/* Execution */}
           <Section label="Execution">
-            <p style={{ fontSize: 13, color: '#b0d0e0', lineHeight: 1.6 }}>{drill.execution}</p>
+            <p style={{ fontSize: 13, color: '#374151', lineHeight: 1.6 }}>{drill.execution}</p>
           </Section>
 
           {/* Coaching Cues */}
@@ -164,7 +164,7 @@ function DrillCard({ drill, delta }: { drill: Drill; delta: number }) {
               {drill.coaching_cues.map((cue, i) => (
                 <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
                   <span style={{ color: config.color, flexShrink: 0, marginTop: 2 }}>▸</span>
-                  <span style={{ fontSize: 13, color: '#d0e8f0', lineHeight: 1.5 }}>{cue}</span>
+                  <span style={{ fontSize: 13, color: '#374151', lineHeight: 1.5 }}>{cue}</span>
                 </div>
               ))}
             </div>
@@ -173,7 +173,7 @@ function DrillCard({ drill, delta }: { drill: Drill; delta: number }) {
           {/* Progression */}
           {drill.progression && (
             <Section label="Progression">
-              <p style={{ fontSize: 13, color: '#b0d0e0', lineHeight: 1.6 }}>{drill.progression}</p>
+              <p style={{ fontSize: 13, color: '#374151', lineHeight: 1.6 }}>{drill.progression}</p>
             </Section>
           )}
 
@@ -183,8 +183,8 @@ function DrillCard({ drill, delta }: { drill: Drill; delta: number }) {
               {drill.tags.map(tag => (
                 <span key={tag} style={{
                   fontSize: 10, padding: '1px 7px', borderRadius: 99,
-                  background: '#1a3a5a', color: '#6d7894',
-                  border: '1px solid #2a4a6e',
+                  background: '#eef1f6', color: '#6b7280',
+                  border: '1px solid #e2e5eb',
                 }}>
                   {tag}
                 </span>
@@ -200,7 +200,7 @@ function DrillCard({ drill, delta }: { drill: Drill; delta: number }) {
 function Section({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div style={{ marginBottom: 12 }}>
-      <p style={{ fontSize: 10, fontWeight: 700, color: '#6d7894', textTransform: 'uppercase',
+      <p style={{ fontSize: 10, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase',
                   letterSpacing: '0.08em', marginBottom: 5 }}>
         {label}
       </p>
@@ -246,37 +246,37 @@ export default function DrillsView({ drills, pillarDeltaMap }: Props) {
     .slice(0, 3)
 
   return (
-    <div style={{ minHeight: '100vh', background: '#0f1117', color: '#e8f4f8', fontFamily: 'system-ui, sans-serif' }}>
+    <div style={{ minHeight: '100vh', background: '#f4f5f7', color: '#1a1f2e', fontFamily: 'system-ui, sans-serif' }}>
       {/* Nav */}
       <div style={{
-        borderBottom: '1px solid #1a3a5a', padding: '14px 24px',
+        borderBottom: '1px solid #e2e5eb', padding: '14px 24px',
         display: 'flex', alignItems: 'center', gap: 16,
       }}>
-        <Link href="/" style={{ color: '#6d7894', textDecoration: 'none', fontSize: 13 }}>
+        <Link href="/" style={{ color: '#6b7280', textDecoration: 'none', fontSize: 13 }}>
           ← Home
         </Link>
-        <span style={{ color: '#1a3a5a' }}>|</span>
-        <span style={{ color: '#e8f4f8', fontWeight: 600, fontSize: 15 }}>Drills Library</span>
+        <span style={{ color: '#e2e5eb' }}>|</span>
+        <span style={{ color: '#1a1f2e', fontWeight: 600, fontSize: 15 }}>Drills Library</span>
       </div>
 
       <div style={{ maxWidth: 960, margin: '0 auto', padding: '28px 20px' }}>
 
         {/* Header */}
         <div style={{ marginBottom: 24 }}>
-          <h1 style={{ fontSize: 24, fontWeight: 700, color: '#e8f4f8', margin: 0 }}>
+          <h1 style={{ fontSize: 24, fontWeight: 700, color: '#1a1f2e', margin: 0 }}>
             Drills Library
           </h1>
-          <p style={{ color: '#6d7894', fontSize: 13, marginTop: 6 }}>
+          <p style={{ color: '#6b7280', fontSize: 13, marginTop: 6 }}>
             {drillList.length} drills across 8 performance pillars — recommended by driver tree insights.
           </p>
         </div>
 
         {/* Priority strip */}
         <div style={{
-          background: '#171c2a', border: '1px solid #2a4a6e', borderRadius: 8,
+          background: '#ffffff', border: '1px solid #e2e5eb', borderRadius: 8,
           padding: '14px 18px', marginBottom: 24,
         }}>
-          <p style={{ fontSize: 11, fontWeight: 700, color: '#6d7894', textTransform: 'uppercase',
+          <p style={{ fontSize: 11, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase',
                       letterSpacing: '0.08em', margin: '0 0 10px' }}>
             Training Priorities This Week
           </p>
@@ -298,8 +298,8 @@ export default function DrillsView({ drills, pillarDeltaMap }: Props) {
                   <span style={{ fontSize: 11, fontWeight: 700, color: PRIORITY_COLOR[priority] }}>
                     {PRIORITY_LABEL[priority]}
                   </span>
-                  <span style={{ fontSize: 12, color: '#e8f4f8' }}>{cfg?.label}</span>
-                  <span style={{ fontSize: 11, color: '#6d7894' }}>
+                  <span style={{ fontSize: 12, color: '#1a1f2e' }}>{cfg?.label}</span>
+                  <span style={{ fontSize: 11, color: '#6b7280' }}>
                     Delta: {delta > 0 ? '+' : ''}{delta}
                   </span>
                 </button>
@@ -316,9 +316,9 @@ export default function DrillsView({ drills, pillarDeltaMap }: Props) {
               onClick={() => setSortByRecommended(true)}
               style={{
                 padding: '6px 14px', borderRadius: 6, fontSize: 12, cursor: 'pointer',
-                background: sortByRecommended ? '#307b92' : 'transparent',
-                color: sortByRecommended ? '#fff' : '#6d7894',
-                border: `1px solid ${sortByRecommended ? '#307b92' : '#2e374d'}`,
+                background: sortByRecommended ? '#307b92' : '#eef1f6',
+                color: sortByRecommended ? '#fff' : '#374151',
+                border: `1px solid ${sortByRecommended ? '#307b92' : '#e2e5eb'}`,
               }}
             >
               Recommended First
@@ -327,9 +327,9 @@ export default function DrillsView({ drills, pillarDeltaMap }: Props) {
               onClick={() => setSortByRecommended(false)}
               style={{
                 padding: '6px 14px', borderRadius: 6, fontSize: 12, cursor: 'pointer',
-                background: !sortByRecommended ? '#307b92' : 'transparent',
-                color: !sortByRecommended ? '#fff' : '#6d7894',
-                border: `1px solid ${!sortByRecommended ? '#307b92' : '#2e374d'}`,
+                background: !sortByRecommended ? '#307b92' : '#eef1f6',
+                color: !sortByRecommended ? '#fff' : '#374151',
+                border: `1px solid ${!sortByRecommended ? '#307b92' : '#e2e5eb'}`,
               }}
             >
               Browse All
@@ -346,14 +346,14 @@ export default function DrillsView({ drills, pillarDeltaMap }: Props) {
                   padding: '5px 12px', borderRadius: 6, fontSize: 11, cursor: 'pointer',
                   textTransform: 'capitalize',
                   background: activeDiff === d
-                    ? (d === 'all' ? '#2e374d' : DIFFICULTY_CONFIG[d]?.color + '33')
-                    : 'transparent',
+                    ? (d === 'all' ? '#e2e5eb' : DIFFICULTY_CONFIG[d]?.color + '22')
+                    : '#eef1f6',
                   color: activeDiff === d
-                    ? (d === 'all' ? '#e8f4f8' : DIFFICULTY_CONFIG[d]?.color)
-                    : '#6d7894',
+                    ? (d === 'all' ? '#1a1f2e' : DIFFICULTY_CONFIG[d]?.color)
+                    : '#374151',
                   border: `1px solid ${activeDiff === d
-                    ? (d === 'all' ? '#1e2f45' : DIFFICULTY_CONFIG[d]?.color + '66')
-                    : '#2e374d'}`,
+                    ? (d === 'all' ? '#d0d5df' : DIFFICULTY_CONFIG[d]?.color + '66')
+                    : '#e2e5eb'}`,
                 }}
               >
                 {d === 'all' ? 'All Levels' : DIFFICULTY_CONFIG[d].label}
@@ -367,9 +367,9 @@ export default function DrillsView({ drills, pillarDeltaMap }: Props) {
               onClick={() => setActivePillar('all')}
               style={{
                 padding: '5px 12px', borderRadius: 6, fontSize: 11, cursor: 'pointer',
-                background: activePillar === 'all' ? '#2e374d' : 'transparent',
-                color: activePillar === 'all' ? '#e8f4f8' : '#6d7894',
-                border: `1px solid ${activePillar === 'all' ? '#1e2f45' : '#2e374d'}`,
+                background: activePillar === 'all' ? '#e2e5eb' : '#eef1f6',
+                color: activePillar === 'all' ? '#1a1f2e' : '#374151',
+                border: `1px solid ${activePillar === 'all' ? '#d0d5df' : '#e2e5eb'}`,
               }}
             >
               All Pillars
@@ -383,9 +383,9 @@ export default function DrillsView({ drills, pillarDeltaMap }: Props) {
                   onClick={() => setActivePillar(key)}
                   style={{
                     padding: '5px 12px', borderRadius: 6, fontSize: 11, cursor: 'pointer',
-                    background: activePillar === key ? cfg.color + '33' : 'transparent',
-                    color: activePillar === key ? cfg.color : '#6d7894',
-                    border: `1px solid ${activePillar === key ? cfg.color + '66' : '#2e374d'}`,
+                    background: activePillar === key ? cfg.color + '22' : '#eef1f6',
+                    color: activePillar === key ? cfg.color : '#374151',
+                    border: `1px solid ${activePillar === key ? cfg.color + '66' : '#e2e5eb'}`,
                     display: 'flex', alignItems: 'center', gap: 5,
                   }}
                 >
@@ -401,7 +401,7 @@ export default function DrillsView({ drills, pillarDeltaMap }: Props) {
         </div>
 
         {/* Count */}
-        <p style={{ fontSize: 12, color: '#6d7894', marginBottom: 16 }}>
+        <p style={{ fontSize: 12, color: '#6b7280', marginBottom: 16 }}>
           Showing {sorted.length} drill{sorted.length !== 1 ? 's' : ''}
           {activePillar !== 'all' && ` · ${PILLAR_CONFIG[activePillar]?.label}`}
           {activeDiff !== 'all' && ` · ${DIFFICULTY_CONFIG[activeDiff].label}`}
@@ -421,8 +421,8 @@ export default function DrillsView({ drills, pillarDeltaMap }: Props) {
         {sorted.length === 0 && (
           <div style={{
             textAlign: 'center', padding: '40px 20px',
-            color: '#6d7894', background: '#171c2a',
-            border: '1px solid #2a4a6e', borderRadius: 8,
+            color: '#6b7280', background: '#f8f9fb',
+            border: '1px solid #e2e5eb', borderRadius: 8,
           }}>
             No drills match the current filters.
           </div>

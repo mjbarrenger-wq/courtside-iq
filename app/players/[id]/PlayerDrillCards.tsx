@@ -19,14 +19,14 @@ export interface PlayerDrill {
 }
 
 const PILLAR_COLORS: Record<string, string> = {
-  shot_efficiency:     '#97cfdc',
-  possession_control:  '#97cfdc',
-  extra_possessions:   '#7a9eb5',
-  pressure_creation:   '#fbbf24',
-  shot_suppression:    '#34d399',
-  possession_ending:   '#34d399',
-  pressure_disruption: '#fbbf24',
-  discipline:          '#f87171',
+  shot_efficiency:     '#307b92',
+  possession_control:  '#307b92',
+  extra_possessions:   '#1e6a82',
+  pressure_creation:   '#d97706',
+  shot_suppression:    '#059669',
+  possession_ending:   '#059669',
+  pressure_disruption: '#d97706',
+  discipline:          '#dc2626',
 }
 
 const PILLAR_LABELS: Record<string, string> = {
@@ -41,17 +41,17 @@ const PILLAR_LABELS: Record<string, string> = {
 }
 
 const DIFFICULTY_CFG: Record<string, { label: string; color: string }> = {
-  foundation:  { label: 'Foundation',  color: '#34d399' },
-  developing:  { label: 'Developing',  color: '#f59e0b' },
-  competitive: { label: 'Competitive', color: '#f87171' },
+  foundation:  { label: 'Foundation',  color: '#059669' },
+  developing:  { label: 'Developing',  color: '#d97706' },
+  competitive: { label: 'Competitive', color: '#dc2626' },
 }
 
-const BORDER = '#2e374d'
+const BORDER = '#e2e5eb'
 
 function Section({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div style={{ marginTop: 10 }}>
-      <div style={{ fontSize: 10, fontWeight: 700, color: '#6d7894', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 4 }}>
+      <div style={{ fontSize: 10, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 4 }}>
         {label}
       </div>
       {children}
@@ -61,13 +61,13 @@ function Section({ label, children }: { label: string; children: React.ReactNode
 
 function DrillCard({ drill }: { drill: PlayerDrill }) {
   const [open, setOpen] = useState(false)
-  const color = PILLAR_COLORS[drill.pillar] ?? '#97cfdc'
+  const color = PILLAR_COLORS[drill.pillar] ?? '#307b92'
   const label = PILLAR_LABELS[drill.pillar] ?? drill.pillar
-  const diff  = DIFFICULTY_CFG[drill.difficulty] ?? { label: drill.difficulty, color: '#97cfdc' }
+  const diff  = DIFFICULTY_CFG[drill.difficulty] ?? { label: drill.difficulty, color: '#307b92' }
 
   return (
     <div style={{
-      background: '#171c2a',
+      background: '#ffffff',
       border: `1px solid ${BORDER}`,
       borderLeft: `3px solid ${color}`,
       borderRadius: 8,
@@ -84,7 +84,7 @@ function DrillCard({ drill }: { drill: PlayerDrill }) {
       >
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 5 }}>
-            <span style={{ color: '#e8f4f8', fontWeight: 600, fontSize: 13 }}>{drill.name}</span>
+            <span style={{ color: '#1a1f2e', fontWeight: 600, fontSize: 13 }}>{drill.name}</span>
             <span style={{
               fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 99,
               background: diff.color + '22', color: diff.color,
@@ -98,12 +98,12 @@ function DrillCard({ drill }: { drill: PlayerDrill }) {
               background: color + '22', color,
               border: `1px solid ${color}44`,
             }}>{label}</span>
-            <span style={{ fontSize: 10, color: '#6d7894' }}>⏱ {drill.duration_mins} min</span>
-            <span style={{ fontSize: 10, color: '#6d7894' }}>👥 {drill.players_min}–{drill.players_max}</span>
+            <span style={{ fontSize: 10, color: '#6b7280' }}>⏱ {drill.duration_mins} min</span>
+            <span style={{ fontSize: 10, color: '#6b7280' }}>👥 {drill.players_min}–{drill.players_max}</span>
           </div>
         </div>
         <span style={{
-          color: '#6d7894', fontSize: 16, flexShrink: 0,
+          color: '#6b7280', fontSize: 16, flexShrink: 0,
           transform: open ? 'rotate(180deg)' : 'rotate(0deg)',
           transition: 'transform 0.2s',
           marginTop: 2,
@@ -112,17 +112,17 @@ function DrillCard({ drill }: { drill: PlayerDrill }) {
 
       {/* Expanded detail */}
       {open && (
-        <div style={{ padding: '0 14px 14px', borderTop: '1px solid #1a3a5a' }}>
+        <div style={{ padding: '0 14px 14px', borderTop: `1px solid ${BORDER}` }}>
           {drill.equipment && (
-            <p style={{ fontSize: 11, color: '#6d7894', margin: '8px 0 0' }}>
+            <p style={{ fontSize: 11, color: '#6b7280', margin: '8px 0 0' }}>
               Equipment: {drill.equipment}
             </p>
           )}
           <Section label="Setup">
-            <p style={{ fontSize: 12, color: '#b0d0e0', lineHeight: 1.6, margin: 0 }}>{drill.setup}</p>
+            <p style={{ fontSize: 12, color: '#374151', lineHeight: 1.6, margin: 0 }}>{drill.setup}</p>
           </Section>
           <Section label="Execution">
-            <p style={{ fontSize: 12, color: '#b0d0e0', lineHeight: 1.6, margin: 0 }}>{drill.execution}</p>
+            <p style={{ fontSize: 12, color: '#374151', lineHeight: 1.6, margin: 0 }}>{drill.execution}</p>
           </Section>
           {drill.coaching_cues.length > 0 && (
             <Section label="Coaching Cues">
@@ -130,7 +130,7 @@ function DrillCard({ drill }: { drill: PlayerDrill }) {
                 {drill.coaching_cues.map((cue, i) => (
                   <div key={i} style={{ display: 'flex', gap: 7, alignItems: 'flex-start' }}>
                     <span style={{ color, flexShrink: 0, marginTop: 1, fontSize: 11 }}>▸</span>
-                    <span style={{ fontSize: 12, color: '#d0e8f0', lineHeight: 1.5 }}>{cue}</span>
+                    <span style={{ fontSize: 12, color: '#374151', lineHeight: 1.5 }}>{cue}</span>
                   </div>
                 ))}
               </div>
@@ -138,7 +138,7 @@ function DrillCard({ drill }: { drill: PlayerDrill }) {
           )}
           {drill.progression && (
             <Section label="Progression">
-              <p style={{ fontSize: 12, color: '#b0d0e0', lineHeight: 1.6, margin: 0 }}>{drill.progression}</p>
+              <p style={{ fontSize: 12, color: '#374151', lineHeight: 1.6, margin: 0 }}>{drill.progression}</p>
             </Section>
           )}
         </div>
@@ -150,7 +150,7 @@ function DrillCard({ drill }: { drill: PlayerDrill }) {
 export default function PlayerDrillCards({ drills }: { drills: PlayerDrill[] }) {
   if (drills.length === 0) {
     return (
-      <p style={{ fontSize: 12, color: '#6d7894', fontStyle: 'italic', margin: 0 }}>
+      <p style={{ fontSize: 12, color: '#6b7280', fontStyle: 'italic', margin: 0 }}>
         No matching drills found. Check the Drills Library for all available drills.
       </p>
     )

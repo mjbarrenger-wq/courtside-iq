@@ -138,27 +138,27 @@ export default async function PlayerQuadrantsPage({
     score:    `${g.team_score}-${g.opponent_score}`,
   }))
 
-  const BG     = '#0f1117'
-  const BORDER = '#2e374d'
-  const CARD   = '#171c2a'
+  const BG     = '#f4f5f7'
+  const BORDER = '#e2e5eb'
+  const CARD   = '#ffffff'
 
   return (
     <main style={{
-      background: BG, minHeight: '100vh', color: '#e8eaf0',
+      background: BG, minHeight: '100vh', color: '#1a1f2e',
       fontFamily: "'Inter', system-ui, sans-serif",
       WebkitFontSmoothing: 'antialiased', padding: '0 0 48px',
     }}>
 
       {/* ── Header ── */}
-      <div style={{ background: '#1f2537', borderBottom: `1px solid ${BORDER}`, padding: '12px 28px' }}>
+      <div style={{ background: '#ffffff', borderBottom: `1px solid ${BORDER}`, padding: '12px 28px' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
           <div>
-            <div style={{ fontSize: 20, fontWeight: 800, color: '#e8eaf0', letterSpacing: '0.05em' }}>
+            <div style={{ fontSize: 20, fontWeight: 800, color: '#1a1f2e', letterSpacing: '0.05em' }}>
               PLAYER QUADRANTS
             </div>
-            <div style={{ fontSize: 12, color: '#6d7894', marginTop: 2 }}>
+            <div style={{ fontSize: 12, color: '#6b7280', marginTop: 2 }}>
               WGT 12.2 — {contextLabel(filteredGames, filter, isCustom)} &nbsp;·&nbsp;
-              <span style={{ color: '#97cfdc', fontWeight: 700 }}>CMD Sports Analytics</span>
+              <span style={{ color: '#307b92', fontWeight: 700 }}>CMD Sports Analytics</span>
             </div>
           </div>
           <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -168,8 +168,8 @@ export default async function PlayerQuadrantsPage({
             <Suspense fallback={<div style={{ width: 100, height: 28 }} />}>
               <GamePicker games={pickerGames} />
             </Suspense>
-            <a href={`/dashboard?${gamesParam ? `games=${gamesParam}` : `filter=${filter}`}`} style={{ color: '#e8eaf0', fontSize: 11, textDecoration: 'none', background: '#1e2f45', border: '1px solid #3a5a7a', borderRadius: 20, padding: '5px 11px', fontWeight: 500, whiteSpace: 'nowrap' }}>← Driver Tree</a>
-            <a href="/" style={{ color: '#e8eaf0', fontSize: 11, textDecoration: 'none', background: '#1e2f45', border: '1px solid #3a5a7a', borderRadius: 20, padding: '5px 11px', fontWeight: 500, whiteSpace: 'nowrap' }}>← Overview</a>
+            <a href={`/dashboard?${gamesParam ? `games=${gamesParam}` : `filter=${filter}`}`} style={{ color: '#374151', fontSize: 11, textDecoration: 'none', background: '#eef1f6', border: '1px solid #c5d5e8', borderRadius: 20, padding: '5px 11px', fontWeight: 500, whiteSpace: 'nowrap' }}>← Driver Tree</a>
+            <a href="/" style={{ color: '#374151', fontSize: 11, textDecoration: 'none', background: '#eef1f6', border: '1px solid #c5d5e8', borderRadius: 20, padding: '5px 11px', fontWeight: 500, whiteSpace: 'nowrap' }}>← Overview</a>
           </div>
         </div>
 
@@ -179,7 +179,7 @@ export default async function PlayerQuadrantsPage({
             <DateSlider games={sliderGames} />
           </Suspense>
           {isCustom && (
-            <div style={{ fontSize: 11, color: '#97cfdc', fontStyle: 'italic' }}>
+            <div style={{ fontSize: 11, color: '#307b92', fontStyle: 'italic' }}>
               Custom range active — use quick filters or Reset to clear
             </div>
           )}
@@ -191,17 +191,17 @@ export default async function PlayerQuadrantsPage({
         {/* ── Bubble chart card ── */}
         <div style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: 14, padding: '24px 20px' }}>
           <div style={{ marginBottom: 16, textAlign: 'center' }}>
-            <div style={{ fontSize: 16, fontWeight: 700, color: '#e8eaf0' }}>
+            <div style={{ fontSize: 16, fontWeight: 700, color: '#1a1f2e' }}>
               Player Offensive vs Defensive PPP
             </div>
-            <div style={{ fontSize: 12, color: '#6d7894', marginTop: 4 }}>
+            <div style={{ fontSize: 12, color: '#6b7280', marginTop: 4 }}>
               Bubble size represents average minutes per game &nbsp;·&nbsp; Quadrants split by team average
             </div>
           </div>
           {bubbles.length > 0
             ? <BubbleChart players={bubbles} />
             : (
-              <div style={{ textAlign: 'center', padding: '60px 0', color: '#6d7894', fontSize: 13 }}>
+              <div style={{ textAlign: 'center', padding: '60px 0', color: '#6b7280', fontSize: 13 }}>
                 No player data available for the selected games.
               </div>
             )}
@@ -213,16 +213,16 @@ export default async function PlayerQuadrantsPage({
         {/* ── Summary table ── */}
         <div style={{ marginTop: 20, background: CARD, border: `1px solid ${BORDER}`, borderRadius: 14, overflow: 'hidden' }}>
           <div style={{ padding: '14px 20px', borderBottom: `1px solid ${BORDER}` }}>
-            <span style={{ fontSize: 13, fontWeight: 700, color: '#97cfdc' }}>PLAYER SUMMARY</span>
+            <span style={{ fontSize: 13, fontWeight: 700, color: '#307b92' }}>PLAYER SUMMARY</span>
           </div>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
             <thead>
-              <tr style={{ background: '#1f2537' }}>
+              <tr style={{ background: '#f0f2f7' }}>
                 {['#', 'Player', 'Games', 'Off PPP', 'Def PPP', 'Net PPP', 'MPG'].map(h => (
                   <th key={h} style={{
                     padding: '10px 14px',
                     textAlign: h === 'Player' ? 'left' : 'center',
-                    fontSize: 10, fontWeight: 700, color: '#6d7894',
+                    fontSize: 10, fontWeight: 700, color: '#6b7280',
                     textTransform: 'uppercase', letterSpacing: '0.08em',
                     borderBottom: `1px solid ${BORDER}`,
                   }}>{h}</th>
@@ -240,17 +240,17 @@ export default async function PlayerQuadrantsPage({
                   return (
                     <tr key={p.name} style={{
                       borderBottom: `1px solid ${BORDER}`,
-                      background: i % 2 === 0 ? 'transparent' : '#1f2537',
+                      background: i % 2 === 0 ? 'transparent' : '#f8f9fb',
                     }}>
-                      <td style={{ padding: '10px 14px', textAlign: 'center', color: '#6d7894' }}>#{p.jersey}</td>
-                      <td style={{ padding: '10px 14px', fontWeight: 600, color: '#e8eaf0' }}>{p.name}</td>
-                      <td style={{ padding: '10px 14px', textAlign: 'center', color: '#a0a8bc' }}>{p.games}</td>
-                      <td style={{ padding: '10px 14px', textAlign: 'center', color: '#97cfdc', fontWeight: 600 }}>{p.off_ppp.toFixed(3)}</td>
-                      <td style={{ padding: '10px 14px', textAlign: 'center', color: '#7a9eb5', fontWeight: 600 }}>{p.def_ppp.toFixed(3)}</td>
-                      <td style={{ padding: '10px 14px', textAlign: 'center', fontWeight: 700, color: netPos ? '#34d399' : '#f87171' }}>
+                      <td style={{ padding: '10px 14px', textAlign: 'center', color: '#6b7280' }}>#{p.jersey}</td>
+                      <td style={{ padding: '10px 14px', fontWeight: 600, color: '#1a1f2e' }}>{p.name}</td>
+                      <td style={{ padding: '10px 14px', textAlign: 'center', color: '#6b7280' }}>{p.games}</td>
+                      <td style={{ padding: '10px 14px', textAlign: 'center', color: '#307b92', fontWeight: 600 }}>{p.off_ppp.toFixed(3)}</td>
+                      <td style={{ padding: '10px 14px', textAlign: 'center', color: '#1e6a82', fontWeight: 600 }}>{p.def_ppp.toFixed(3)}</td>
+                      <td style={{ padding: '10px 14px', textAlign: 'center', fontWeight: 700, color: netPos ? '#059669' : '#dc2626' }}>
                         {netPos ? '+' : ''}{net.toFixed(3)}
                       </td>
-                      <td style={{ padding: '10px 14px', textAlign: 'center', color: '#a0a8bc' }}>{mins}:{secs}</td>
+                      <td style={{ padding: '10px 14px', textAlign: 'center', color: '#6b7280' }}>{mins}:{secs}</td>
                     </tr>
                   )
                 })}

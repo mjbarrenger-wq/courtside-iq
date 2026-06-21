@@ -219,7 +219,7 @@ function Sparkline({ values, color = '#fbbf24', w = 90, h = 26 }: {
 // ── Metric progress bar row ──────────────────────────────────────────────────
 function MetricBar({ m, side }: { m: MetricScore; side: 'off' | 'def' }) {
   const pos = m.delta >= 0
-  const dColor = pos ? '#34d399' : '#f87171'
+  const dColor = pos ? '#059669' : '#dc2626'
   const hasOpp = m.opp_value != null
   let barPct = 50
   if (hasOpp && m.opp_value !== 0) {
@@ -243,8 +243,8 @@ function MetricBar({ m, side }: { m: MetricScore; side: 'off' | 'def' }) {
         </span>
         {hasOpp && (
           <>
-            <div style={{ flex: 1, height: 4, background: '#1d3451', borderRadius: 2, overflow: 'hidden' }}>
-              <div style={{ width: `${barPct}%`, height: '100%', borderRadius: 2, background: pos ? '#34d399' : '#f87171' }} />
+            <div style={{ flex: 1, height: 4, background: '#e2e5eb', borderRadius: 2, overflow: 'hidden' }}>
+              <div style={{ width: `${barPct}%`, height: '100%', borderRadius: 2, background: pos ? '#059669' : '#dc2626' }} />
             </div>
             <span style={{ fontSize: 11, color: 'var(--text-muted)', minWidth: 40, textAlign: 'right' }}>
               {fmtVal(m.opp_value)}
@@ -284,13 +284,13 @@ function PillarCard({ pillar, side, sparkValues, vsLabel = 'Opp', estimated = fa
   rank?: number; totalRanked?: number
 }) {
   const pos = pillar.delta >= 0
-  const borderColor = pos ? '#34d399' : '#f87171'
-  const accentColor = side === 'off' ? '#97cfdc' : '#7a9eb5'
-  const sparkColor  = pos ? '#34d399' : '#f87171'
+  const borderColor = pos ? '#059669' : '#dc2626'
+  const accentColor = side === 'off' ? '#307b92' : '#1e6a82'
+  const sparkColor  = pos ? '#059669' : '#dc2626'
 
   return (
     <div style={{
-      background: '#1a2a40',
+      background: '#ffffff',
       border: `2px solid ${borderColor}`,
       borderRadius: 12,
       padding: '14px 12px',
@@ -327,13 +327,13 @@ function PillarCard({ pillar, side, sparkValues, vsLabel = 'Opp', estimated = fa
           </div>
         )}
         <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 1 }}>vs {vsLabel}: {pillar.opp_score}</div>
-        <div style={{ fontSize: 12, fontWeight: 700, color: pos ? '#34d399' : '#f87171', marginTop: 2 }}>
+        <div style={{ fontSize: 12, fontWeight: 700, color: pos ? '#059669' : '#dc2626', marginTop: 2 }}>
           {pos ? '+' : ''}{pillar.delta}
         </div>
       </div>
 
       {/* Metrics — flex:1 ensures equal height */}
-      <div style={{ flex: 1, borderTop: '1px solid #1e3a5f', paddingTop: 10 }}>
+      <div style={{ flex: 1, borderTop: '1px solid #e2e5eb', paddingTop: 10 }}>
         {pillar.metrics.map((m, i) => (
           <MetricBar key={i} m={m} side={side} />
         ))}
@@ -341,14 +341,14 @@ function PillarCard({ pillar, side, sparkValues, vsLabel = 'Opp', estimated = fa
 
       {/* Player rank badge */}
       {rank != null && totalRanked != null && (
-        <div style={{ borderTop: '1px solid #1e3a5f', marginTop: 8, paddingTop: 6, textAlign: 'center' }}>
+        <div style={{ borderTop: '1px solid #e2e5eb', marginTop: 8, paddingTop: 6, textAlign: 'center' }}>
           <span style={{
             fontSize: 10, fontWeight: 700, letterSpacing: '0.04em',
-            color: rank === 1 ? '#fbbf24' : rank <= Math.ceil(totalRanked / 3) ? '#34d399' : rank > Math.floor(totalRanked * 2 / 3) ? '#f87171' : '#a0a8bc',
+            color: rank === 1 ? '#d97706' : rank <= Math.ceil(totalRanked / 3) ? '#059669' : rank > Math.floor(totalRanked * 2 / 3) ? '#dc2626' : '#6b7280',
           }}>
             #{rank} of {totalRanked}
           </span>
-          <div style={{ fontSize: 9, color: '#6d7894', marginTop: 1 }}>team rank</div>
+          <div style={{ fontSize: 9, color: '#6b7280', marginTop: 1 }}>team rank</div>
         </div>
       )}
     </div>
@@ -378,7 +378,7 @@ function KPIStat({ label, value, opp, sparkValues, color = '#fbbf24', prefix = '
 }
 
 // ── Tree connector ────────────────────────────────────────────────────────────
-const LINE = '#2e374d'
+const LINE = '#e2e5eb'
 
 function BranchConnector() {
   return (
@@ -701,9 +701,9 @@ export default async function DashboardPage({
     score:    `${g.team_score}-${g.opponent_score}`,
   }))
 
-  const BG     = '#0f1117'
-  const CARD   = '#171c2a'
-  const BORDER = '#2e374d'
+  const BG     = '#f4f5f7'
+  const CARD   = '#ffffff'
+  const BORDER = '#e2e5eb'
 
   return (
     <main style={{ background: BG, minHeight: '100vh', color: 'var(--text-primary)', fontFamily: "'Inter', system-ui, sans-serif", WebkitFontSmoothing: 'antialiased', MozOsxFontSmoothing: 'grayscale', padding: '0 0 40px' }}>
@@ -711,8 +711,8 @@ export default async function DashboardPage({
         .pillar-info { position: relative; display: inline-flex; align-items: center; cursor: help; }
         .pillar-info-icon {
           width: 13px; height: 13px; border-radius: 50%;
-          background: #1a3a54; border: 1px solid #3a5a7a;
-          color: #94a3b8; font-size: 8px; font-weight: 800;
+          background: #eef1f6; border: 1px solid #c5d5e8;
+          color: #374151; font-size: 8px; font-weight: 800;
           display: inline-flex; align-items: center; justify-content: center;
           font-style: italic; line-height: 1; flex-shrink: 0;
         }
@@ -720,28 +720,28 @@ export default async function DashboardPage({
           visibility: hidden; opacity: 0;
           position: absolute; bottom: calc(100% + 6px); left: 50%;
           transform: translateX(-50%);
-          background: #07111e; border: 1px solid #3a5a7a;
+          background: #ffffff; border: 1px solid #e2e5eb;
           border-radius: 8px; padding: 9px 11px;
-          font-size: 11px; color: #cbd5e1; line-height: 1.55;
+          font-size: 11px; color: #374151; line-height: 1.55;
           width: 210px; text-align: left; z-index: 200;
           transition: opacity 0.15s ease;
           pointer-events: none;
-          box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+          box-shadow: 0 4px 20px rgba(0,0,0,0.12);
           font-weight: 400; text-transform: none; letter-spacing: 0;
         }
         .pillar-info:hover .pillar-info-tooltip { visibility: visible; opacity: 1; }
       `}</style>
 
       {/* ── Header row 1 ── */}
-      <div style={{ background: '#1f2537', borderBottom: `1px solid ${BORDER}`, padding: '12px 28px' }}>
+      <div style={{ background: '#ffffff', borderBottom: `1px solid ${BORDER}`, padding: '12px 28px' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
           <div>
-            <div style={{ fontSize: 20, fontWeight: 800, color: 'var(--text-hero)', letterSpacing: '0.05em' }}>
+            <div style={{ fontSize: 20, fontWeight: 800, color: '#1a1f2e', letterSpacing: '0.05em' }}>
               COACHING INTELLIGENCE DASHBOARD
             </div>
-            <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2 }}>
+            <div style={{ fontSize: 12, color: '#374151', marginTop: 2 }}>
               WGT 12.2 — {contextLabel(filteredGames, filter, isCustom)} &nbsp;·&nbsp;
-              <span style={{ color: '#97cfdc', fontWeight: 700 }}>CMD Sports Analytics</span>
+              <span style={{ color: '#307b92', fontWeight: 700 }}>CMD Sports Analytics</span>
             </div>
           </div>
           <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -754,9 +754,9 @@ export default async function DashboardPage({
             <Suspense fallback={<div style={{ width: 160, height: 28 }} />}>
               <PlayerSelector players={allPlayers} currentPlayerId={playerId} />
             </Suspense>
-            <a href={`/players?${gamesParam ? `games=${gamesParam}` : `filter=${filter}`}`} style={{ color: '#e8eaf0', fontSize: 11, textDecoration: 'none', background: '#1e2f45', border: '1px solid #3a5a7a', borderRadius: 20, padding: '5px 11px', fontWeight: 500, whiteSpace: 'nowrap' }}>Player Quadrants</a>
-            <a href="/players/c1000000-0000-0000-0000-000000000001" style={{ color: '#fbbf24', fontSize: 11, textDecoration: 'none', background: '#1a2a0a', border: '1px solid #f59e0b', borderRadius: 20, padding: '5px 11px', fontWeight: 600, whiteSpace: 'nowrap' }}>Player Profiles</a>
-            <a href="/" style={{ color: '#e8eaf0', fontSize: 11, textDecoration: 'none', background: '#1e2f45', border: '1px solid #3a5a7a', borderRadius: 20, padding: '5px 11px', fontWeight: 500, whiteSpace: 'nowrap' }}>← Overview</a>
+            <a href={`/players?${gamesParam ? `games=${gamesParam}` : `filter=${filter}`}`} style={{ color: '#374151', fontSize: 11, textDecoration: 'none', background: '#eef1f6', border: '1px solid #c5d5e8', borderRadius: 20, padding: '5px 11px', fontWeight: 500, whiteSpace: 'nowrap' }}>Player Quadrants</a>
+            <a href="/players/c1000000-0000-0000-0000-000000000001" style={{ color: '#d97706', fontSize: 11, textDecoration: 'none', background: '#fffbeb', border: '1px solid #fcd34d', borderRadius: 20, padding: '5px 11px', fontWeight: 600, whiteSpace: 'nowrap' }}>Player Profiles</a>
+            <a href="/" style={{ color: '#374151', fontSize: 11, textDecoration: 'none', background: '#eef1f6', border: '1px solid #c5d5e8', borderRadius: 20, padding: '5px 11px', fontWeight: 500, whiteSpace: 'nowrap' }}>← Overview</a>
           </div>
         </div>
 
@@ -766,7 +766,7 @@ export default async function DashboardPage({
             <DateSlider games={sliderGames} />
           </Suspense>
           {isCustom && (
-            <div style={{ fontSize: 11, color: '#97cfdc', fontStyle: 'italic' }}>
+            <div style={{ fontSize: 11, color: '#307b92', fontStyle: 'italic' }}>
               Custom range active — use quick filters or Reset to clear
             </div>
           )}
@@ -802,18 +802,18 @@ export default async function DashboardPage({
 
           {/* Net PPP / Player Net hero */}
           <div style={{
-            textAlign: 'center', background: '#252d40',
-            border: `2px solid ${netPos ? '#34d399' : '#f87171'}`,
+            textAlign: 'center', background: netPos ? '#ecfdf5' : '#fef2f2',
+            border: `2px solid ${netPos ? '#059669' : '#dc2626'}`,
             borderRadius: 12, padding: '14px 20px',
           }}>
-            <div style={{ fontSize: 11, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.12em', marginBottom: 4 }}>
+            <div style={{ fontSize: 11, color: '#374151', textTransform: 'uppercase', letterSpacing: '0.12em', marginBottom: 4 }}>
               {isPlayerMode ? `#${selectedPlayer?.jersey} ${selectedPlayer?.name}` : 'NET PPP'}
             </div>
-            <div style={{ fontSize: 46, fontWeight: 900, color: netPos ? '#34d399' : '#f87171', lineHeight: 1 }}>
+            <div style={{ fontSize: 46, fontWeight: 900, color: netPos ? '#059669' : '#dc2626', lineHeight: 1 }}>
               {netPos ? '+' : ''}{tree.net_ppp}
             </div>
             <div style={{ display: 'flex', justifyContent: 'center', margin: '6px 0 4px' }}>
-              <Sparkline values={netTrend} color={netPos ? '#34d399' : '#f87171'} w={120} h={30} />
+              <Sparkline values={netTrend} color={netPos ? '#059669' : '#dc2626'} w={120} h={30} />
             </div>
             <div style={{ fontSize: 11, color: 'var(--text-muted)', maxWidth: 200, margin: '0 auto', lineHeight: 1.5 }}>
               {isPlayerMode
@@ -823,7 +823,7 @@ export default async function DashboardPage({
             {isPlayerMode && selectedPlayer && (
               <a
                 href={`/players/${selectedPlayer.id}`}
-                style={{ display: 'inline-block', marginTop: 10, fontSize: 10, fontWeight: 700, color: '#97cfdc', textDecoration: 'none', background: '#1e2f45', border: '1px solid #2a5a7e', borderRadius: 20, padding: '4px 12px', letterSpacing: '0.06em' }}
+                style={{ display: 'inline-block', marginTop: 10, fontSize: 10, fontWeight: 700, color: '#307b92', textDecoration: 'none', background: '#eef1f6', border: '1px solid #c5d5e8', borderRadius: 20, padding: '4px 12px', letterSpacing: '0.06em' }}
               >
                 VIEW FULL PROFILE →
               </a>
@@ -859,17 +859,17 @@ export default async function DashboardPage({
                 <div style={{ width: '50%', borderTop: `2px solid ${LINE}`, borderLeft: `2px solid ${LINE}`, height: 16 }} />
               </div>
               <div style={{ background: CARD, border: `2px solid #307b92`, borderRadius: 10, padding: '10px 16px', textAlign: 'center', width: 160, margin: '0 auto' }}>
-                <div style={{ fontSize: 12, fontWeight: 700, color: '#97cfdc', letterSpacing: '0.1em' }}>{isPlayerMode ? 'OFFENSIVE' : 'OFFENCE PPP'}</div>
-                <div style={{ fontSize: 30, fontWeight: 800, color: '#97cfdc' }}>{tree.off_ppp}</div>
+                <div style={{ fontSize: 12, fontWeight: 700, color: '#307b92', letterSpacing: '0.1em' }}>{isPlayerMode ? 'OFFENSIVE' : 'OFFENCE PPP'}</div>
+                <div style={{ fontSize: 30, fontWeight: 800, color: '#307b92' }}>{tree.off_ppp}</div>
               </div>
             </div>
             <div style={{ flex: 1 }}>
               <div style={{ display: 'flex', justifyContent: 'flex-start' }}>
                 <div style={{ width: '50%', borderTop: `2px solid ${LINE}`, borderRight: `2px solid ${LINE}`, height: 16 }} />
               </div>
-              <div style={{ background: CARD, border: `2px solid #97cfdc`, borderRadius: 10, padding: '10px 16px', textAlign: 'center', width: 160, margin: '0 auto' }}>
-                <div style={{ fontSize: 12, fontWeight: 700, color: '#7a9eb5', letterSpacing: '0.1em' }}>{isPlayerMode ? 'DEFENSIVE' : 'DEFENCE PPP'}</div>
-                <div style={{ fontSize: 30, fontWeight: 800, color: '#7a9eb5' }}>{tree.def_ppp}</div>
+              <div style={{ background: CARD, border: `2px solid #1e6a82`, borderRadius: 10, padding: '10px 16px', textAlign: 'center', width: 160, margin: '0 auto' }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: '#1e6a82', letterSpacing: '0.1em' }}>{isPlayerMode ? 'DEFENSIVE' : 'DEFENCE PPP'}</div>
+                <div style={{ fontSize: 30, fontWeight: 800, color: '#1e6a82' }}>{tree.def_ppp}</div>
               </div>
             </div>
           </div>
@@ -920,18 +920,18 @@ export default async function DashboardPage({
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1.3fr', gap: 16, marginTop: 28 }}>
 
           {/* Top Drivers */}
-          <div style={{ background: CARD, border: '1px solid #1a4a2e', borderRadius: 12, padding: '18px 20px' }}>
+          <div style={{ background: '#ecfdf5', border: '1px solid #a7f3d0', borderRadius: 12, padding: '18px 20px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
-              <div style={{ width: 28, height: 28, background: '#14532d', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14 }}>📈</div>
-              <span style={{ fontSize: 13, fontWeight: 700, color: '#34d399' }}>{isPlayerMode ? 'TOP CONTRIBUTIONS' : 'TOP POSITIVE DRIVERS'}</span>
+              <div style={{ width: 28, height: 28, background: '#059669', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14 }}>📈</div>
+              <span style={{ fontSize: 13, fontWeight: 700, color: '#059669' }}>{isPlayerMode ? 'TOP CONTRIBUTIONS' : 'TOP POSITIVE DRIVERS'}</span>
             </div>
             {tree.top_drivers.map((d, i) => (
-              <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '7px 0', borderBottom: i < tree.top_drivers.length - 1 ? `1px solid ${BORDER}` : 'none' }}>
-                <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>• {d.pillar}</span>
-                <span style={{ fontSize: 12, fontWeight: 700, color: '#34d399' }}>
+              <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '7px 0', borderBottom: i < tree.top_drivers.length - 1 ? `1px solid #a7f3d0` : 'none' }}>
+                <span style={{ fontSize: 12, color: '#374151' }}>• {d.pillar}</span>
+                <span style={{ fontSize: 12, fontWeight: 700, color: '#059669' }}>
                   +{d.delta}
                   {!isPlayerMode && PILLAR_DELTA_UNIT[d.pillar] && (
-                    <span style={{ fontSize: 10, fontWeight: 400, color: 'var(--text-muted)', marginLeft: 3 }}>
+                    <span style={{ fontSize: 10, fontWeight: 400, color: '#6b7280', marginLeft: 3 }}>
                       {PILLAR_DELTA_UNIT[d.pillar]}
                     </span>
                   )}
@@ -941,18 +941,18 @@ export default async function DashboardPage({
           </div>
 
           {/* Leakage */}
-          <div style={{ background: CARD, border: '1px solid #4a1a1a', borderRadius: 12, padding: '18px 20px' }}>
+          <div style={{ background: '#fef2f2', border: '1px solid #fca5a5', borderRadius: 12, padding: '18px 20px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
-              <div style={{ width: 28, height: 28, background: '#7f1d1d', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14 }}>📉</div>
-              <span style={{ fontSize: 13, fontWeight: 700, color: '#f87171' }}>{isPlayerMode ? 'DEVELOPMENT AREAS' : 'BIGGEST LEAKAGE AREAS'}</span>
+              <div style={{ width: 28, height: 28, background: '#dc2626', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14 }}>📉</div>
+              <span style={{ fontSize: 13, fontWeight: 700, color: '#dc2626' }}>{isPlayerMode ? 'DEVELOPMENT AREAS' : 'BIGGEST LEAKAGE AREAS'}</span>
             </div>
             {tree.leakage_areas.map((d, i) => (
-              <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '7px 0', borderBottom: i < tree.leakage_areas.length - 1 ? `1px solid ${BORDER}` : 'none' }}>
-                <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>• {d.pillar}</span>
-                <span style={{ fontSize: 12, fontWeight: 700, color: '#f87171' }}>
+              <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '7px 0', borderBottom: i < tree.leakage_areas.length - 1 ? `1px solid #fca5a5` : 'none' }}>
+                <span style={{ fontSize: 12, color: '#374151' }}>• {d.pillar}</span>
+                <span style={{ fontSize: 12, fontWeight: 700, color: '#dc2626' }}>
                   {d.delta}
                   {!isPlayerMode && PILLAR_DELTA_UNIT[d.pillar] && (
-                    <span style={{ fontSize: 10, fontWeight: 400, color: 'var(--text-muted)', marginLeft: 3 }}>
+                    <span style={{ fontSize: 10, fontWeight: 400, color: '#6b7280', marginLeft: 3 }}>
                       {PILLAR_DELTA_UNIT[d.pillar]}
                     </span>
                   )}
@@ -998,12 +998,12 @@ export default async function DashboardPage({
             return (
               <div style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: 12, padding: '18px 20px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
-                  <div style={{ width: 28, height: 28, background: '#1d3451', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14 }}>💡</div>
-                  <span style={{ fontSize: 13, fontWeight: 700, color: '#97cfdc' }}>KEY TAKEAWAYS</span>
+                  <div style={{ width: 28, height: 28, background: '#eef1f6', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14 }}>💡</div>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: '#307b92' }}>KEY TAKEAWAYS</span>
                 </div>
                 {takeaways.map((t, i) => (
                   <div key={i} style={{ display: 'flex', gap: 10, marginBottom: i < takeaways.length - 1 ? 10 : 0, alignItems: 'flex-start' }}>
-                    <div style={{ width: 20, height: 20, background: '#1d3451', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 700, color: '#97cfdc', flexShrink: 0, marginTop: 1 }}>
+                    <div style={{ width: 20, height: 20, background: '#eef1f6', border: '1px solid #c5d5e8', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 700, color: '#307b92', flexShrink: 0, marginTop: 1 }}>
                       {i + 1}
                     </div>
                     <p style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.6, margin: 0 }}>{t}</p>
@@ -1014,13 +1014,13 @@ export default async function DashboardPage({
           })()}
 
           {/* AI Coaching Priorities */}
-          <div style={{ background: '#252d40', border: `1px solid #307b92`, borderRadius: 12, padding: '18px 20px' }}>
+          <div style={{ background: '#eef1f6', border: `1px solid #c5d5e8`, borderRadius: 12, padding: '18px 20px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
               <div style={{ width: 28, height: 28, background: '#307b92', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14 }}>🤖</div>
-              <span style={{ fontSize: 13, fontWeight: 700, color: '#97cfdc' }}>
+              <span style={{ fontSize: 13, fontWeight: 700, color: '#307b92' }}>
                 {isPlayerMode ? `${selectedPlayer?.name?.split(' ')[0].toUpperCase()} — DEVELOPMENT PLAN` : 'COACHING PRIORITIES'}
               </span>
-              <span style={{ fontSize: 10, color: 'var(--text-muted)', marginLeft: 'auto' }}>Powered by Claude</span>
+              <span style={{ fontSize: 10, color: '#6b7280', marginLeft: 'auto' }}>Powered by Claude</span>
             </div>
             {insights.map((insight, i) => (
               <div key={i} style={{ display: 'flex', gap: 10, marginBottom: 10, alignItems: 'flex-start' }}>
@@ -1033,19 +1033,19 @@ export default async function DashboardPage({
           </div>
 
           {/* Recommended Drills */}
-          <div style={{ background: '#1f2537', border: `1px solid #1a3a5a`, borderRadius: 12, padding: '18px 20px' }}>
+          <div style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: 12, padding: '18px 20px' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <div style={{ width: 28, height: 28, background: '#34d399', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14 }}>🏀</div>
-                <span style={{ fontSize: 13, fontWeight: 700, color: '#34d399' }}>RECOMMENDED DRILLS</span>
-                <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>
+                <div style={{ width: 28, height: 28, background: '#059669', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14 }}>🏀</div>
+                <span style={{ fontSize: 13, fontWeight: 700, color: '#059669' }}>RECOMMENDED DRILLS</span>
+                <span style={{ fontSize: 10, color: '#6b7280' }}>
                   {relevantDrills.length > 0
                     ? `matched to ${isPlayerMode ? 'development' : 'leakage'} pillars · click to expand`
                     : 'no leakage pillars identified'}
                 </span>
               </div>
               <a href="/drills" style={{
-                fontSize: 10, fontWeight: 600, color: '#34d399',
+                fontSize: 10, fontWeight: 600, color: '#059669',
                 textDecoration: 'none', letterSpacing: '0.05em',
               }}>FULL LIBRARY →</a>
             </div>
@@ -1062,15 +1062,15 @@ export default async function DashboardPage({
                 : 'All metrics calculated from season totals. Comparison vs season average opponent. Data via Hoopsalytics.'}
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <div style={{ width: 1, height: 20, background: '#2e374d' }} />
-              <span style={{ fontSize: 12, color: 'var(--text-secondary)', fontWeight: 500 }}>Powered by</span>
-              <span style={{ fontSize: 13, fontWeight: 800, color: '#97cfdc', letterSpacing: '0.04em' }}>
+              <div style={{ width: 1, height: 20, background: '#e2e5eb' }} />
+              <span style={{ fontSize: 12, color: '#374151', fontWeight: 500 }}>Powered by</span>
+              <span style={{ fontSize: 13, fontWeight: 800, color: '#307b92', letterSpacing: '0.04em' }}>
                 CMD Sports Analytics
               </span>
             </div>
           </div>
           <div style={{
-            borderTop: '1px solid #2a4a6e', paddingTop: 12,
+            borderTop: `1px solid ${BORDER}`, paddingTop: 12,
             textAlign: 'center', fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.7,
           }}>
             © {new Date().getFullYear()} CMD Sports Pty Ltd. All rights reserved. Courtside IQ and the Coaching Intelligence Dashboard are proprietary products of CMD Sports Pty Ltd.

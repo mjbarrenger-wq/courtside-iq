@@ -25,18 +25,18 @@ export function FilterBar({ current, currentType }: FilterBarProps) {
   const pillStyle = (active: boolean) => ({
     padding: '5px 11px',
     borderRadius: 20,
-    border: `1px solid ${active ? '#307b92' : '#1e2f45'}`,
+    border: `1px solid ${active ? '#307b92' : '#e2e5eb'}`,
     cursor: 'pointer',
     fontSize: 11,
     fontWeight: active ? 700 : 500,
-    background: active ? '#307b92' : '#1e2f45',
-    color: active ? '#ffffff' : '#97cfdc',
+    background: active ? '#307b92' : '#eef1f6',
+    color: active ? '#ffffff' : '#374151',
     whiteSpace: 'nowrap' as const,
   })
 
   const labelStyle = {
     fontSize: 10,
-    color: '#c5cde0',
+    color: '#6b7280',
     marginRight: 4,
     textTransform: 'uppercase' as const,
     letterSpacing: '0.08em',
