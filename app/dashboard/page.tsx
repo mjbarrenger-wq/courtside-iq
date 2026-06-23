@@ -754,7 +754,6 @@ export default async function DashboardPage({
             <Suspense fallback={<div style={{ width: 160, height: 28 }} />}>
               <PlayerSelector players={allPlayers} currentPlayerId={playerId} />
             </Suspense>
-            <a href={`/players?${gamesParam ? `games=${gamesParam}` : `filter=${filter}`}`} style={{ color: '#374151', fontSize: 11, textDecoration: 'none', background: '#eef1f6', border: '1px solid #c5d5e8', borderRadius: 20, padding: '5px 11px', fontWeight: 500, whiteSpace: 'nowrap' }}>Player Quadrants</a>
           </div>
         </div>
 

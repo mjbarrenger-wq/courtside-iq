@@ -30,16 +30,16 @@ export function PlayerSelector({
 
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-      <span style={{ fontSize: 10, color: '#c5cde0', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+      <span style={{ fontSize: 10, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
         Player:
       </span>
       <select
         value={currentPlayerId ?? 'team'}
         onChange={e => onChange(e.target.value)}
         style={{
-          background: '#171c2a',
-          border: `1px solid ${currentPlayerId ? '#307b92' : '#2e374d'}`,
-          color: currentPlayerId ? '#97cfdc' : '#c5cde0',
+          background: currentPlayerId ? '#e8f4f8' : '#ffffff',
+          border: `1px solid ${currentPlayerId ? '#307b92' : '#e2e5eb'}`,
+          color: currentPlayerId ? '#307b92' : '#374151',
           fontSize: 12,
           fontWeight: 600,
           padding: '5px 32px 5px 12px',
@@ -47,7 +47,7 @@ export function PlayerSelector({
           cursor: 'pointer',
           appearance: 'none',
           WebkitAppearance: 'none',
-          backgroundImage: `url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6'><path d='M0 0l5 6 5-6z' fill='%2397cfdc'/></svg>")`,
+          backgroundImage: `url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6'><path d='M0 0l5 6 5-6z' fill='%23374151'/></svg>")`,
           backgroundRepeat: 'no-repeat',
           backgroundPosition: 'right 10px center',
           outline: 'none',

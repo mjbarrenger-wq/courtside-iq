@@ -8,6 +8,7 @@ const NAV_ITEMS = [
   { label: 'Dashboard',  href: '/dashboard' },
   { label: 'Trends',     href: '/trends' },
   { label: 'Quadrants',  href: '/players' },
+  { label: 'Profiles',   href: '/profiles' },
   { label: 'Rotations',  href: '/rotations' },
   { label: 'Drills',     href: '/drills' },
   { label: 'Glossary',   href: '/glossary' },

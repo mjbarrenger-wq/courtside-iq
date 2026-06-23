@@ -280,7 +280,7 @@ export default async function Home() {
           </a>
 
           {/* Player Profiles */}
-          <a href="/players/c1000000-0000-0000-0000-000000000001" style={{ textDecoration: 'none', display: 'flex' }}>
+          <a href="/profiles" style={{ textDecoration: 'none', display: 'flex' }}>
             <div style={{
               background: CARD, border: `1px solid ${BORDER}`,
               borderTop: '3px solid #f59e0b',
@@ -298,8 +298,8 @@ export default async function Home() {
                 Player Profiles
               </div>
               <div style={{ fontSize: 13, color: '#6b7280', lineHeight: 1.7, flex: 1 }}>
-                Individual development profiles for every player. Pillar scores, team ranks,
-                AI-generated insights, coaching priorities, and suggested drills.
+                Individual development profiles for every player. Select a player from the quadrant
+                view to see pillar scores, team ranks, AI insights, and drill recommendations.
               </div>
               <div style={{ marginTop: 18, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                 {['Insights', 'Work Ons', 'Drills'].map(tag => (
