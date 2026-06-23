@@ -547,7 +547,6 @@ export default async function PlayerProfilePage({
     return (
       <main style={{ background: BG, minHeight: '100vh', color: '#1a1f2e', padding: 40, fontFamily: 'Inter, system-ui, sans-serif' }}>
         <div style={{ color: '#374151' }}>Player not found.</div>
-        <a href="/dashboard" style={{ color: '#307b92', fontSize: 13, marginTop: 16, display: 'block' }}>← Back to Dashboard</a>
       </main>
     )
   }
@@ -849,7 +848,6 @@ export default async function PlayerProfilePage({
             </a>
           ))}
           <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, paddingLeft: 16 }}>
-            <a href="/dashboard" style={{ color: '#374151', fontSize: 11, textDecoration: 'none', background: '#eef1f6', border: `1px solid #c5d5e8`, borderRadius: 20, padding: '4px 11px', whiteSpace: 'nowrap' }}>← Team Dashboard</a>
             <a href={`/dashboard?player=${id}`} style={{ color: '#374151', fontSize: 11, textDecoration: 'none', background: '#eef1f6', border: `1px solid #c5d5e8`, borderRadius: 20, padding: '4px 11px', whiteSpace: 'nowrap' }}>Driver Tree View</a>
           </div>
         </div>

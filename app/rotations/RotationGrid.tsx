@@ -13,16 +13,16 @@ interface Props {
 
 // ── Palette ───────────────────────────────────────────────────────────────────
 
-const BG      = '#0f1117'
-const CARD    = '#171c2a'
-const BORDER  = '#2e374d'
-const TEAL    = '#97cfdc'
-const PRIMARY = '#e8eaf0'
-const MUTED   = '#6d7894'
-const SEC     = '#a0a8bc'
-const AMBER   = '#fbbf24'
-const GREEN   = '#34d399'
-const RED     = '#f87171'
+const BG      = '#f4f5f7'
+const CARD    = '#ffffff'
+const BORDER  = '#e2e5eb'
+const TEAL    = '#307b92'
+const PRIMARY = '#1a1f2e'
+const MUTED   = '#6b7280'
+const SEC     = '#374151'
+const AMBER   = '#d97706'
+const GREEN   = '#059669'
+const RED     = '#dc2626'
 
 // Per-player colors (10 distinct hues)
 const PLAYER_COLORS = [
@@ -282,7 +282,7 @@ function MinutesView({ result, players }: { result: OptimiserResult; players: Ro
                 display: 'flex', alignItems: 'center', paddingLeft: 8,
                 minWidth: 40,
               }}>
-                <span style={{ fontSize: 11, fontWeight: 700, color: '#0f1117' }}>
+                <span style={{ fontSize: 11, fontWeight: 700, color: PRIMARY }}>
                   {mins} min
                 </span>
               </div>

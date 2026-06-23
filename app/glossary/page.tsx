@@ -361,10 +361,6 @@ export default function GlossaryPage() {
               <span style={{ color: '#307b92', fontWeight: 700 }}>CMD Sports Analytics</span>
             </div>
           </div>
-          <div style={{ display: 'flex', gap: 10 }}>
-            <a href="/dashboard" style={{ color: '#374151', fontSize: 11, textDecoration: 'none', background: '#eef1f6', border: '1px solid #c5d5e8', borderRadius: 20, padding: '5px 11px', fontWeight: 500 }}>← Driver Tree</a>
-            <a href="/" style={{ color: '#374151', fontSize: 11, textDecoration: 'none', background: '#eef1f6', border: '1px solid #c5d5e8', borderRadius: 20, padding: '5px 11px', fontWeight: 500 }}>← Overview</a>
-          </div>
         </div>
       </div>
 

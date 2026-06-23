@@ -168,8 +168,6 @@ export default async function PlayerQuadrantsPage({
             <Suspense fallback={<div style={{ width: 100, height: 28 }} />}>
               <GamePicker games={pickerGames} />
             </Suspense>
-            <a href={`/dashboard?${gamesParam ? `games=${gamesParam}` : `filter=${filter}`}`} style={{ color: '#374151', fontSize: 11, textDecoration: 'none', background: '#eef1f6', border: '1px solid #c5d5e8', borderRadius: 20, padding: '5px 11px', fontWeight: 500, whiteSpace: 'nowrap' }}>← Driver Tree</a>
-            <a href="/" style={{ color: '#374151', fontSize: 11, textDecoration: 'none', background: '#eef1f6', border: '1px solid #c5d5e8', borderRadius: 20, padding: '5px 11px', fontWeight: 500, whiteSpace: 'nowrap' }}>← Overview</a>
           </div>
         </div>
 

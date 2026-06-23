@@ -50,7 +50,6 @@ export default async function BoxScorePage({
     return (
       <main style={{ background: BG, minHeight: '100vh', color: '#1a1f2e', fontFamily: "'Inter', system-ui, sans-serif", padding: 40 }}>
         <p style={{ color: '#6b7280' }}>Game not found.</p>
-        <a href="/" style={{ color: '#307b92', fontSize: 12 }}>← Back to overview</a>
       </main>
     )
   }
@@ -146,7 +145,7 @@ export default async function BoxScorePage({
 
           {/* Breadcrumb */}
           <div style={{ fontSize: 11, color: '#6b7280', marginBottom: 10 }}>
-            <a href="/" style={{ color: '#6b7280', textDecoration: 'none' }}>Overview</a>
+            <span>Overview</span>
             <span style={{ margin: '0 6px' }}>›</span>
             <span style={{ color: '#307b92' }}>Box Score</span>
           </div>

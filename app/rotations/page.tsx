@@ -11,9 +11,9 @@ export const metadata: Metadata = { title: 'Rotation Planner — Courtside IQ' }
 const SB_URL  = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const SB_KEY  = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 
-const BG     = '#0f1117'
-const BORDER = '#2e374d'
-const HEADER = '#1f2537'
+const BG     = '#f4f5f7'
+const BORDER = '#e2e5eb'
+const HEADER = '#ffffff'
 
 async function fetchJson(path: string) {
   const res = await fetch(`${SB_URL}/rest/v1/${path}`, {
@@ -54,23 +54,20 @@ export default async function RotationsPage() {
 
   return (
     <main style={{
-      background: BG, minHeight: '100vh', color: '#e8eaf0',
+      background: BG, minHeight: '100vh', color: '#1a1f2e',
       fontFamily: "'Inter', system-ui, sans-serif",
       WebkitFontSmoothing: 'antialiased', padding: '0 0 64px',
     }}>
       {/* Header */}
-      <div style={{ background: HEADER, borderBottom: `1px solid ${BORDER}`, padding: '20px 32px' }}>
-        <div style={{ maxWidth: 1100, margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div>
-            <div style={{ fontSize: 22, fontWeight: 800, color: '#e8eaf0', letterSpacing: '0.05em' }}>
-              COURTSIDE IQ
-            </div>
-            <div style={{ fontSize: 12, color: '#a0a8bc', marginTop: 3 }}>
-              WGT 12.2 · U12 Basketball · Melbourne · Season 2025–26 &nbsp;·&nbsp;
-              <span style={{ color: '#97cfdc', fontWeight: 700 }}>CMD Sports Analytics</span>
-            </div>
+      <div style={{ background: HEADER, borderBottom: `1px solid ${BORDER}`, padding: '16px 32px' }}>
+        <div style={{ maxWidth: 1100, margin: '0 auto' }}>
+          <div style={{ fontSize: 20, fontWeight: 800, color: '#1a1f2e', letterSpacing: '0.05em' }}>
+            ROTATION PLANNER
           </div>
-          <a href="/" style={{ fontSize: 13, color: '#97cfdc', textDecoration: 'none' }}>&larr; Home</a>
+          <div style={{ fontSize: 12, color: '#374151', marginTop: 2 }}>
+            WGT 12.2 — pre-game lineup builder &nbsp;·&nbsp;
+            <span style={{ color: '#307b92', fontWeight: 700 }}>CMD Sports Analytics</span>
+          </div>
         </div>
       </div>
 

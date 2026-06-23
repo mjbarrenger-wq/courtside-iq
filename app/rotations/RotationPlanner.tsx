@@ -8,17 +8,17 @@ import { savePlayerPositions } from './actions'
 
 interface Props { players: RotationPlayer[]; teamId: string }
 
-const CARD    = '#171c2a'
-const BORDER  = '#2e374d'
-const BG      = '#0f1117'
-const HEADER  = '#1f2537'
-const TEAL    = '#97cfdc'
-const SEC     = '#a0a8bc'
-const PRIMARY = '#e8eaf0'
-const MUTED   = '#6d7894'
-const GREEN   = '#34d399'
-const RED     = '#f87171'
-const AMBER   = '#fbbf24'
+const CARD    = '#ffffff'
+const BORDER  = '#e2e5eb'
+const BG      = '#f4f5f7'
+const HEADER  = '#ffffff'
+const TEAL    = '#307b92'
+const SEC     = '#374151'
+const PRIMARY = '#1a1f2e'
+const MUTED   = '#6b7280'
+const GREEN   = '#059669'
+const RED     = '#dc2626'
+const AMBER   = '#d97706'
 
 const ALL_POSITIONS: Position[] = ['PG', 'SG', 'SF', 'PF', 'C']
 
@@ -83,7 +83,7 @@ function ToggleGroup<T extends string | number>({ options, value, onChange }: {
         <button key={String(opt.value)} onClick={() => onChange(opt.value)} style={{
           flex: 1, padding: '6px 12px', fontSize: 12, fontWeight: 600, border: 'none',
           background: value === opt.value ? TEAL : BG,
-          color: value === opt.value ? '#0f1117' : MUTED,
+          color: value === opt.value ? '#ffffff' : MUTED,
           cursor: 'pointer', transition: 'all 0.12s',
         }}>
           {opt.label}
@@ -113,7 +113,7 @@ function PositionEditor({ primary, secondary, onChange }: {
       {ALL_POSITIONS.map(pos => {
         const isPri = primary.includes(pos), isSec = secondary.includes(pos)
         const bg  = isPri ? TEAL : isSec ? 'rgba(151,207,220,0.15)' : BG
-        const col = isPri ? '#0f1117' : isSec ? TEAL : MUTED
+        const col = isPri ? '#ffffff' : isSec ? TEAL : MUTED
         const bdr = isPri || isSec ? TEAL : BORDER
         return (
           <div key={pos} style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
@@ -480,7 +480,7 @@ export default function RotationPlanner({ players: initialPlayers, teamId: _team
             <button onClick={() => setShowPositions(v => !v)} style={{
               background: showPositions ? TEAL : BG, border: `1px solid ${showPositions ? TEAL : BORDER}`,
               borderRadius: 6, padding: '5px 12px', fontSize: 11, fontWeight: 600,
-              color: showPositions ? '#0f1117' : SEC, cursor: 'pointer',
+              color: showPositions ? '#ffffff' : SEC, cursor: 'pointer',
             }}>
               {showPositions ? '✓ Positions' : 'Edit Positions'}
             </button>
@@ -522,7 +522,7 @@ export default function RotationPlanner({ players: initialPlayers, teamId: _team
                     <button onClick={toggleAllEveryQ} style={{
                       background: allEveryQ ? TEAL : BG, border: `1px solid ${allEveryQ ? TEAL : BORDER}`,
                       borderRadius: 4, padding: '1px 5px', fontSize: 8, fontWeight: 700,
-                      color: allEveryQ ? '#0f1117' : MUTED, cursor: 'pointer',
+                      color: allEveryQ ? '#ffffff' : MUTED, cursor: 'pointer',
                     }}>{allEveryQ ? 'All ✓' : 'All'}</button>
                   </span>
                 </th>
@@ -568,7 +568,7 @@ export default function RotationPlanner({ players: initialPlayers, teamId: _team
                                 onClick={() => handleSavePositions(p)}
                                 style={{
                                   fontSize: 9, fontWeight: 700, padding: '2px 8px',
-                                  background: TEAL, color: '#0f1117',
+                                  background: TEAL, color: '#ffffff',
                                   border: 'none', borderRadius: 4, cursor: 'pointer',
                                 }}
                               >

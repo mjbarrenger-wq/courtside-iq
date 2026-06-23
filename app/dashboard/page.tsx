@@ -755,8 +755,6 @@ export default async function DashboardPage({
               <PlayerSelector players={allPlayers} currentPlayerId={playerId} />
             </Suspense>
             <a href={`/players?${gamesParam ? `games=${gamesParam}` : `filter=${filter}`}`} style={{ color: '#374151', fontSize: 11, textDecoration: 'none', background: '#eef1f6', border: '1px solid #c5d5e8', borderRadius: 20, padding: '5px 11px', fontWeight: 500, whiteSpace: 'nowrap' }}>Player Quadrants</a>
-            <a href="/players/c1000000-0000-0000-0000-000000000001" style={{ color: '#d97706', fontSize: 11, textDecoration: 'none', background: '#fffbeb', border: '1px solid #fcd34d', borderRadius: 20, padding: '5px 11px', fontWeight: 600, whiteSpace: 'nowrap' }}>Player Profiles</a>
-            <a href="/" style={{ color: '#374151', fontSize: 11, textDecoration: 'none', background: '#eef1f6', border: '1px solid #c5d5e8', borderRadius: 20, padding: '5px 11px', fontWeight: 500, whiteSpace: 'nowrap' }}>← Overview</a>
           </div>
         </div>
 
