@@ -10,6 +10,7 @@ const NAV_ITEMS = [
   { label: 'Quadrants',  href: '/players' },
   { label: 'Profiles',   href: '/profiles' },
   { label: 'Rotations',  href: '/rotations' },
+  { label: 'Practice',   href: '/practice' },
   { label: 'Drills',     href: '/drills' },
   { label: 'Glossary',   href: '/glossary' },
 ]
