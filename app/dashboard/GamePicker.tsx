@@ -40,9 +40,9 @@ export function GamePicker({ games }: { games: PickerGame[] }) {
   const btnStyle = (mini?: boolean): React.CSSProperties => ({
     padding: mini ? '3px 10px' : '5px 14px',
     borderRadius: 14,
-    border: '1px solid #2a4a6e',
-    background: 'transparent',
-    color: '#97cfdc',
+    border: '1px solid #e2e5eb',
+    background: '#eef1f6',
+    color: '#374151',
     fontSize: 10,
     cursor: 'pointer',
     whiteSpace: 'nowrap' as const,
@@ -56,9 +56,9 @@ export function GamePicker({ games }: { games: PickerGame[] }) {
         style={{
           padding: '5px 12px',
           borderRadius: 20,
-          border: `1px solid ${n > 0 ? '#307b92' : '#1e2f45'}`,
-          background: n > 0 ? '#1e2f45' : '#171c2a',
-          color: n > 0 ? '#97cfdc' : '#c5cde0',
+          border: `1px solid ${n > 0 ? '#307b92' : '#e2e5eb'}`,
+          background: n > 0 ? '#e8f4f8' : '#ffffff',
+          color: n > 0 ? '#307b92' : '#374151',
           fontSize: 11,
           fontWeight: n > 0 ? 700 : 500,
           cursor: 'pointer',
@@ -84,19 +84,19 @@ export function GamePicker({ games }: { games: PickerGame[] }) {
             top: 36,
             right: 0,
             zIndex: 100,
-            background: '#171c2a',
-            border: '1px solid #2a4a6e',
+            background: '#ffffff',
+            border: '1px solid #e2e5eb',
             borderRadius: 10,
             padding: '12px',
             width: 300,
-            boxShadow: '0 8px 32px rgba(0,0,0,0.6)',
+            boxShadow: '0 8px 32px rgba(0,0,0,0.12)',
           }}>
             {/* Controls row */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
               <button style={btnStyle(true)} onClick={() => setSelected(new Set(games.map(g => g.id)))}>
                 All
               </button>
-              <span style={{ fontSize: 10, color: '#a0a8bc' }}>
+              <span style={{ fontSize: 10, color: '#6b7280' }}>
                 {n > 0 ? `${n} of ${games.length} selected` : 'No games selected'}
               </span>
               <button style={btnStyle(true)} onClick={() => setSelected(new Set())}>
@@ -114,7 +114,7 @@ export function GamePicker({ games }: { games: PickerGame[] }) {
                   padding: '5px 4px',
                   cursor: 'pointer',
                   borderRadius: 4,
-                  borderBottom: '1px solid #1a3050',
+                  borderBottom: '1px solid #f0f2f7',
                 }}>
                   <input
                     type="checkbox"
@@ -124,13 +124,13 @@ export function GamePicker({ games }: { games: PickerGame[] }) {
                   />
                   <span style={{
                     fontSize: 10, fontWeight: 700, width: 14, flexShrink: 0,
-                    color: g.result === 'W' ? '#34d399' : '#f87171',
+                    color: g.result === 'W' ? '#059669' : '#dc2626',
                   }}>{g.result}</span>
-                  <span style={{ fontSize: 10, color: '#a0a8bc', width: 40, flexShrink: 0 }}>{g.label}</span>
-                  <span style={{ fontSize: 11, color: '#c5cde0', flex: 1, overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>
+                  <span style={{ fontSize: 10, color: '#6b7280', width: 40, flexShrink: 0 }}>{g.label}</span>
+                  <span style={{ fontSize: 11, color: '#1a1f2e', flex: 1, overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>
                     {g.opponent}
                   </span>
-                  <span style={{ fontSize: 10, color: '#6d7894', flexShrink: 0 }}>{g.score}</span>
+                  <span style={{ fontSize: 10, color: '#6b7280', flexShrink: 0 }}>{g.score}</span>
                 </label>
               ))}
             </div>
@@ -144,8 +144,8 @@ export function GamePicker({ games }: { games: PickerGame[] }) {
                 padding: '7px',
                 borderRadius: 8,
                 border: 'none',
-                background: n > 0 ? '#307b92' : '#1a3050',
-                color: n > 0 ? '#fff' : '#5c6880',
+                background: n > 0 ? '#307b92' : '#eef1f6',
+                color: n > 0 ? '#fff' : '#9ca3af',
                 fontSize: 11,
                 fontWeight: 700,
                 cursor: n > 0 ? 'pointer' : 'not-allowed',
