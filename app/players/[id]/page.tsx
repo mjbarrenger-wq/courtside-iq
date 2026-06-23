@@ -1,16 +1,19 @@
 // Individual Player Development Page
 // Offensive pillars: full cards with ranks
 // Defensive section: flat stat grid
-// AI sections: key insights, coaching priorities, suggested drills
+// AI sections: streamed via <Suspense> in InsightsPanel.tsx
 
+import { Suspense } from 'react'
 import { getSeasonAggregates } from '@/lib/getSeasonAggregates'
 import { computePlayerDriverTree, PlayerStats, PillarScore, MetricScore } from '@/lib/driverTree'
-import { COACHING_WRITING_STANDARDS } from '@/lib/writingStandards'
 import PlayerDrillCards, { type PlayerDrill } from './PlayerDrillCards'
+import InsightsPanel, { InsightsSkeleton, type WinLossSplit, type InsightsPanelProps } from './InsightsPanel'
 import { FilterBar } from '@/app/dashboard/FilterBar'
 import { GamePicker, type PickerGame } from '@/app/dashboard/GamePicker'
 import type { FilterKey, GameTypeKey } from '@/app/dashboard/filterConfig'
 import { FILTER_CONFIG, GAME_TYPE_CONFIG } from '@/app/dashboard/filterConfig'
+
+// WinLossSplit and DevelopmentContent types live in InsightsPanel.tsx
 
 // ── Tooltip content ───────────────────────────────────────────────────────────
 const PILLAR_TOOLTIPS: Record<string, string> = {
@@ -40,12 +43,6 @@ async function fetchJson(path: string) {
     cache: 'no-store',
   })
   return res.json()
-}
-
-// ── AI development content ────────────────────────────────────────────────────
-interface DevelopmentContent {
-  insights: string[]
-  workOns: string[]
 }
 
 // ── Pillar name → DB pillar key ────────────────────────────────────────────────
@@ -79,148 +76,6 @@ function getRelevantDrills(
     if (result.length >= 4) break
   }
   return result.slice(0, 4)
-}
-
-interface WinLossSplit {
-  wins:   number
-  losses: number
-  pts_w:   number | null; pts_l:   number | null
-  ts_w:    number | null; ts_l:    number | null
-  to_w:    number | null; to_l:    number | null
-  reb_w:   number | null; reb_l:   number | null
-  stl_w:   number | null; stl_l:   number | null
-  ftf_w:   number | null; ftf_l:   number | null
-}
-
-async function getDevelopmentContent(
-  playerName: string,
-  jersey: number,
-  tree: ReturnType<typeof computePlayerDriverTree>,
-  stats: { ppg: number; ts: number; to_pct: number; oreb_pg: number; dreb_pg: number; stl_pg: number; blk_pg: number; ftf_pg: number; ft_pct: number },
-  teamAvgs: { ts: number; to_pct: number; oreb_pg: number; dreb_pg: number; stl_pg: number; blk_pg: number; ftf_pg: number; ft_pct: number; ppg: number },
-  ranks: { label: string; rank: number; total: number }[],
-  winLoss: WinLossSplit,
-  outlierSummary: string,
-  biggestWlSplit: { label: string; w: number | null; l: number | null; lowerBetter?: boolean } | null,
-): Promise<DevelopmentContent> {
-  const first = playerName.split(' ')[0]
-
-  // Full stat table with team avg and rank for every metric
-  const comparisonRows = [
-    { stat: 'PPG',        player: stats.ppg,     team: teamAvgs.ppg,    unit: '',  lowerBetter: false, rank: ranks[0] },
-    { stat: 'TS%',        player: stats.ts,      team: teamAvgs.ts,     unit: '%', lowerBetter: false, rank: ranks[0] },
-    { stat: 'TO%',        player: stats.to_pct,  team: teamAvgs.to_pct, unit: '%', lowerBetter: true,  rank: ranks[1] },
-    { stat: 'FTF/G',      player: stats.ftf_pg,  team: teamAvgs.ftf_pg, unit: '',  lowerBetter: false, rank: ranks[3] },
-    { stat: 'FT%',        player: stats.ft_pct,  team: teamAvgs.ft_pct, unit: '%', lowerBetter: false, rank: ranks[3] },
-    { stat: 'OReb/G',     player: stats.oreb_pg, team: teamAvgs.oreb_pg,unit: '',  lowerBetter: false, rank: ranks[2] },
-    { stat: 'DReb/G',     player: stats.dreb_pg, team: teamAvgs.dreb_pg,unit: '',  lowerBetter: false, rank: ranks[5] },
-    { stat: 'STL/G',      player: stats.stl_pg,  team: teamAvgs.stl_pg, unit: '',  lowerBetter: false, rank: ranks[6] },
-    { stat: 'BLK/G',      player: stats.blk_pg,  team: teamAvgs.blk_pg, unit: '',  lowerBetter: false, rank: ranks[4] },
-  ]
-  const compTable = comparisonRows.map(r => {
-    const diff = Math.round((r.player - r.team) * 10) / 10
-    const dir  = r.lowerBetter ? (diff <= 0 ? '✓ better' : '✗ worse') : (diff >= 0 ? '✓ above' : '✗ below')
-    return `${r.stat}: ${r.player}${r.unit} (team avg ${r.team}${r.unit}, ${diff >= 0 ? '+' : ''}${diff} ${dir}, ranked #${r.rank.rank} of ${r.rank.total})`
-  }).join('\n')
-
-  // Win/loss split
-  const fmt = (v: number | null) => v != null ? String(v) : 'n/a'
-  const wlLines = winLoss.wins + winLoss.losses >= 3 ? [
-    `Games: ${winLoss.wins}W / ${winLoss.losses}L`,
-    `PTS:   ${fmt(winLoss.pts_w)} in wins vs ${fmt(winLoss.pts_l)} in losses`,
-    `TS%:   ${fmt(winLoss.ts_w)}% in wins vs ${fmt(winLoss.ts_l)}% in losses`,
-    `TO:    ${fmt(winLoss.to_w)} in wins vs ${fmt(winLoss.to_l)} in losses`,
-    `REB:   ${fmt(winLoss.reb_w)} in wins vs ${fmt(winLoss.reb_l)} in losses`,
-    `STL:   ${fmt(winLoss.stl_w)} in wins vs ${fmt(winLoss.stl_l)} in losses`,
-    `FTF:   ${fmt(winLoss.ftf_w)} in wins vs ${fmt(winLoss.ftf_l)} in losses`,
-    biggestWlSplit ? `→ Biggest split: ${biggestWlSplit.label} (${fmt(biggestWlSplit.w)} wins / ${fmt(biggestWlSplit.l)} losses)` : '',
-  ].filter(Boolean).join('\n') : 'Insufficient win/loss split data for this sample.'
-
-  const rankSummary = ranks.map(r => `${r.label}: #${r.rank} of ${r.total}`).join(', ')
-  const tops     = tree.top_drivers.map(d => d.pillar).join(', ')
-  const leakages = tree.leakage_areas.map(d => d.pillar).join(', ')
-
-  try {
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-api-key': process.env.ANTHROPIC_API_KEY ?? '', 'anthropic-version': '2023-06-01' },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-6', max_tokens: 2600,
-        messages: [{ role: 'user', content: `You are a youth basketball development coach writing a player development report for a U12 team in Melbourne (WGT 12.2, 29 games, 22–7 record).
-
-Player: #${jersey} ${playerName}
-Net PPP on-court: ${tree.net_ppp >= 0 ? '+' : ''}${tree.net_ppp}
-Driver tree pillars (ranked): ${rankSummary}
-Top performing pillars: ${tops || 'none identified'}
-Development pillars: ${leakages || 'none identified'}
-
-FULL STAT PROFILE vs TEAM AVERAGE AND PEER RANK (${ranks[0].total} players, min 5 games):
-${compTable}
-
-${outlierSummary}
-
-WIN / LOSS SPLIT:
-${wlLines}
-
-U12 REFERENCE BENCHMARKS (Melbourne competition level):
-- TS% > 52% = efficient; 42–52% = developing; < 42% = inefficient
-- TO% < 20% = strong; 20–28% = manageable; > 28% = high-risk
-- FT% > 65% = reliable; 50–65% = inconsistent; < 50% = significant gap
-- FTF/G > 3.0 = consistent rim pressure; < 1.5 = not attacking the rim
-- OReb/G > 2.0 = active on glass; DReb/G > 2.5 = strong possession finisher
-- STL/G > 1.5 = active, disruptive; BLK/G > 0.5 = shot deterrent
-
-${COACHING_WRITING_STANDARDS}
-
-Return valid JSON — no markdown, no preamble:
-{
-  "insights": ["string", "string", "string"],
-  "workOns": ["string", "string", "string"]
-}
-
-INSIGHT RULES:
-The STRENGTHS and DEVELOPMENT AREAS above show where this player stands out relative to their peers — use these as your starting points, not your own assumptions about what matters in basketball.
-
-Do not default to TS%, turnovers, and rebounds for every player. Each player has different outliers. A player whose biggest positive outlier is STL/G and biggest negative outlier is FT% should get insights about those stats — not generic shooting and ball security.
-
-Write 3 insights. Together they must give a balanced picture: at least one insight covers a genuine strength, at least one covers a real development need. If a combination of stats tells a more interesting story than any single stat (e.g. high FTF/G but low FT%, strong defensive stats but costly fouls), lead with that connection.
-
-Every insight must:
-- Be grounded in this player's actual outlier data and peer ranks
-- State specific numbers with team average and/or peer rank for context ("2.8 STL/G, ranked #1 on the team" not "a strong defender")
-- Reference U12 benchmarks only where they genuinely add context
-- Address ${first} by first name
-- Be 2–4 sentences, direct, no filler or hollow affirmations
-
-WORKONS — 3 specific training priorities that follow directly from the development areas in the insights. Imperative voice. Each names a concrete habit or physical skill, not a general category. Address ${first} by first name.` }],
-      }),
-    })
-    const d = await res.json()
-    if (d.error) {
-      console.error('[AI] Anthropic error:', JSON.stringify(d.error))
-      throw new Error(d.error.message)
-    }
-    const text = d.content?.[0]?.text?.replace(/```json|```/g, '').trim()
-    if (!text) {
-      console.error('[AI] No text in response:', JSON.stringify(d))
-      throw new Error('No text content in response')
-    }
-    return JSON.parse(text)
-  } catch (err) {
-    console.error('[AI] getDevelopmentContent failed:', err)
-    return {
-      insights: [
-        `${first} scores ${stats.ppg} points per game at a TS% of ${stats.ts}% — ${stats.ts >= 52 ? 'above the U12 efficiency benchmark of 52%' : stats.ts >= 42 ? 'in the developing range for U12 (42–52%)' : 'below the U12 average threshold of 42%'}. True Shooting captures scoring efficiency across all shot types. The number tells you how many points are being generated per scoring attempt, not just how many shots go in.`,
-        `Turnover rate is ${stats.to_pct}% — ${stats.to_pct < 20 ? 'strong ball security by U12 standards (benchmark: under 20%)' : stats.to_pct < 28 ? 'in the manageable range but with room to improve (benchmark: under 20% is strong)' : 'above the high-risk threshold for U12 (28%+)'}. Every turnover gives the opponent a possession without a shot being taken. At this level, ball security under pressure is one of the most direct drivers of point differential.`,
-        `${first} averages ${stats.dreb_pg} defensive rebounds and ${stats.stl_pg} steals per game. Defensive rebounding ends possessions cleanly; steals create new ones. ${stats.dreb_pg >= 2.5 ? 'Both numbers suggest an engaged, active defender' : 'There is room to be more active on the defensive end'} — and together they reflect how much this player is contributing to possession control on the defensive side of the ball.`,
-      ],
-      workOns: [
-        `${first}, work on shot selection before shot making — choose attempts that sit inside your range and inside the team's offensive structure.`,
-        `Ball security under pressure: every live-ball rep at training, absorb contact from a defender before making the decision to pass or drive.`,
-        `Box out on every defensive miss — two hands on your player before you turn to find the ball. Consistency here converts to possessions.`,
-      ],
-    }
-  }
 }
 
 // ── Sparkline ─────────────────────────────────────────────────────────────────
@@ -768,14 +623,23 @@ export default async function PlayerProfilePage({
     return bDiff - aDiff
   })[0] ?? null
 
-  // AI content (insights + workOns only — drills come from DB)
-  const devContent = await getDevelopmentContent(
-    fullName, player.jersey_number, tree, aiStats, teamAvgs, rankSummaryArr, winLoss, outlierSummary, biggestWlSplit,
-  )
-
-  // Real drills from DB, matched to player's development pillars
+  // Drills from DB — passed to InsightsPanel for rendering
   const allDrills: PlayerDrill[] = Array.isArray(drillsRaw) ? drillsRaw : []
   const relevantDrills = getRelevantDrills(tree.leakage_areas, allDrills)
+
+  // Props for InsightsPanel (the async Suspense component that calls Claude)
+  const insightsPanelProps: InsightsPanelProps = {
+    playerName: fullName,
+    jersey: player.jersey_number,
+    tree,
+    aiStats,
+    teamAvgs,
+    rankSummaryArr,
+    winLoss,
+    outlierSummary,
+    biggestWlSplit,
+    relevantDrills,
+  }
 
   const playerIdx  = players.findIndex((p: any) => p.id === id)
   const prevPlayer = playerIdx > 0 ? players[playerIdx - 1] : null
@@ -927,21 +791,10 @@ export default async function PlayerProfilePage({
           ))}
         </div>
 
-        {/* ── Key Insights ── */}
-        <div style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: 14, padding: '20px 24px', marginBottom: 20 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
-            <span style={{ fontSize: 16 }}>💡</span>
-            <span style={{ fontSize: 13, fontWeight: 700, color: '#d97706', letterSpacing: '0.08em' }}>KEY INSIGHTS</span>
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
-            {devContent.insights.map((insight, i) => (
-              <div key={i} style={{ background: '#f0f2f7', border: `1px solid ${BORDER}`, borderRadius: 8, padding: '14px 16px' }}>
-                <div style={{ fontSize: 18, fontWeight: 800, color: '#d97706', opacity: 0.4, marginBottom: 6 }}>{i + 1}</div>
-                <div style={{ fontSize: 13, color: '#374151', lineHeight: 1.6 }}>{insight}</div>
-              </div>
-            ))}
-          </div>
-        </div>
+        {/* ── Key Insights + Work Ons + Drills — streamed via Suspense ── */}
+        <Suspense fallback={<InsightsSkeleton />}>
+          <InsightsPanel {...insightsPanelProps} />
+        </Suspense>
 
         {/* ── Offensive Pillars ── */}
         <div style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: 14, padding: '20px 20px 24px', marginBottom: 20 }}>
@@ -974,47 +827,6 @@ export default async function PlayerProfilePage({
           <div style={{ marginTop: 10, padding: '8px 12px', background: '#f0f2f7', borderRadius: 6, fontSize: 11, color: '#6b7280', fontStyle: 'italic' }}>
             Individual tracking only. Contested shots, opponent FG% when guarded, and screen quality are not captured in this dataset.
           </div>
-        </div>
-
-        {/* ── Work Ons + Drills ── */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 20 }}>
-
-          {/* Coaching priorities */}
-          <div style={{ background: CARD, border: '1px solid #e2e5eb', borderRadius: 14, padding: '20px 24px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
-              <span style={{ fontSize: 16 }}>🎯</span>
-              <span style={{ fontSize: 13, fontWeight: 700, color: '#d97706', letterSpacing: '0.08em' }}>WORK ONS</span>
-              <span style={{ fontSize: 11, color: '#6b7280', marginLeft: 4 }}>coaching priorities this week</span>
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              {devContent.workOns.map((item, i) => (
-                <div key={i} style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
-                  <div style={{
-                    width: 24, height: 24, borderRadius: '50%', background: '#fffbeb',
-                    border: '1px solid #fcd34d', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    fontSize: 11, fontWeight: 700, color: '#d97706', flexShrink: 0, marginTop: 1,
-                  }}>{i + 1}</div>
-                  <div style={{ fontSize: 13, color: '#374151', lineHeight: 1.6 }}>{item}</div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Suggested drills */}
-          <div style={{ background: CARD, border: '1px solid #e2e5eb', borderRadius: 14, padding: '20px 24px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
-              <span style={{ fontSize: 16 }}>🏀</span>
-              <span style={{ fontSize: 13, fontWeight: 700, color: '#307b92', letterSpacing: '0.08em' }}>SUGGESTED DRILLS</span>
-              <span style={{ fontSize: 11, color: '#6b7280', marginLeft: 4 }}>click to expand</span>
-            </div>
-            <PlayerDrillCards drills={relevantDrills} />
-            <a href="/drills" style={{
-              display: 'inline-block', marginTop: 14,
-              fontSize: 10, fontWeight: 600, color: '#307b92',
-              textDecoration: 'none', letterSpacing: '0.06em',
-            }}>VIEW ALL DRILLS →</a>
-          </div>
-
         </div>
 
         {/* ── Top contributions & development areas ── */}
