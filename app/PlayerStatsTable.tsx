@@ -13,6 +13,8 @@ export interface PlayerRow {
   spg: number
   bpg: number
   topg: number
+  fg_pct: number
+  ts_pct: number
   ft_pct: number
 }
 
@@ -22,7 +24,7 @@ type SortDir = 'asc' | 'desc'
 const BORDER = '#e2e5eb'
 const CARD   = '#ffffff'
 
-const COLS: { key: SortKey; label: string; title: string; lowerBetter?: boolean }[] = [
+const COLS: { key: SortKey; label: string; title: string; lowerBetter?: boolean; isPct?: boolean }[] = [
   { key: 'jersey', label: '#',     title: 'Jersey number' },
   { key: 'gp',     label: 'GP',    title: 'Games played' },
   { key: 'ppg',    label: 'PPG',   title: 'Points per game' },
@@ -31,7 +33,9 @@ const COLS: { key: SortKey; label: string; title: string; lowerBetter?: boolean 
   { key: 'spg',    label: 'SPG',   title: 'Steals per game' },
   { key: 'bpg',    label: 'BPG',   title: 'Blocks per game' },
   { key: 'topg',   label: 'TO/G',  title: 'Turnovers per game', lowerBetter: true },
-  { key: 'ft_pct', label: 'FT%',   title: 'Free throw percentage' },
+  { key: 'fg_pct', label: 'FG%',   title: 'Field goal percentage (2pt + 3pt)', isPct: true },
+  { key: 'ts_pct', label: 'TS%',   title: 'True shooting % — accounts for 2pt, 3pt and free throws. Formula: pts ÷ (2 × (FGA + 0.44 × FTA))', isPct: true },
+  { key: 'ft_pct', label: 'FT%',   title: 'Free throw percentage', isPct: true },
 ]
 
 export default function PlayerStatsTable({ players }: { players: PlayerRow[] }) {
@@ -106,7 +110,7 @@ export default function PlayerStatsTable({ players }: { players: PlayerRow[] }) 
               {COLS.map(col => {
                 const val = p[col.key] as number
                 const isActive = col.key === sortKey
-                const formatted = col.key === 'ft_pct'
+                const formatted = col.isPct
                   ? (val > 0 ? `${val}%` : '—')
                   : col.key === 'jersey' || col.key === 'gp'
                   ? val

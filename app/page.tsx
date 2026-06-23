@@ -21,7 +21,7 @@ const HEADER = '#ffffff'
 export default async function Home() {
   const [gamesRaw, stats, players, drillsRaw] = await Promise.all([
     fetchJson('games?select=*,opponents(full_name)&order=game_date.asc'),
-    fetchJson('player_game_stats?select=player_id,points,oreb,dreb,ast,stl,blk,turnovers,ft_made,ft_att'),
+    fetchJson('player_game_stats?select=player_id,points,oreb,dreb,ast,stl,blk,turnovers,ft_made,ft_att,twopt_made,twopt_att,threept_made,threept_att'),
     fetchJson('players?select=*&order=jersey_number.asc'),
     fetchJson('drills?select=id'),
   ])
@@ -45,7 +45,14 @@ export default async function Home() {
     const sum = (key: string) => ps.reduce((s: number, r: any) => s + (Number(r[key]) || 0), 0)
     const gp  = ps.length
     const avg = (key: string) => gp > 0 ? Math.round((sum(key) / gp) * 10) / 10 : 0
-    const ftMade = sum('ft_made'), ftAtt = sum('ft_att')
+    const ftMade    = sum('ft_made'),    ftAtt    = sum('ft_att')
+    const twoptMade = sum('twopt_made'), twoptAtt = sum('twopt_att')
+    const thryptMade= sum('threept_made'), thryptAtt = sum('threept_att')
+    const totalPts  = sum('points')
+    const fgMade    = twoptMade + thryptMade
+    const fgAtt     = twoptAtt  + thryptAtt
+    // TS% = pts / (2 × (FGA + 0.44 × FTA))
+    const tsDenom   = 2 * (fgAtt + 0.44 * ftAtt)
     return {
       id:     p.id,
       name:   `${p.first_name} ${p.last_name}`,
@@ -57,7 +64,9 @@ export default async function Home() {
       spg:    avg('stl'),
       bpg:    avg('blk'),
       topg:   avg('turnovers'),
-      ft_pct: ftAtt > 0 ? Math.round((ftMade / ftAtt) * 1000) / 10 : 0,
+      fg_pct: fgAtt  > 0 ? Math.round((fgMade / fgAtt) * 1000) / 10 : 0,
+      ts_pct: tsDenom > 0 ? Math.round((totalPts / tsDenom) * 1000) / 10 : 0,
+      ft_pct: ftAtt  > 0 ? Math.round((ftMade  / ftAtt)  * 1000) / 10 : 0,
     }
   })
 
