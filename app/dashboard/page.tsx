@@ -159,6 +159,7 @@ async function getPlayerInsights(
   playerName: string,
   jersey: number,
   tree: DriverTreeOutput,
+  statRankSummary: string,
 ): Promise<string[]> {
   const tops     = tree.top_drivers.map(d => `${d.pillar}: ${d.delta >= 0 ? '+' : ''}${d.delta} vs team avg`).join(', ')
   const leakages = tree.leakage_areas.map(d => `${d.pillar}: ${d.delta} vs team avg`).join(', ')
@@ -168,13 +169,18 @@ async function getPlayerInsights(
       headers: { 'Content-Type': 'application/json', 'x-api-key': process.env.ANTHROPIC_API_KEY ?? '' },
       body: JSON.stringify({
         model: 'claude-sonnet-4-6', max_tokens: 900,
-        messages: [{ role: 'user', content: `You are a youth basketball development coach. Based on this player's stats vs team average, write 3 individual training priorities. Each must connect a specific stat to a concrete practice habit or drill. Reference actual numbers from the data.
+        messages: [{ role: 'user', content: `You are a youth basketball development coach. Based on this player's profile vs the team, write 3 individual training priorities. Each must connect a specific stat (cite its real number and team rank) to a concrete practice habit or drill.
 
 Player: #${jersey} ${playerName} (U12 basketball, Melbourne)
 
-STRENGTHS (above team average): ${tops || 'none identified'}
-DEVELOPMENT AREAS (below team average): ${leakages || 'none identified'}
+PER-STAT PROFILE (player value, team average per player, and team rank):
+${statRankSummary || '(not available)'}
+
+PILLAR STRENGTHS (above team average): ${tops || 'none identified'}
+PILLAR DEVELOPMENT AREAS (below team average): ${leakages || 'none identified'}
 Net PPP on-court: ${tree.net_ppp >= 0 ? '+' : ''}${tree.net_ppp}
+
+ACCURACY: Use only the numbers and ranks listed above — never invent a stat, percentage, or ranking not shown. Say a player "leads the team" / is "the team's best at X" ONLY when that stat's rank is #1; if it shows "tied #1", say "tied for the team lead". For any other rank, state the real position (e.g. "second on the team for scoring"). Being above the team average does NOT by itself mean the player leads — the average is total ÷ players, so most contributors sit above it.
 
 ${COACHING_WRITING_STANDARDS}
 
@@ -611,6 +617,7 @@ export default async function DashboardPage({
   let playerTree: DriverTreeOutput | null = null
   let selectedPlayer: { id: string; name: string; jersey: number } | null = null
   let pillarRanks: { rank: number; total: number; tie: boolean }[] | null = null
+  let statRankSummary = ''
   const numGames = Math.max(Object.keys(playerByGame).length, 1)
   const numActivePlayers = Array.isArray(perGamePlayers) && perGamePlayers.length > 0
     ? perGamePlayers.length / numGames
@@ -667,6 +674,45 @@ export default async function DashboardPage({
         pillarRank(playerId, p => p.games > 0 ? p.stl / p.games : 0, true),            // Possession Creation — STL/G higher better (matches pillar score)
         pillarRank(playerId, p => p.games > 0 ? p.def_fouls / p.games : 999, false),   // Discipline — Def Fouls/G lower better
       ]
+
+      // Real per-stat values + team-per-player averages + dedicated ranks, so the
+      // player insight prompt can make verified "leads the team" claims with numbers.
+      {
+        const g    = Math.max(ps.games, 1)
+        const fga  = ps.twopt_att + ps.threept_att
+        const tFga = aggregates.twopt_att + aggregates.threept_att
+        const tg   = Math.max(aggregates.games, 1)
+        const np   = Math.max(numActivePlayers, 1)
+        const rnd1 = (n: number) => Math.round(n * 10) / 10
+        const pctOf = (made: number, att: number) => att > 0 ? (made / att) * 100 : 0
+        const fmtRk = (r: { rank: number; total: number; tie: boolean }) => `${r.tie ? 'tied ' : ''}#${r.rank} of ${r.total}`
+
+        const rows: Array<[string, number, number, { rank: number; total: number; tie: boolean }, string]> = [
+          ['PPG', ps.pts / g, aggregates.pts / tg / np,
+            pillarRank(playerId, p => p.games > 0 ? (2 * p.twopt_made + 3 * p.threept_made + p.ft_made) / p.games : 0, true), ''],
+          ['TS%', pctOf(ps.pts, 2 * (fga + 0.44 * ps.ft_att)), pctOf(aggregates.pts, 2 * (tFga + 0.44 * aggregates.ft_att)),
+            pillarRank(playerId, p => { const f = p.twopt_att + p.threept_att; const d = 2 * (f + 0.44 * p.ft_att); return d > 0 ? (2 * p.twopt_made + 3 * p.threept_made + p.ft_made) / d : 0 }, true), '%'],
+          ['TO% (lower=better)', pctOf(ps.turnovers, fga + 0.44 * ps.ft_att + ps.turnovers), pctOf(aggregates.turnovers, tFga + 0.44 * aggregates.ft_att + aggregates.turnovers),
+            pillarRank(playerId, p => { const poss = p.twopt_att + p.threept_att + 0.44 * p.ft_att + p.turnovers; return poss > 0 ? p.turnovers / poss : 999 }, false), '%'],
+          ['FTA/G', ps.ft_att / g, aggregates.ft_att / tg / np,
+            pillarRank(playerId, p => p.games > 0 ? p.ft_att / p.games : 0, true), ''],
+          ['FT%', pctOf(ps.ft_made, ps.ft_att), pctOf(aggregates.ft_made, aggregates.ft_att),
+            pillarRank(playerId, p => p.ft_att > 0 ? p.ft_made / p.ft_att : 0, true), '%'],
+          ['OReb/G', ps.oreb / g, aggregates.oreb / tg / np,
+            pillarRank(playerId, p => p.games > 0 ? p.oreb / p.games : 0, true), ''],
+          ['DReb/G', ps.dreb / g, aggregates.dreb / tg / np,
+            pillarRank(playerId, p => p.games > 0 ? p.dreb / p.games : 0, true), ''],
+          ['STL/G', ps.stl / g, aggregates.stl / tg / np,
+            pillarRank(playerId, p => p.games > 0 ? p.stl / p.games : 0, true), ''],
+          ['BLK/G', ps.blk / g, aggregates.blk / tg / np,
+            pillarRank(playerId, p => p.games > 0 ? p.blk / p.games : 0, true), ''],
+          ['Def Fouls/G (lower=better)', ps.def_fouls / g, aggregates.def_fouls / tg / np,
+            pillarRank(playerId, p => p.games > 0 ? p.def_fouls / p.games : 999, false), ''],
+        ]
+        statRankSummary = rows
+          .map(([label, pv, tv, rk, unit]) => `${label}: ${rnd1(pv)}${unit} (team avg ${rnd1(tv)}${unit}) — team rank ${fmtRk(rk)}`)
+          .join('\n')
+      }
     }
   }
 
@@ -680,7 +726,7 @@ export default async function DashboardPage({
   ].map(p => ({ pillar: p.name, delta: p.delta }))
 
   const insights = isPlayerMode && selectedPlayer
-    ? await getPlayerInsights(selectedPlayer.name, selectedPlayer.jersey, tree)
+    ? await getPlayerInsights(selectedPlayer.name, selectedPlayer.jersey, tree, statRankSummary)
     : await getInsightsFromDB(allPillarDrivers, SB_URL, SB_KEY)
 
   // Drills matched to current leakage areas (team or player)
