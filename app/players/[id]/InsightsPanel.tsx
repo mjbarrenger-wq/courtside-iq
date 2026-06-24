@@ -44,6 +44,13 @@ interface RankEntry {
   tie?:  boolean
 }
 
+// Per-stat rank (no pillar label) for stats not 1:1 with a pillar.
+interface StatRank {
+  rank:  number
+  total: number
+  tie?:  boolean
+}
+
 export interface InsightsPanelProps {
   playerName:     string
   jersey:         number
@@ -51,6 +58,9 @@ export interface InsightsPanelProps {
   aiStats:        PlayerAiStats
   teamAvgs:       PlayerAiStats
   rankSummaryArr: RankEntry[]
+  ppgRank:        StatRank
+  ftaRank:        StatRank
+  ftPctRank:      StatRank
   winLoss:        WinLossSplit
   outlierSummary: string
   biggestWlSplit: { label: string; w: number | null; l: number | null; lowerBetter?: boolean } | null
@@ -66,6 +76,9 @@ async function getDevelopmentContent(
   stats: PlayerAiStats,
   teamAvgs: PlayerAiStats,
   ranks: RankEntry[],
+  ppgRank: StatRank,
+  ftaRank: StatRank,
+  ftPctRank: StatRank,
   winLoss: WinLossSplit,
   outlierSummary: string,
   biggestWlSplit: InsightsPanelProps['biggestWlSplit'],
@@ -73,11 +86,11 @@ async function getDevelopmentContent(
   const first = playerName.split(' ')[0]
 
   const comparisonRows = [
-    { stat: 'PPG',    player: stats.ppg,     team: teamAvgs.ppg,     unit: '',  lowerBetter: false, rank: ranks[0] },
+    { stat: 'PPG',    player: stats.ppg,     team: teamAvgs.ppg,     unit: '',  lowerBetter: false, rank: ppgRank },
     { stat: 'TS%',    player: stats.ts,      team: teamAvgs.ts,      unit: '%', lowerBetter: false, rank: ranks[0] },
     { stat: 'TO%',    player: stats.to_pct,  team: teamAvgs.to_pct,  unit: '%', lowerBetter: true,  rank: ranks[1] },
-    { stat: 'FTA/G',  player: stats.ftf_pg,  team: teamAvgs.ftf_pg,  unit: '',  lowerBetter: false, rank: ranks[3] },
-    { stat: 'FT%',    player: stats.ft_pct,  team: teamAvgs.ft_pct,  unit: '%', lowerBetter: false, rank: ranks[3] },
+    { stat: 'FTA/G',  player: stats.ftf_pg,  team: teamAvgs.ftf_pg,  unit: '',  lowerBetter: false, rank: ftaRank },
+    { stat: 'FT%',    player: stats.ft_pct,  team: teamAvgs.ft_pct,  unit: '%', lowerBetter: false, rank: ftPctRank },
     { stat: 'OReb/G', player: stats.oreb_pg, team: teamAvgs.oreb_pg, unit: '',  lowerBetter: false, rank: ranks[2] },
     { stat: 'DReb/G', player: stats.dreb_pg, team: teamAvgs.dreb_pg, unit: '',  lowerBetter: false, rank: ranks[5] },
     { stat: 'STL/G',  player: stats.stl_pg,  team: teamAvgs.stl_pg,  unit: '',  lowerBetter: false, rank: ranks[6] },
@@ -151,6 +164,7 @@ INSIGHT RULES:
 Each player's insights must be driven by their actual outliers vs team average, not a generic template.
 Write 3 insights: at least one covers a genuine strength, at least one covers a real development need.
 Every insight: specific numbers, peer rank, 2–4 sentences, direct, no filler. Address ${first} by first name.
+ACCURACY: Use only the peer ranks given above — never infer standing from the team-average comparison. The team average is points/players, so most contributors sit above it; being above average does NOT make a player the leader. Do not use superlatives ("top", "best", "leading", "most", "number one") for any stat unless that stat's peer rank is exactly #1 of ${ranks[0].total}. A #2 rank is "second-highest", a #3 is "third", and so on. If a rank is shown as "tied", say "tied for Nth", not a clean rank.
 WORKONS: 3 concrete training priorities from the development areas. Imperative voice. Name the habit, not the category. Address ${first} by first name.`,
         }],
       }),
@@ -238,6 +252,9 @@ export default async function InsightsPanel({
   aiStats,
   teamAvgs,
   rankSummaryArr,
+  ppgRank,
+  ftaRank,
+  ftPctRank,
   winLoss,
   outlierSummary,
   biggestWlSplit,
@@ -245,7 +262,7 @@ export default async function InsightsPanel({
 }: InsightsPanelProps) {
   const devContent = await getDevelopmentContent(
     playerName, jersey, tree, aiStats, teamAvgs,
-    rankSummaryArr, winLoss, outlierSummary, biggestWlSplit,
+    rankSummaryArr, ppgRank, ftaRank, ftPctRank, winLoss, outlierSummary, biggestWlSplit,
   )
 
   const CARD   = '#ffffff'

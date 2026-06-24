@@ -518,6 +518,13 @@ export default async function PlayerProfilePage({
     rankStat(p => p.games > 0 ? p.def_fouls / p.games : 999, false),                                                                              // Discipline (Fouls/G lower better)
   ]
 
+  // Dedicated ranks for stats that are NOT 1:1 with a pillar rank.
+  // (PPG borrowed the TS% rank, FT% and FTA/G borrowed the Rim Pressure rank —
+  //  fixed so the AI prompt receives each stat's true peer rank.)
+  const ppgRank   = rankStat(p => p.games > 0 ? p.pts / p.games : 0, true)
+  const ftaRank   = rankStat(p => p.games > 0 ? p.ft_att / p.games : 0, true)
+  const ftPctRank = rankStat(p => p.ft_att > 0 ? p.ft_made / p.ft_att : 0, true)
+
   const fullName = `${player.first_name} ${player.last_name}`
   const netPPP   = Math.round((ps.off_ppp - ps.def_ppp) * 1000) / 1000
   const netPos   = netPPP >= 0
@@ -597,11 +604,11 @@ export default async function PlayerProfilePage({
   // Normalised as % above/below team average. Higher = bigger positive outlier.
   // lowerBetter stats are inverted so a negative number always means "worse than team".
   const statComparisons = [
-    { label: 'PPG',     player: aiStats.ppg,     team: teamAvgs.ppg,     lowerBetter: false, rank: rankSummaryArr[0] },
+    { label: 'PPG',     player: aiStats.ppg,     team: teamAvgs.ppg,     lowerBetter: false, rank: { label: 'PPG', ...ppgRank } },
     { label: 'TS%',     player: aiStats.ts,      team: teamAvgs.ts,      lowerBetter: false, rank: rankSummaryArr[0] },
     { label: 'TO%',     player: aiStats.to_pct,  team: teamAvgs.to_pct,  lowerBetter: true,  rank: rankSummaryArr[1] },
-    { label: 'FTA/G',   player: aiStats.ftf_pg,  team: teamAvgs.ftf_pg,  lowerBetter: false, rank: rankSummaryArr[3] },
-    { label: 'FT%',     player: aiStats.ft_pct,  team: teamAvgs.ft_pct,  lowerBetter: false, rank: rankSummaryArr[3] },
+    { label: 'FTA/G',   player: aiStats.ftf_pg,  team: teamAvgs.ftf_pg,  lowerBetter: false, rank: { label: 'FTA/G', ...ftaRank } },
+    { label: 'FT%',     player: aiStats.ft_pct,  team: teamAvgs.ft_pct,  lowerBetter: false, rank: { label: 'FT%', ...ftPctRank } },
     { label: 'OReb/G',  player: aiStats.oreb_pg, team: teamAvgs.oreb_pg, lowerBetter: false, rank: rankSummaryArr[2] },
     { label: 'DReb/G',  player: aiStats.dreb_pg, team: teamAvgs.dreb_pg, lowerBetter: false, rank: rankSummaryArr[5] },
     { label: 'STL/G',   player: aiStats.stl_pg,  team: teamAvgs.stl_pg,  lowerBetter: false, rank: rankSummaryArr[6] },
@@ -653,6 +660,9 @@ export default async function PlayerProfilePage({
     aiStats,
     teamAvgs,
     rankSummaryArr,
+    ppgRank,
+    ftaRank,
+    ftPctRank,
     winLoss,
     outlierSummary,
     biggestWlSplit,
