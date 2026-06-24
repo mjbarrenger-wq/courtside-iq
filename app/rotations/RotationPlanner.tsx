@@ -1,12 +1,20 @@
 'use client'
 import { useState, useMemo, useCallback } from 'react'
-import type { RotationPlayer, PlayerConstraint, OptimiserResult, Position, GameConfig } from './types'
+import type {
+  RotationPlayer, PlayerConstraint, OptimiserResult, Position, GameConfig,
+  RotationPlanSnapshot, RotationPlanRecord, GameOption,
+} from './types'
 import { DEFAULT_GAME_CONFIG } from './types'
 import { solve } from './optimiser'
 import RotationGrid from './RotationGrid'
-import { savePlayerPositions } from './actions'
+import { savePlayerPositions, saveRotationPlan, listRotationPlans, deleteRotationPlan } from './actions'
 
-interface Props { players: RotationPlayer[]; teamId: string }
+interface Props {
+  players: RotationPlayer[]
+  teamId: string
+  games?: GameOption[]
+  initialPlans?: RotationPlanRecord[]
+}
 
 const CARD    = '#ffffff'
 const BORDER  = '#e2e5eb'
@@ -147,7 +155,7 @@ function defaultConstraints(players: RotationPlayer[]): PlayerConstraint[] {
 
 // ── Main ──────────────────────────────────────────────────────────────────────
 
-export default function RotationPlanner({ players: initialPlayers, teamId: _teamId }: Props) {
+export default function RotationPlanner({ players: initialPlayers, teamId, games = [], initialPlans = [] }: Props) {
   const [players, setPlayers]         = useState<RotationPlayer[]>(initialPlayers)
   const [constraints, setConstraints] = useState<PlayerConstraint[]>(defaultConstraints(initialPlayers))
   const [result, setResult]           = useState<OptimiserResult | null>(null)
@@ -194,6 +202,85 @@ export default function RotationPlanner({ players: initialPlayers, teamId: _team
 
   // Per-player overrides: set of player IDs that have custom min/max
   const [overrideIds, setOverrideIds] = useState<Set<string>>(new Set())
+
+  // ── Plan management ──
+  const [plans, setPlans]         = useState<RotationPlanRecord[]>(initialPlans)
+  const [planId, setPlanId]       = useState<string | null>(null)
+  const [planName, setPlanName]   = useState('')
+  const [planGameId, setPlanGameId] = useState<string>('')
+  const [planStatus, setPlanStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
+  const [planError, setPlanError]   = useState<string | null>(null)
+
+  function buildSnapshot(): RotationPlanSnapshot {
+    return {
+      version: 1,
+      config: { ...config, minStintMins, maxQtrImbalance },
+      defaultMin,
+      defaultMax,
+      overrideIds: [...overrideIds],
+      constraints,
+      result,
+    }
+  }
+
+  async function handleSavePlan() {
+    setPlanStatus('saving'); setPlanError(null)
+    const res = await saveRotationPlan({
+      id: planId ?? undefined,
+      teamId,
+      name: planName,
+      gameId: planGameId || null,
+      state: buildSnapshot(),
+    })
+    if (!res.success) { setPlanStatus('error'); setPlanError(res.error ?? 'Save failed'); return }
+    if (res.id) setPlanId(res.id)
+    setPlanStatus('saved')
+    setPlans(await listRotationPlans(teamId))
+    setTimeout(() => setPlanStatus('idle'), 2000)
+  }
+
+  function loadPlan(rec: RotationPlanRecord) {
+    const s = rec.state
+    if (!s) return
+    setPlanId(rec.id)
+    setPlanName(rec.name)
+    setPlanGameId(rec.gameId ?? '')
+    setConfig(s.config)
+    setMinStintMins(s.config.minStintMins)
+    setMaxQtrImbalance(s.config.maxQtrImbalance)
+    setDefaultMin(s.defaultMin)
+    setDefaultMax(s.defaultMax)
+    setOverrideIds(new Set(s.overrideIds))
+    // Merge saved constraints onto the current roster (keyed by playerId)
+    const byId = new Map(s.constraints.map(c => [c.playerId, c]))
+    setConstraints(players.map(p => byId.get(p.id) ?? {
+      playerId: p.id, isStarter: false, isCloser: false,
+      minMinutes: 10, maxMinutes: 40, mustPlayEveryQuarter: false, unavailable: false,
+    }))
+    setResult(s.result)
+    setPlanStatus('idle'); setPlanError(null)
+  }
+
+  function newPlan() {
+    setPlanId(null)
+    setPlanName('')
+    setPlanGameId('')
+    setConfig(DEFAULT_GAME_CONFIG)
+    setMinStintMins(DEFAULT_GAME_CONFIG.minStintMins)
+    setMaxQtrImbalance(DEFAULT_GAME_CONFIG.maxQtrImbalance)
+    setDefaultMin(10); setDefaultMax(40)
+    setOverrideIds(new Set())
+    setConstraints(defaultConstraints(players))
+    setResult(null)
+    setPlanStatus('idle'); setPlanError(null)
+  }
+
+  async function handleDeletePlan() {
+    if (!planId) return
+    const res = await deleteRotationPlan(planId)
+    if (res.success) { setPlans(await listRotationPlans(teamId)); newPlan() }
+    else { setPlanError(res.error ?? 'Delete failed'); setPlanStatus('error') }
+  }
 
   // Derived
   const totalGameMins     = config.numPeriods * config.periodDuration
@@ -264,8 +351,88 @@ export default function RotationPlanner({ players: initialPlayers, teamId: _team
   // Period label for Every Q / table header
   const periodLabel = config.numPeriods === 2 ? 'Every Half' : 'Every Q'
 
+  const canSavePlan = planName.trim().length > 0 && planStatus !== 'saving'
+
   return (
     <div style={{ color: PRIMARY, fontFamily: "'Inter', system-ui, sans-serif" }}>
+
+      {/* ── PLANS ── */}
+      <div style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: 12, padding: 24, marginBottom: 16 }}>
+        <SectionLabel>PLANS</SectionLabel>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16, alignItems: 'flex-end' }}>
+
+          {/* Load existing */}
+          <div style={{ minWidth: 200 }}>
+            <div style={{ fontSize: 11, color: MUTED, marginBottom: 6 }}>Saved plans</div>
+            <select
+              value={planId ?? ''}
+              onChange={e => {
+                const rec = plans.find(p => p.id === e.target.value)
+                if (rec) loadPlan(rec)
+              }}
+              style={{ background: BG, border: `1px solid ${BORDER}`, borderRadius: 6, padding: '7px 10px', fontSize: 13, color: PRIMARY, minWidth: 200 }}
+            >
+              <option value="">{plans.length ? 'Load a plan…' : 'No saved plans yet'}</option>
+              {plans.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+            </select>
+          </div>
+
+          {/* Plan name */}
+          <div style={{ minWidth: 200, flex: 1 }}>
+            <div style={{ fontSize: 11, color: MUTED, marginBottom: 6 }}>Plan name</div>
+            <input
+              type="text" value={planName} placeholder="e.g. vs Keilor 12.5"
+              onChange={e => setPlanName(e.target.value)}
+              style={{ width: '100%', background: BG, border: `1px solid ${BORDER}`, borderRadius: 6, padding: '7px 10px', fontSize: 13, color: PRIMARY }}
+            />
+          </div>
+
+          {/* Link to game */}
+          <div style={{ minWidth: 180 }}>
+            <div style={{ fontSize: 11, color: MUTED, marginBottom: 6 }}>Link to game (optional)</div>
+            <select
+              value={planGameId}
+              onChange={e => setPlanGameId(e.target.value)}
+              style={{ background: BG, border: `1px solid ${BORDER}`, borderRadius: 6, padding: '7px 10px', fontSize: 13, color: PRIMARY, minWidth: 180 }}
+            >
+              <option value="">No game linked</option>
+              {games.map(g => <option key={g.id} value={g.id}>{g.label}</option>)}
+            </select>
+          </div>
+
+          {/* Actions */}
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <button onClick={handleSavePlan} disabled={!canSavePlan} style={{
+              background: canSavePlan ? TEAL : MUTED, color: '#fff', border: 'none', borderRadius: 8,
+              padding: '9px 18px', fontSize: 13, fontWeight: 700,
+              cursor: canSavePlan ? 'pointer' : 'not-allowed', opacity: canSavePlan ? 1 : 0.5,
+            }}>
+              {planStatus === 'saving' ? 'Saving…' : planId ? 'Update plan' : 'Save plan'}
+            </button>
+            {planId && (
+              <button onClick={newPlan} style={{
+                background: BG, color: SEC, border: `1px solid ${BORDER}`, borderRadius: 8,
+                padding: '9px 14px', fontSize: 13, fontWeight: 600, cursor: 'pointer',
+              }}>New</button>
+            )}
+            {planId && (
+              <button onClick={handleDeletePlan} title="Delete this plan" style={{
+                background: BG, color: RED, border: `1px solid ${BORDER}`, borderRadius: 8,
+                padding: '9px 14px', fontSize: 13, fontWeight: 600, cursor: 'pointer',
+              }}>Delete</button>
+            )}
+          </div>
+        </div>
+
+        {/* Status line */}
+        <div style={{ marginTop: 10, fontSize: 11, minHeight: 16 }}>
+          {planStatus === 'saved' && <span style={{ color: GREEN }}>✓ Saved</span>}
+          {planStatus === 'error' && <span style={{ color: RED }}>✗ {planError ?? 'Error'}</span>}
+          {planStatus === 'idle' && planId && <span style={{ color: MUTED }}>Editing saved plan — “Update plan” overwrites it, “New” starts fresh.</span>}
+          {planStatus === 'idle' && !planId && !result && <span style={{ color: MUTED }}>Set constraints, generate a rotation, then save it as a named plan.</span>}
+          {planStatus === 'idle' && !planId && result && <span style={{ color: MUTED }}>Name the plan and click Save to store this rotation.</span>}
+        </div>
+      </div>
 
       {/* ── GAME SETUP ── */}
       <div style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: 12, padding: 24, marginBottom: 16 }}>

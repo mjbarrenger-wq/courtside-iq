@@ -85,11 +85,11 @@ const TERMS: Term[] = [
     category: 'Shot Efficiency',
   },
   {
-    abbr: 'ATR',
-    full: 'Free Throw Attempt Rate',
+    abbr: 'FTF',
+    full: 'Free Throw Frequency',
     formula: 'FTA ÷ FGA',
-    definition: 'Free throw attempts relative to field goal attempts. Measures how often a player draws fouls when attacking.',
-    basketball: 'A high ATR signals a player who attacks the basket aggressively and draws contact. It\'s a proxy for offensive aggression — players who play tentatively rarely get to the line.',
+    definition: 'Free throw attempts relative to field goal attempts — a rate, not a per-game count. Measures how often a player draws fouls when attacking. Matches the "FTF" figure in Hoopsalytics.',
+    basketball: 'A high FTF signals a player who attacks the basket aggressively and draws contact. It\'s a proxy for offensive aggression — players who play tentatively rarely get to the line.',
     category: 'Shot Efficiency',
   },
 
@@ -151,10 +151,11 @@ const TERMS: Term[] = [
 
   // Rim Pressure
   {
-    abbr: 'FTF/G',
-    full: 'Free Throw Frequency Per Game',
-    definition: 'Free throw attempts per game. Measures how often a player attacks the basket and draws defensive fouls.',
-    basketball: 'Getting to the line is a skill. A high FTF/G means a player is aggressive attacking the rim and forcing defenders to foul. It creates easy scoring opportunities and puts opponents in foul trouble.',
+    abbr: 'FTA/G',
+    full: 'Free Throw Attempts Per Game',
+    formula: 'FTA ÷ Games',
+    definition: 'Free throw attempts per game — a per-game count, not a rate. Measures how often a player attacks the basket and draws defensive fouls. (For the rate version comparable to Hoopsalytics, see FTF.)',
+    basketball: 'Getting to the line is a skill. A high FTA/G means a player is aggressive attacking the rim and forcing defenders to foul. It creates easy scoring opportunities and puts opponents in foul trouble.',
     category: 'Rim Pressure',
   },
   {
@@ -162,14 +163,14 @@ const TERMS: Term[] = [
     full: 'Free Throw Percentage',
     formula: 'FTM ÷ FTA',
     definition: 'Conversion rate at the free throw line. Free throws are uncontested attempts, so FT% reflects shooting mechanics and composure under pressure.',
-    basketball: 'Getting to the line only matters if you convert. A player with high FTF/G but low FT% is attacking the basket but leaving points on the board — the aggression is there but the mechanics need work.',
+    basketball: 'Getting to the line only matters if you convert. A player with high FTA/G but low FT% is attacking the basket but leaving points on the board — the aggression is there but the mechanics need work.',
     category: 'Rim Pressure',
   },
   {
     abbr: 'FT Made/G',
     full: 'Free Throws Made Per Game',
     definition: 'Free throws converted per game. The actual scoring output from the free throw line.',
-    basketball: 'The end product of getting to the line. Combined with FTF/G and FT%, it shows both how often a player earns free throws and how much scoring they generate from them.',
+    basketball: 'The end product of getting to the line. Combined with FTA/G and FT%, it shows both how often a player earns free throws and how much scoring they generate from them.',
     category: 'Rim Pressure',
   },
 
@@ -254,18 +255,18 @@ const TERMS: Term[] = [
     category: 'Discipline',
   },
   {
-    abbr: 'Opp FTF',
-    full: 'Opponent Free Throw Frequency',
-    formula: 'Opp FTA ÷ Opp FGA',
-    definition: 'How often the opponent gets to the free throw line relative to their field goal attempts. A measure of defensive foul discipline and physicality.',
-    basketball: 'A high Opp FTF means the defence is giving the opponent easy, uncontested scoring opportunities at the line. Disciplined defence contests shots without fouling.',
+    abbr: 'Opp FTA/G',
+    full: 'Opponent Free Throw Attempts Per Game',
+    formula: 'Opp FTA ÷ Games',
+    definition: 'How many free throw attempts the opponent earns per game. A measure of defensive foul discipline and physicality.',
+    basketball: 'A high Opp FTA/G means the defence is giving the opponent easy, uncontested scoring opportunities at the line. Disciplined defence contests shots without fouling.',
     category: 'Discipline',
   },
   {
     abbr: 'Opp FT%',
     full: 'Opponent Free Throw Percentage',
     definition: 'The opponent\'s free throw conversion rate. Once the opponent is at the line, this measures how much damage the fouling actually causes.',
-    basketball: 'Context stat — relevant when combined with Opp FTF. A team might foul often but face poor free throw shooters; or rarely foul but allow a high conversion rate when they do.',
+    basketball: 'Context stat — relevant when combined with Opp FTA/G. A team might foul often but face poor free throw shooters; or rarely foul but allow a high conversion rate when they do.',
     category: 'Discipline',
   },
 

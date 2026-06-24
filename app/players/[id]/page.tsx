@@ -20,7 +20,7 @@ const PILLAR_TOOLTIPS: Record<string, string> = {
   'Shot Efficiency':     'Primary: TS% — True Shooting % accounts for 2-pointers, 3-pointers and free throws on equal footing. The most complete measure of scoring efficiency. Higher is better.',
   'Possession Control':  'Primary: TO% — Turnovers per estimated possession (TOs ÷ (FGA + 0.44×FTA + TOs)). Captures ball security relative to usage, not just raw count. Lower is better.',
   'Second Chances':      'Primary: OReb/G — Offensive rebounds per game. Each offensive board extends a possession and creates another scoring opportunity. Higher is better.',
-  'Rim Pressure':        'Primary: FTF/G × (0.5 + 0.5 × FT%) — Rewards getting to the line with a conversion modifier. Full credit for makes, half credit for misses. Higher is better.',
+  'Rim Pressure':        'Primary: FTA/G × (0.5 + 0.5 × FT%) — Rewards getting to the line with a conversion modifier. Full credit for makes, half credit for misses. Higher is better.',
 }
 
 const DEF_STAT_TOOLTIPS: Record<string, string> = {
@@ -437,13 +437,13 @@ export default async function PlayerProfilePage({
   addSeries('TS%',       r => { const fga = (r.twopt_att||0)+(r.threept_att||0); const d = 2*(fga+0.44*(r.ft_att||0)); return d > 0 ? Math.round((((r.points||0)/d)*100)*10)/10 : 0 })
   addSeries('eFG%',      r => { const fga = (r.twopt_att||0)+(r.threept_att||0); return fga > 0 ? Math.round((((r.twopt_made||0)+1.5*(r.threept_made||0))/fga*100)*10)/10 : 0 })
   addSeries('2Pt%',      r => { const a = r.twopt_att||0; return a > 0 ? Math.round(((r.twopt_made||0)/a*100)*10)/10 : 0 })
-  addSeries('ATR',       r => { const fga = (r.twopt_att||0)+(r.threept_att||0); return fga > 0 ? Math.round(((r.ft_att||0)/fga)*100)/100 : 0 })
+  addSeries('FTF',       r => { const fga = (r.twopt_att||0)+(r.threept_att||0); return fga > 0 ? Math.round(((r.ft_att||0)/fga)*100)/100 : 0 })
   addSeries('TO%',       r => { const fga = (r.twopt_att||0)+(r.threept_att||0); const d = fga+0.44*(r.ft_att||0)+(r.turnovers||0); return d > 0 ? Math.round(((r.turnovers||0)/d*100)*10)/10 : 0 })
   addSeries('TO/G',      r => r.turnovers || 0)
   addSeries('OReb%',     r => r.oreb || 0)   // OReb% needs team context; use raw OReb as proxy per game
   addSeries('OReb/G',    r => r.oreb || 0)
   addSeries('Total Reb/G', r => (r.oreb||0) + (r.dreb||0))
-  addSeries('FTF/G',     r => r.ft_att || 0)
+  addSeries('FTA/G',     r => r.ft_att || 0)
   addSeries('FT%',       r => { const a = r.ft_att||0; return a > 0 ? Math.round(((r.ft_made||0)/a*100)*10)/10 : 0 })
   addSeries('FT Made/G', r => r.ft_made || 0)
   // Defensive metrics (map to DefStat labels)
@@ -582,7 +582,7 @@ export default async function PlayerProfilePage({
     { label: 'PPG',     player: aiStats.ppg,     team: teamAvgs.ppg,     lowerBetter: false, rank: rankSummaryArr[0] },
     { label: 'TS%',     player: aiStats.ts,      team: teamAvgs.ts,      lowerBetter: false, rank: rankSummaryArr[0] },
     { label: 'TO%',     player: aiStats.to_pct,  team: teamAvgs.to_pct,  lowerBetter: true,  rank: rankSummaryArr[1] },
-    { label: 'FTF/G',   player: aiStats.ftf_pg,  team: teamAvgs.ftf_pg,  lowerBetter: false, rank: rankSummaryArr[3] },
+    { label: 'FTA/G',   player: aiStats.ftf_pg,  team: teamAvgs.ftf_pg,  lowerBetter: false, rank: rankSummaryArr[3] },
     { label: 'FT%',     player: aiStats.ft_pct,  team: teamAvgs.ft_pct,  lowerBetter: false, rank: rankSummaryArr[3] },
     { label: 'OReb/G',  player: aiStats.oreb_pg, team: teamAvgs.oreb_pg, lowerBetter: false, rank: rankSummaryArr[2] },
     { label: 'DReb/G',  player: aiStats.dreb_pg, team: teamAvgs.dreb_pg, lowerBetter: false, rank: rankSummaryArr[5] },
@@ -615,7 +615,7 @@ export default async function PlayerProfilePage({
     { label: 'TO',  w: winLoss.to_w,  l: winLoss.to_l, lowerBetter: true },
     { label: 'REB', w: winLoss.reb_w, l: winLoss.reb_l },
     { label: 'STL', w: winLoss.stl_w, l: winLoss.stl_l },
-    { label: 'FTF', w: winLoss.ftf_w, l: winLoss.ftf_l },
+    { label: 'FTA/G', w: winLoss.ftf_w, l: winLoss.ftf_l },
   ].filter(s => s.w != null && s.l != null && (s.w! + s.l!) > 0)
   const biggestWlSplit = wlSplits.sort((a, b) => {
     const aDiff = Math.abs((a.w! - a.l!) / ((a.w! + a.l!) / 2 || 1))

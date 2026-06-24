@@ -3,7 +3,10 @@
 
 import type { Metadata } from 'next'
 import RotationPlanner from './RotationPlanner'
-import type { RotationPlayer } from './types'
+import { listRotationPlans } from './actions'
+import type { RotationPlayer, GameOption } from './types'
+
+const TEAM_ID = 'b1000000-0000-0000-0000-000000000001'
 
 export const dynamic = 'force-dynamic'
 export const metadata: Metadata = { title: 'Rotation Planner — Courtside IQ' }
@@ -24,10 +27,25 @@ async function fetchJson(path: string) {
 }
 
 export default async function RotationsPage() {
-  const [playersRaw, statsRaw] = await Promise.all([
+  const [playersRaw, statsRaw, gamesRaw, opponentsRaw, plans] = await Promise.all([
     fetchJson(`players?select=*&order=jersey_number.asc`),
     fetchJson(`player_game_stats?select=player_id,points,oreb,dreb,turnovers,ft_att,twopt_att,threept_att`),
+    fetchJson(`games?select=id,game_date,opponent_id&team_id=eq.${TEAM_ID}&order=game_date.desc`),
+    fetchJson(`opponents?select=id,name`),
+    listRotationPlans(TEAM_ID),
   ])
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const opponentName: Record<string, string> = Object.fromEntries(
+    (Array.isArray(opponentsRaw) ? opponentsRaw : []).map((o: any) => [o.id, o.name]),
+  )
+  const games: GameOption[] = (Array.isArray(gamesRaw) ? gamesRaw : [])
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    .map((g: any) => {
+      const d = g.game_date ? new Date(g.game_date).toLocaleDateString('en-AU', { day: 'numeric', month: 'short' }) : ''
+      const opp = opponentName[g.opponent_id] ?? 'Unknown'
+      return { id: g.id, label: [d, opp].filter(Boolean).join(' — ') }
+    })
 
   const players: RotationPlayer[] = (Array.isArray(playersRaw) ? playersRaw : [])
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -86,7 +104,7 @@ export default async function RotationsPage() {
           </p>
         </div>
 
-        <RotationPlanner players={players} teamId="b1000000-0000-0000-0000-000000000001" />
+        <RotationPlanner players={players} teamId={TEAM_ID} games={games} initialPlans={plans} />
       </div>
     </main>
   )

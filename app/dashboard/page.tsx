@@ -272,7 +272,7 @@ const PILLAR_TOOLTIPS: Record<string, string> = {
   'Shot Efficiency':       'Primary: TS% — True Shooting % accounts for 2-pointers, 3-pointers and free throws on equal footing. The most complete measure of scoring efficiency. Higher is better.',
   'Possession Control':    'Primary: TO% — Turnovers per estimated possession (TOs ÷ (FGA + 0.44×FTA + TOs)). Captures ball security relative to usage, not just raw count. Lower is better.',
   'Second Chances':        'Primary: OReb/G — Offensive rebounds per game. Each offensive board extends a possession, giving the team another scoring opportunity. Higher is better.',
-  'Rim Pressure':     'Primary: FTF/G × (0.5 + 0.5 × FT%) — Rewards getting to the line with a conversion modifier. Full credit for makes, half credit for misses — drawing the foul still has value. Higher is better.',
+  'Rim Pressure':     'Primary: FTA/G × (0.5 + 0.5 × FT%) — Rewards getting to the line with a conversion modifier. Full credit for makes, half credit for misses — drawing the foul still has value. Higher is better.',
   'Shot Suppression':      'Team: Opp eFG% — opponent shooting efficiency allowed. Player: BLK/G — best available proxy for shot contest activity. Note: individual shot suppression data (contested shots, opponent FG% when guarded) is not tracked in this dataset.',
   'Possession Ending':     'Primary: DReb/G — Defensive rebounds per game. Finishing defensive possessions denies second-chance points. Higher is better.',
   'Possession Creation':   'Primary: STL/G (player) / Def TO% (team) — Steals and forced turnovers that directly generate new possessions. Higher is better.',
@@ -644,7 +644,7 @@ export default async function DashboardPage({
           return poss > 0 ? p.turnovers / poss : 999
         }, false),
         pillarRank(playerId, p => p.games > 0 ? p.oreb / p.games : 0, true),           // Second Chances — OReb/G higher better
-        pillarRank(playerId, p => p.games > 0 && p.ft_att > 0                              // Rim Pressure — FTF/G × (0.5 + 0.5 × FT%) combined metric
+        pillarRank(playerId, p => p.games > 0 && p.ft_att > 0                              // Rim Pressure — FTA/G × (0.5 + 0.5 × FT%) combined metric
           ? (p.ft_att / p.games) * (0.5 + 0.5 * (p.ft_made / p.ft_att)) : 0, true),
         // Defensive
         pillarRank(playerId, p => p.games > 0 ? p.blk / p.games : 0, true),            // Shot Suppression — BLK/G higher better (matches pillar score)

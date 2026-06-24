@@ -117,7 +117,7 @@ export function computeDriverTree(a: SeasonAggregates): DriverTreeOutput {
     metrics: [
       { name: 'TS%',  value: ts,      opp_value: opp_ts,      delta: r(ts - opp_ts, 1),           format: 'pct' },
       { name: 'eFG%', value: efg,     opp_value: opp_efg,     delta: r(efg - opp_efg, 1),         format: 'pct' },
-      { name: 'ATR',  value: atr,     opp_value: opp_atr,     delta: r(atr - opp_atr, 2),         format: 'num' },
+      { name: 'FTF',  value: atr,     opp_value: opp_atr,     delta: r(atr - opp_atr, 2),         format: 'num' },
     ]
   }
 
@@ -173,7 +173,7 @@ export function computeDriverTree(a: SeasonAggregates): DriverTreeOutput {
   const opp_ft_pct = pct(a.opp_ft_made, a.opp_ft_att)
   const opp_ftf_pg = per_game(a.opp_ft_att, g)
 
-  // Combined pressure score: FTF/G × (0.5 + 0.5 × FT%) — mirrors player view formula
+  // Combined pressure score: FTA/G × (0.5 + 0.5 × FT%) — mirrors player view formula
   const pressure_score     = r(ftf_pg     * (0.5 + 0.5 * (ft_pct     / 100)), 2)
   const opp_pressure_score = r(opp_ftf_pg * (0.5 + 0.5 * (opp_ft_pct / 100)), 2)
 
@@ -183,7 +183,7 @@ export function computeDriverTree(a: SeasonAggregates): DriverTreeOutput {
     opp_score: opp_pressure_score,
     delta: r(pressure_score - opp_pressure_score, 2),
     metrics: [
-      { name: 'FTF/G',     value: ftf_pg,     opp_value: opp_ftf_pg,                  delta: r(ftf_pg - opp_ftf_pg, 1),         format: 'num' },
+      { name: 'FTA/G',     value: ftf_pg,     opp_value: opp_ftf_pg,                  delta: r(ftf_pg - opp_ftf_pg, 1),         format: 'num' },
       { name: 'FT%',       value: ft_pct,     opp_value: opp_ft_pct,                  delta: r(ft_pct - opp_ft_pct, 1),         format: 'pct' },
       { name: 'FT Made/G', value: ft_made_pg, opp_value: per_game(a.opp_ft_made, g),  delta: r(ft_made_pg - per_game(a.opp_ft_made, g), 1), format: 'num' },
     ]
@@ -269,7 +269,7 @@ export function computeDriverTree(a: SeasonAggregates): DriverTreeOutput {
     delta: r(opp_def_fouls_pg - def_fouls_pg, 1),
     metrics: [
       { name: 'Def Fouls/G', value: def_fouls_pg, opp_value: opp_def_fouls_pg, delta: r(opp_def_fouls_pg - def_fouls_pg, 1), format: 'num' },
-      { name: 'Opp FTF/G', value: opp_ftf_pg2, opp_value: us_ftf_pg, delta: r(us_ftf_pg - opp_ftf_pg2, 1), format: 'num' },
+      { name: 'Opp FTA/G', value: opp_ftf_pg2, opp_value: us_ftf_pg, delta: r(us_ftf_pg - opp_ftf_pg2, 1), format: 'num' },
       { name: 'Opp FT%', value: opp_ft_pct, opp_value: ft_pct, delta: r(ft_pct - opp_ft_pct, 1), format: 'pct' },
     ]
   }
@@ -431,7 +431,7 @@ export function computePlayerDriverTree(
     opp_score: team_pressure_score,
     delta: r(player_pressure_score - team_pressure_score, 2),
     metrics: [
-      { name: 'FTF/G',     value: player_ftf_pg,               opp_value: team_ftf_ppg,     delta: r(player_ftf_pg - team_ftf_ppg, 1),                                 format: 'num' },
+      { name: 'FTA/G',     value: player_ftf_pg,               opp_value: team_ftf_ppg,     delta: r(player_ftf_pg - team_ftf_ppg, 1),                                 format: 'num' },
       { name: 'FT%',       value: player_ft_pct,               opp_value: team_ft_pct,       delta: r(player_ft_pct - team_ft_pct, 1),                                  format: 'pct' },
       { name: 'FT Made/G', value: r(player.ft_made / g, 1),    opp_value: team_ft_made_ppg,  delta: r(r(player.ft_made / g, 1) - team_ft_made_ppg, 1),                  format: 'num' },
     ],

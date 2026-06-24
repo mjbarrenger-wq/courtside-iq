@@ -104,3 +104,30 @@ export interface OptimiserResult {
   warnings: string[]
   config: GameConfig
 }
+
+// ── Persistence ────────────────────────────────────────────────────────────────
+// Full planner snapshot stored in rotation_plans.state (JSONB). This is the source
+// of truth for save/load — see migrations/rotation_plans_add_state_jsonb.sql.
+
+export interface RotationPlanSnapshot {
+  version: number
+  config: GameConfig                  // effective config (includes live minStintMins/maxQtrImbalance)
+  defaultMin: number
+  defaultMax: number
+  overrideIds: string[]
+  constraints: PlayerConstraint[]
+  result: OptimiserResult | null
+}
+
+export interface RotationPlanRecord {
+  id: string
+  name: string
+  gameId: string | null
+  updatedAt: string
+  state: RotationPlanSnapshot
+}
+
+export interface GameOption {
+  id: string
+  label: string
+}

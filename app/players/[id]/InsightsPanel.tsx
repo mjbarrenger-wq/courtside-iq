@@ -75,7 +75,7 @@ async function getDevelopmentContent(
     { stat: 'PPG',    player: stats.ppg,     team: teamAvgs.ppg,     unit: '',  lowerBetter: false, rank: ranks[0] },
     { stat: 'TS%',    player: stats.ts,      team: teamAvgs.ts,      unit: '%', lowerBetter: false, rank: ranks[0] },
     { stat: 'TO%',    player: stats.to_pct,  team: teamAvgs.to_pct,  unit: '%', lowerBetter: true,  rank: ranks[1] },
-    { stat: 'FTF/G',  player: stats.ftf_pg,  team: teamAvgs.ftf_pg,  unit: '',  lowerBetter: false, rank: ranks[3] },
+    { stat: 'FTA/G',  player: stats.ftf_pg,  team: teamAvgs.ftf_pg,  unit: '',  lowerBetter: false, rank: ranks[3] },
     { stat: 'FT%',    player: stats.ft_pct,  team: teamAvgs.ft_pct,  unit: '%', lowerBetter: false, rank: ranks[3] },
     { stat: 'OReb/G', player: stats.oreb_pg, team: teamAvgs.oreb_pg, unit: '',  lowerBetter: false, rank: ranks[2] },
     { stat: 'DReb/G', player: stats.dreb_pg, team: teamAvgs.dreb_pg, unit: '',  lowerBetter: false, rank: ranks[5] },
@@ -96,7 +96,7 @@ async function getDevelopmentContent(
     `TO:    ${fmt(winLoss.to_w)} in wins vs ${fmt(winLoss.to_l)} in losses`,
     `REB:   ${fmt(winLoss.reb_w)} in wins vs ${fmt(winLoss.reb_l)} in losses`,
     `STL:   ${fmt(winLoss.stl_w)} in wins vs ${fmt(winLoss.stl_l)} in losses`,
-    `FTF:   ${fmt(winLoss.ftf_w)} in wins vs ${fmt(winLoss.ftf_l)} in losses`,
+    `FTA/G: ${fmt(winLoss.ftf_w)} in wins vs ${fmt(winLoss.ftf_l)} in losses`,
     biggestWlSplit ? `→ Biggest split: ${biggestWlSplit.label} (${fmt(biggestWlSplit.w)} wins / ${fmt(biggestWlSplit.l)} losses)` : '',
   ].filter(Boolean).join('\n') : 'Insufficient win/loss split data.'
 
@@ -137,7 +137,7 @@ U12 REFERENCE BENCHMARKS (Melbourne competition level):
 - TS% > 52% = efficient; 42–52% = developing; < 42% = inefficient
 - TO% < 20% = strong; 20–28% = manageable; > 28% = high-risk
 - FT% > 65% = reliable; 50–65% = inconsistent; < 50% = significant gap
-- FTF/G > 3.0 = consistent rim pressure; < 1.5 = not attacking the rim
+- FTA/G > 3.0 = consistent rim pressure; < 1.5 = not attacking the rim
 - OReb/G > 2.0 = active on glass; DReb/G > 2.5 = strong possession finisher
 - STL/G > 1.5 = active, disruptive; BLK/G > 0.5 = shot deterrent
 
