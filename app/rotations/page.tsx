@@ -74,13 +74,13 @@ export default async function RotationsPage() {
       <div style={{ maxWidth: 1100, margin: '0 auto', padding: '32px 32px 0' }}>
         {/* Page title */}
         <div style={{ marginBottom: 28 }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: '#97cfdc', letterSpacing: '0.08em', marginBottom: 6 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: '#307b92', letterSpacing: '0.08em', marginBottom: 6 }}>
             ROTATION PLANNER
           </div>
-          <h1 style={{ fontSize: 28, fontWeight: 800, color: '#e8eaf0', margin: 0, lineHeight: 1.2 }}>
+          <h1 style={{ fontSize: 28, fontWeight: 800, color: '#1a1f2e', margin: 0, lineHeight: 1.2 }}>
             Pre-Game Rotations
           </h1>
-          <p style={{ fontSize: 14, color: '#a0a8bc', marginTop: 8, lineHeight: 1.6, maxWidth: 600 }}>
+          <p style={{ fontSize: 14, color: '#4b5563', marginTop: 8, lineHeight: 1.6, maxWidth: 600 }}>
             Set player constraints, generate an optimised rotation plan, and adjust until it fits your game plan.
             The planner respects starter/closer roles, minimum minutes, position balance, and minimises referee sub calls.
           </p>
