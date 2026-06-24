@@ -131,10 +131,11 @@ function Sparkline({ values, color = '#307b92', width = 64, height = 22 }: {
 }
 
 // ── Pillar card (offensive) ───────────────────────────────────────────────────
-function PillarCard({ pillar, rank, totalRanked, sparklines }: {
+function PillarCard({ pillar, rank, totalRanked, tie, sparklines }: {
   pillar: PillarScore
   rank?: number
   totalRanked?: number
+  tie?: boolean
   sparklines?: Record<string, number[]>
 }) {
   const pos = pillar.delta >= 0
@@ -186,9 +187,9 @@ function PillarCard({ pillar, rank, totalRanked, sparklines }: {
               : rank > Math.floor(totalRanked * 2 / 3) ? '#dc2626'
               : '#6b7280',
           }}>
-            #{rank} of {totalRanked}
+            {tie ? 'T-' : '#'}{rank} of {totalRanked}
           </span>
-          <div style={{ fontSize: 9, color: '#6b7280', marginTop: 1 }}>team rank</div>
+          <div style={{ fontSize: 9, color: '#6b7280', marginTop: 1 }}>{tie ? 'tied team rank' : 'team rank'}</div>
         </div>
       )}
     </div>
@@ -226,9 +227,9 @@ function MetricRow({ m, sparkline }: { m: MetricScore; sparkline?: number[] }) {
 }
 
 // ── Defensive stat cell ───────────────────────────────────────────────────────
-function DefStat({ label, value, teamAvg, higherBetter = true, rank, totalRanked, sparkline }: {
+function DefStat({ label, value, teamAvg, higherBetter = true, rank, totalRanked, tie, sparkline }: {
   label: string; value: number; teamAvg: number; higherBetter?: boolean
-  rank?: number; totalRanked?: number; sparkline?: number[]
+  rank?: number; totalRanked?: number; tie?: boolean; sparkline?: number[]
 }) {
   const delta = Math.round((value - teamAvg) * 10) / 10
   const positive = higherBetter ? delta >= 0 : delta <= 0
@@ -293,9 +294,9 @@ function DefStat({ label, value, teamAvg, higherBetter = true, rank, totalRanked
               : rank > Math.floor(totalRanked * 2 / 3) ? '#dc2626'
               : '#6b7280',
           }}>
-            #{rank} of {totalRanked}
+            {tie ? 'T-' : '#'}{rank} of {totalRanked}
           </span>
-          <div style={{ fontSize: 9, color: '#6b7280', marginTop: 1 }}>team rank</div>
+          <div style={{ fontSize: 9, color: '#6b7280', marginTop: 1 }}>{tie ? 'tied team rank' : 'team rank'}</div>
         </div>
       )}
     </div>
@@ -476,16 +477,33 @@ export default async function PlayerProfilePage({
     a.blk         += (Number(r.blk)          || 0); a.def_fouls  += (Number(r.def_fouls)   || 0)
   }
 
+  // Players whose ranking metric is within TIE_TOL (relative) of each other are
+  // treated as tied — they share the better player's rank and the card flags it.
+  const TIE_TOL = 0.02  // 2%
+
   function rankStat(
     getValue: (p: typeof perAgg[string]) => number,
     higherBetter: boolean,
     minGames = 5,
-  ): { rank: number; total: number } {
+  ): { rank: number; total: number; tie: boolean } {
     const entries = Object.entries(perAgg).filter(([, p]) => p.games >= minGames)
-    const values  = entries.map(([pid, p]) => ({ pid, val: getValue(p) }))
-    values.sort((a, b) => higherBetter ? b.val - a.val : a.val - b.val)
-    const rank  = values.findIndex(v => v.pid === id) + 1
-    return { rank: rank > 0 ? rank : values.length, total: values.length }
+    const total = entries.length
+    const me = entries.find(([pid]) => pid === id)
+    if (!me) return { rank: total, total, tie: false }
+
+    const myVal = getValue(me[1])
+    let better = 0, tied = 0
+    for (const [pid, p] of entries) {
+      if (pid === id) continue
+      const v = getValue(p)
+      const scale = Math.max(Math.abs(v), Math.abs(myVal), 1e-9)
+      const rel = (v - myVal) / scale            // > 0 means this player's value is higher
+      const meaningfullyBetter = higherBetter ? rel > TIE_TOL : rel < -TIE_TOL
+      if (meaningfullyBetter) better++
+      else if (Math.abs(rel) <= TIE_TOL) tied++
+    }
+    // Competition rank: 1 + players meaningfully ahead. Tied players share this rank.
+    return { rank: better + 1, total, tie: tied > 0 }
   }
 
   // 8 pillar ranks (same order as pillars: 4 off, 4 def)
@@ -544,7 +562,7 @@ export default async function PlayerProfilePage({
     'Shot Efficiency', 'Possession Control', 'Second Chances', 'Rim Pressure',
     'Shot Suppression', 'Possession Ending', 'Possession Creation', 'Discipline',
   ]
-  const rankSummaryArr = ranks.map((r, i) => ({ label: rankLabels[i], rank: r.rank, total: r.total }))
+  const rankSummaryArr = ranks.map((r, i) => ({ label: rankLabels[i], rank: r.rank, total: r.total, tie: r.tie }))
 
   // ── Win/Loss split stats ──────────────────────────────────────────────────
   const gameResultMap = new Map(filteredGames.map((g: any) => [g.id, g.result]))
@@ -601,10 +619,10 @@ export default async function PlayerProfilePage({
   const negativeOutliers = sorted.filter(s => s.score < -10).reverse().slice(0, 3)
   const outlierSummary = [
     positiveOutliers.length
-      ? `STRENGTHS (biggest positive outliers vs team average): ${positiveOutliers.map(s => `${s.label}: ${s.player} vs team avg ${s.team} (${s.diff > 0 ? '+' : ''}${s.diff}%, ranked #${s.rank.rank} of ${s.rank.total})`).join('; ')}`
+      ? `STRENGTHS (biggest positive outliers vs team average): ${positiveOutliers.map(s => `${s.label}: ${s.player} vs team avg ${s.team} (${s.diff > 0 ? '+' : ''}${s.diff}%, ranked ${s.rank.tie ? 'tied ' : ''}#${s.rank.rank} of ${s.rank.total})`).join('; ')}`
       : 'No clear positive outliers — broadly average across most stats.',
     negativeOutliers.length
-      ? `DEVELOPMENT AREAS (biggest negative outliers vs team average): ${negativeOutliers.map(s => `${s.label}: ${s.player} vs team avg ${s.team} (${s.diff > 0 ? '+' : ''}${s.diff}%, ranked #${s.rank.rank} of ${s.rank.total})`).join('; ')}`
+      ? `DEVELOPMENT AREAS (biggest negative outliers vs team average): ${negativeOutliers.map(s => `${s.label}: ${s.player} vs team avg ${s.team} (${s.diff > 0 ? '+' : ''}${s.diff}%, ranked ${s.rank.tie ? 'tied ' : ''}#${s.rank.rank} of ${s.rank.total})`).join('; ')}`
       : 'No clear negative outliers — broadly average across most stats.',
   ].join('\n')
 
@@ -805,7 +823,7 @@ export default async function PlayerProfilePage({
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
             {tree.pillars.offensive.map((p, i) => (
-              <PillarCard key={i} pillar={p} rank={ranks[i]?.rank} totalRanked={ranks[i]?.total} sparklines={sparklines} />
+              <PillarCard key={i} pillar={p} rank={ranks[i]?.rank} totalRanked={ranks[i]?.total} tie={ranks[i]?.tie} sparklines={sparklines} />
             ))}
           </div>
         </div>
@@ -818,10 +836,10 @@ export default async function PlayerProfilePage({
             <span style={{ fontSize: 11, color: '#6b7280', marginLeft: 4 }}>vs team average · ranked among squad</span>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 10 }}>
-            <DefStat label="Blocks / Game"        value={pg(ps.blk)}       teamAvg={tppg(aggregates.blk)}       higherBetter={true}  rank={ranks[4]?.rank} totalRanked={ranks[4]?.total} sparkline={sparklines['Blocks / Game']} />
-            <DefStat label="Def Rebounds / Game"  value={pg(ps.dreb)}      teamAvg={tppg(aggregates.dreb)}      higherBetter={true}  rank={ranks[5]?.rank} totalRanked={ranks[5]?.total} sparkline={sparklines['Def Rebounds / Game']} />
-            <DefStat label="Steals / Game"        value={pg(ps.stl)}       teamAvg={tppg(aggregates.stl)}       higherBetter={true}  rank={ranks[6]?.rank} totalRanked={ranks[6]?.total} sparkline={sparklines['Steals / Game']} />
-            <DefStat label="Def Fouls / Game"     value={pg(ps.def_fouls)} teamAvg={tppg(aggregates.def_fouls)} higherBetter={false} rank={ranks[7]?.rank} totalRanked={ranks[7]?.total} sparkline={sparklines['Def Fouls / Game']} />
+            <DefStat label="Blocks / Game"        value={pg(ps.blk)}       teamAvg={tppg(aggregates.blk)}       higherBetter={true}  rank={ranks[4]?.rank} totalRanked={ranks[4]?.total} tie={ranks[4]?.tie} sparkline={sparklines['Blocks / Game']} />
+            <DefStat label="Def Rebounds / Game"  value={pg(ps.dreb)}      teamAvg={tppg(aggregates.dreb)}      higherBetter={true}  rank={ranks[5]?.rank} totalRanked={ranks[5]?.total} tie={ranks[5]?.tie} sparkline={sparklines['Def Rebounds / Game']} />
+            <DefStat label="Steals / Game"        value={pg(ps.stl)}       teamAvg={tppg(aggregates.stl)}       higherBetter={true}  rank={ranks[6]?.rank} totalRanked={ranks[6]?.total} tie={ranks[6]?.tie} sparkline={sparklines['Steals / Game']} />
+            <DefStat label="Def Fouls / Game"     value={pg(ps.def_fouls)} teamAvg={tppg(aggregates.def_fouls)} higherBetter={false} rank={ranks[7]?.rank} totalRanked={ranks[7]?.total} tie={ranks[7]?.tie} sparkline={sparklines['Def Fouls / Game']} />
             <DefStat label="Off Fouls / Game"     value={pg(ps.off_fouls)} teamAvg={tppg(aggregates.off_fouls)} higherBetter={false} sparkline={sparklines['Off Fouls / Game']} />
           </div>
           <div style={{ marginTop: 10, padding: '8px 12px', background: '#f0f2f7', borderRadius: 6, fontSize: 11, color: '#6b7280', fontStyle: 'italic' }}>

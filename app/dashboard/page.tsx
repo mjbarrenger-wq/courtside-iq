@@ -279,9 +279,9 @@ const PILLAR_TOOLTIPS: Record<string, string> = {
   'Discipline':            'Primary: Def Fouls/G — Defensive fouls per game. Unnecessary fouling extends opponent possessions and surrenders free throw attempts. Lower is better.',
 }
 
-function PillarCard({ pillar, side, sparkValues, vsLabel = 'Opp', estimated = false, rank, totalRanked }: {
+function PillarCard({ pillar, side, sparkValues, vsLabel = 'Opp', estimated = false, rank, totalRanked, tie }: {
   pillar: PillarScore; side: 'off' | 'def'; sparkValues?: number[]; vsLabel?: string; estimated?: boolean
-  rank?: number; totalRanked?: number
+  rank?: number; totalRanked?: number; tie?: boolean
 }) {
   const pos = pillar.delta >= 0
   const borderColor = pos ? '#059669' : '#dc2626'
@@ -346,9 +346,9 @@ function PillarCard({ pillar, side, sparkValues, vsLabel = 'Opp', estimated = fa
             fontSize: 10, fontWeight: 700, letterSpacing: '0.04em',
             color: rank === 1 ? '#d97706' : rank <= Math.ceil(totalRanked / 3) ? '#059669' : rank > Math.floor(totalRanked * 2 / 3) ? '#dc2626' : '#6b7280',
           }}>
-            #{rank} of {totalRanked}
+            {tie ? 'T-' : '#'}{rank} of {totalRanked}
           </span>
-          <div style={{ fontSize: 9, color: '#6b7280', marginTop: 1 }}>team rank</div>
+          <div style={{ fontSize: 9, color: '#6b7280', marginTop: 1 }}>{tie ? 'tied team rank' : 'team rank'}</div>
         </div>
       )}
     </div>
@@ -577,25 +577,40 @@ export default async function DashboardPage({
     }
   }
 
+  // Players within TIE_TOL (relative) of each other are treated as tied — they
+  // share the better player's rank and the card flags it.
+  const TIE_TOL = 0.02  // 2%
+
   // Helper: rank a player among all who played >= minGames
   function pillarRank(
     pid: string,
     getValue: (p: typeof perPlayerAgg[string]) => number,
     higherIsBetter: boolean,
     minGames = 3,
-  ): { rank: number; total: number } {
-    const entries = Object.entries(perPlayerAgg)
-      .filter(([, p]) => p.games >= minGames)
-      .map(([id, p]) => ({ id, value: getValue(p) }))
-      .sort((a, b) => higherIsBetter ? b.value - a.value : a.value - b.value)
-    const idx = entries.findIndex(e => e.id === pid)
-    return { rank: idx >= 0 ? idx + 1 : entries.length, total: entries.length }
+  ): { rank: number; total: number; tie: boolean } {
+    const entries = Object.entries(perPlayerAgg).filter(([, p]) => p.games >= minGames)
+    const total = entries.length
+    const me = entries.find(([id]) => id === pid)
+    if (!me) return { rank: total, total, tie: false }
+
+    const myVal = getValue(me[1])
+    let better = 0, tied = 0
+    for (const [id, p] of entries) {
+      if (id === pid) continue
+      const v = getValue(p)
+      const scale = Math.max(Math.abs(v), Math.abs(myVal), 1e-9)
+      const rel = (v - myVal) / scale
+      const meaningfullyBetter = higherIsBetter ? rel > TIE_TOL : rel < -TIE_TOL
+      if (meaningfullyBetter) better++
+      else if (Math.abs(rel) <= TIE_TOL) tied++
+    }
+    return { rank: better + 1, total, tie: tied > 0 }
   }
 
   // ── Player mode ──────────────────────────────────────────────────────────
   let playerTree: DriverTreeOutput | null = null
   let selectedPlayer: { id: string; name: string; jersey: number } | null = null
-  let pillarRanks: { rank: number; total: number }[] | null = null
+  let pillarRanks: { rank: number; total: number; tie: boolean }[] | null = null
   const numGames = Math.max(Object.keys(playerByGame).length, 1)
   const numActivePlayers = Array.isArray(perGamePlayers) && perGamePlayers.length > 0
     ? perGamePlayers.length / numGames
@@ -901,14 +916,14 @@ export default async function DashboardPage({
               <PillarCard key={`off-${i}`} pillar={p} side="off"
                 vsLabel={isPlayerMode ? 'Team Avg' : 'Opp'}
                 sparkValues={[pillarSparks.shotEfficiency, pillarSparks.possessionControl, pillarSparks.extraPossessions, pillarSparks.pressureCreation][i]}
-                rank={pillarRanks?.[i]?.rank} totalRanked={pillarRanks?.[i]?.total} />
+                rank={pillarRanks?.[i]?.rank} totalRanked={pillarRanks?.[i]?.total} tie={pillarRanks?.[i]?.tie} />
             ))}
             {tree.pillars.defensive.map((p, i) => (
               <PillarCard key={`def-${i}`} pillar={p} side="def"
                 vsLabel={isPlayerMode ? 'Team Avg' : 'Opp'}
                 estimated={!isPlayerMode && !hasOppData}
                 sparkValues={[pillarSparks.shotSuppression, pillarSparks.possessionEnding, pillarSparks.pressureDisruption, pillarSparks.discipline][i]}
-                rank={pillarRanks?.[4 + i]?.rank} totalRanked={pillarRanks?.[4 + i]?.total} />
+                rank={pillarRanks?.[4 + i]?.rank} totalRanked={pillarRanks?.[4 + i]?.total} tie={pillarRanks?.[4 + i]?.tie} />
             ))}
           </div>
         </div>

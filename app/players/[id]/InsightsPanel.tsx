@@ -41,6 +41,7 @@ interface RankEntry {
   label: string
   rank:  number
   total: number
+  tie?:  boolean
 }
 
 export interface InsightsPanelProps {
@@ -85,7 +86,7 @@ async function getDevelopmentContent(
   const compTable = comparisonRows.map(r => {
     const diff = Math.round((r.player - r.team) * 10) / 10
     const dir  = r.lowerBetter ? (diff <= 0 ? '✓ better' : '✗ worse') : (diff >= 0 ? '✓ above' : '✗ below')
-    return `${r.stat}: ${r.player}${r.unit} (team avg ${r.team}${r.unit}, ${diff >= 0 ? '+' : ''}${diff} ${dir}, ranked #${r.rank.rank} of ${r.rank.total})`
+    return `${r.stat}: ${r.player}${r.unit} (team avg ${r.team}${r.unit}, ${diff >= 0 ? '+' : ''}${diff} ${dir}, ranked ${r.rank.tie ? 'tied ' : ''}#${r.rank.rank} of ${r.rank.total})`
   }).join('\n')
 
   const fmt = (v: number | null) => v != null ? String(v) : 'n/a'
@@ -100,7 +101,7 @@ async function getDevelopmentContent(
     biggestWlSplit ? `→ Biggest split: ${biggestWlSplit.label} (${fmt(biggestWlSplit.w)} wins / ${fmt(biggestWlSplit.l)} losses)` : '',
   ].filter(Boolean).join('\n') : 'Insufficient win/loss split data.'
 
-  const rankSummary   = ranks.map(r => `${r.label}: #${r.rank} of ${r.total}`).join(', ')
+  const rankSummary   = ranks.map(r => `${r.label}: ${r.tie ? 'tied ' : ''}#${r.rank} of ${r.total}`).join(', ')
   const tops          = tree.top_drivers.map(d => d.pillar).join(', ')
   const leakages      = tree.leakage_areas.map(d => d.pillar).join(', ')
 
