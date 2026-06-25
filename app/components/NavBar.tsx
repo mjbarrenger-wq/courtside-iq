@@ -19,21 +19,19 @@ export function NavBar() {
   const pathname = usePathname()
 
   return (
-    <nav style={{
-      background: '#ffffff',
-      borderBottom: '1px solid #e2e5eb',
-      padding: '0 28px',
-      height: 44,
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      position: 'sticky',
-      top: 0,
-      zIndex: 1000,
-      flexShrink: 0,
-    }}>
+    // Layout lifted to mobile-first Tailwind classes; cosmetic styles stay inline.
+    // Desktop (md+) reproduces the original exactly: h-11 = 44px, md:px-7 = 28px,
+    // overflow visible. Below md the link row becomes a horizontal scroll strip
+    // (brand pinned left) so every link stays reachable on a phone.
+    <nav
+      className="sticky top-0 z-[1000] shrink-0 flex items-center justify-between gap-3 h-11 px-4 md:px-7"
+      style={{
+        background: '#ffffff',
+        borderBottom: '1px solid #e2e5eb',
+      }}
+    >
       {/* Brand */}
-      <Link href="/" style={{
+      <Link href="/" className="shrink-0" style={{
         fontSize: 14,
         fontWeight: 800,
         color: '#307b92',
@@ -45,7 +43,7 @@ export function NavBar() {
       </Link>
 
       {/* Nav links */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+      <div className="nav-scroll flex items-center gap-0.5 overflow-x-auto md:overflow-visible">
         {NAV_ITEMS.map(({ label, href }) => {
           const isActive = href === '/'
             ? pathname === '/'
@@ -54,6 +52,7 @@ export function NavBar() {
             <Link
               key={href}
               href={href}
+              className="shrink-0"
               style={{
                 fontSize: 12,
                 fontWeight: isActive ? 700 : 500,

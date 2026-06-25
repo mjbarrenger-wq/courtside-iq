@@ -77,6 +77,16 @@ input[type="range"].date-slider-input::-moz-range-track {
   pointer-events: none;
 }
 
+/* NavBar link strip — hides the scrollbar when it scrolls horizontally on phones.
+   No effect on desktop (md+) where the row has overflow:visible and never scrolls. */
+.nav-scroll {
+  scrollbar-width: none;          /* Firefox */
+  -ms-overflow-style: none;       /* old Edge */
+}
+.nav-scroll::-webkit-scrollbar {
+  display: none;                  /* Chrome/Safari */
+}
+
 /* Semantic utility classes using CSS vars */
 /* Game row hover — used on main page Recent Results */
 .game-row-link > div {

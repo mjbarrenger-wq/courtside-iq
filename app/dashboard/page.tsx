@@ -794,7 +794,7 @@ export default async function DashboardPage({
       `}</style>
 
       {/* ── Header row 1 ── */}
-      <div style={{ background: '#ffffff', borderBottom: `1px solid ${BORDER}`, padding: '12px 28px' }}>
+      <div className="px-4 md:px-7 py-3" style={{ background: '#ffffff', borderBottom: `1px solid ${BORDER}` }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
           <div>
             <div style={{ fontSize: 20, fontWeight: 800, color: '#1a1f2e', letterSpacing: '0.05em' }}>
@@ -831,17 +831,15 @@ export default async function DashboardPage({
         </div>
       </div>
 
-      <div style={{ padding: '0 28px' }}>
+      <div className="px-4 md:px-7">
 
         {/* ── KPI Bar ── */}
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: '1fr 1fr 1.6fr 1fr 1fr',
-          gap: 2,
+        <div
+          className="grid grid-cols-1 md:grid-cols-[1fr_1fr_1.6fr_1fr_1fr] gap-3 md:gap-0.5 p-5 md:px-7 md:py-[22px]"
+          style={{
           background: CARD,
           border: `1px solid ${BORDER}`,
           borderRadius: 14,
-          padding: '22px 28px',
           marginTop: 20,
           alignItems: 'center',
         }}>
@@ -951,13 +949,9 @@ export default async function DashboardPage({
             </div>
           )}
 
-          {/* All 8 pillar cards in ONE grid row → all same height automatically */}
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(8, 1fr)',
-            gap: 8,
-            alignItems: 'stretch',
-          }}>
+          {/* All 8 pillar cards in ONE grid row → all same height automatically.
+              Phone: 2 columns (dense cards stay legible). Desktop (md+): 8 across. */}
+          <div className="grid grid-cols-2 md:grid-cols-8 gap-2 items-stretch">
             {tree.pillars.offensive.map((p, i) => (
               <PillarCard key={`off-${i}`} pillar={p} side="off"
                 vsLabel={isPlayerMode ? 'Team Avg' : 'Opp'}
@@ -975,7 +969,7 @@ export default async function DashboardPage({
         </div>
 
         {/* ── Bottom Summary ── */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1.3fr', gap: 16, marginTop: 28 }}>
+        <div className="grid grid-cols-1 md:grid-cols-[1fr_1fr_1fr_1.3fr] gap-4 mt-7">
 
           {/* Top Drivers */}
           <div style={{ background: '#ecfdf5', border: '1px solid #a7f3d0', borderRadius: 12, padding: '18px 20px' }}>
@@ -1113,7 +1107,7 @@ export default async function DashboardPage({
 
         {/* ── Footer ── */}
         <div style={{ marginTop: 28 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+          <div className="flex flex-wrap items-center justify-between gap-2" style={{ marginBottom: 12 }}>
             <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
               {isPlayerMode
                 ? `Player metrics vs team average per player (÷ ${allPlayers.length} roster). Data via Hoopsalytics.`
