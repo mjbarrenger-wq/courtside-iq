@@ -70,7 +70,11 @@ export default function PlayerStatsTable({ players }: { players: PlayerRow[] }) 
         <span style={{ fontSize: 13, fontWeight: 700, color: '#307b92' }}>SEASON PLAYER AVERAGES</span>
         <span style={{ fontSize: 11, color: '#6b7280' }}>Click any column to sort</span>
       </div>
-      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+      {/* Wide stat table: scrolls horizontally below desktop so all columns stay
+          full-size and legible. On desktop the parent is far wider than min-width,
+          so width:100% wins and the layout is unchanged. */}
+      <div className="overflow-x-auto">
+      <table className="min-w-[680px]" style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
         <thead>
           <tr style={{ background: '#f0f2f7' }}>
             <th style={{ padding: '10px 14px', textAlign: 'left', fontSize: 10, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.08em', borderBottom: `1px solid ${BORDER}` }}>
@@ -132,6 +136,7 @@ export default function PlayerStatsTable({ players }: { players: PlayerRow[] }) 
           ))}
         </tbody>
       </table>
+      </div>
     </div>
   )
 }

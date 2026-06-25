@@ -78,8 +78,8 @@ export default async function Home() {
     }}>
 
       {/* ── Header ── */}
-      <div style={{ background: HEADER, borderBottom: `1px solid ${BORDER}`, padding: '20px 32px' }}>
-        <div style={{ maxWidth: 1100, margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+      <div className="px-4 md:px-8 py-5" style={{ background: HEADER, borderBottom: `1px solid ${BORDER}` }}>
+        <div className="flex-wrap gap-3" style={{ maxWidth: 1100, margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div>
             <div style={{ fontSize: 22, fontWeight: 800, color: '#1a1f2e', letterSpacing: '0.05em' }}>
               COURTSIDE IQ
@@ -104,10 +104,11 @@ export default async function Home() {
         </div>
       </div>
 
-      <div style={{ maxWidth: 1100, margin: '0 auto', padding: '32px 32px 0' }}>
+      <div className="px-4 md:px-8 pt-8" style={{ maxWidth: 1100, margin: '0 auto' }}>
 
         {/* ── Nav cards ── */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr 1fr', gap: 20, marginBottom: 40 }}>
+        {/* Phone: 1 col. Small tablet: 2 cols. Desktop (md+): original 5 across. */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-5 mb-10">
 
           {/* Coaching Intelligence */}
           <a href="/dashboard" style={{ textDecoration: 'none', display: 'flex' }}>
@@ -315,7 +316,8 @@ export default async function Home() {
         </div>
 
         {/* ── Season snapshot ── */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 12, marginBottom: 32 }}>
+        {/* Phone: 2 cols (was a forced 5-wide row that spilled off-screen). Desktop: 5. */}
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-8">
           {[
             { label: 'Record',    value: `${wins}–${losses}`,                colour: '#059669' },
             { label: 'Games',     value: String(games.length),               colour: '#1a1f2e' },
