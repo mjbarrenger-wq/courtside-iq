@@ -159,6 +159,7 @@ export default function RotationPlanner({ players: initialPlayers, teamId, games
   const [players, setPlayers]         = useState<RotationPlayer[]>(initialPlayers)
   const [constraints, setConstraints] = useState<PlayerConstraint[]>(defaultConstraints(initialPlayers))
   const [result, setResult]           = useState<OptimiserResult | null>(null)
+  const [isGenerating, setIsGenerating] = useState(false)
   const [showPositions, setShowPositions] = useState(false)
 
   // Track DB-committed positions (initialized from server-fetched data).
@@ -310,7 +311,11 @@ export default function RotationPlanner({ players: initialPlayers, teamId, games
     const v = !allEveryQ
     setConstraints(prev => prev.map(c => c.unavailable ? c : { ...c, mustPlayEveryQuarter: v }))
   }
-  function generate() {
+  // The solver runs synchronously on the main thread and can take a noticeable
+  // moment, during which the UI would otherwise look frozen. We flip on a
+  // "building" flag, then defer the heavy solve with a short timeout so React
+  // paints the spinner/banner BEFORE the blocking computation starts.
+  function runSolve(): OptimiserResult {
     const totalPlayerMins = config.numPeriods * config.periodDuration * 5
 
     // When balanceMinutes + overrides coexist: remove committed override mins from the
@@ -332,8 +337,7 @@ export default function RotationPlanner({ players: initialPlayers, teamId, games
             maxMinutes: Math.ceil(perPlayer) + 2,
           })
       // Values pre-computed — pass balanceMinutes:false so solver doesn't overwrite them
-      setResult(solve(players, merged, { ...config, minStintMins, maxQtrImbalance, balanceMinutes: false }))
-      return
+      return solve(players, merged, { ...config, minStintMins, maxQtrImbalance, balanceMinutes: false })
     }
 
     // Default path
@@ -345,7 +349,20 @@ export default function RotationPlanner({ players: initialPlayers, teamId, games
         maxMinutes: hasOverride ? c.maxMinutes : defaultMax,
       }
     })
-    setResult(solve(players, merged, { ...config, minStintMins, maxQtrImbalance }))
+    return solve(players, merged, { ...config, minStintMins, maxQtrImbalance })
+  }
+
+  function generate() {
+    if (isGenerating) return
+    setIsGenerating(true)
+    // Defer so the "Building rotation…" state can paint before the blocking solve.
+    setTimeout(() => {
+      try {
+        setResult(runSolve())
+      } finally {
+        setIsGenerating(false)
+      }
+    }, 30)
   }
 
   // Period label for Every Q / table header
@@ -812,15 +829,38 @@ export default function RotationPlanner({ players: initialPlayers, teamId, games
       {starterCount > 5 && <div style={{ marginBottom: 8, color: RED, fontSize: 12 }}>⚠ {starterCount} starters selected — max 5</div>}
       {closerCount  > 5 && <div style={{ marginBottom: 8, color: RED, fontSize: 12 }}>⚠ {closerCount} closers selected — max 5</div>}
 
-      <button onClick={generate} disabled={!canGenerate} style={{
-        background: canGenerate ? '#307b92' : MUTED, color: '#fff',
+      <button onClick={generate} disabled={!canGenerate || isGenerating} style={{
+        background: (canGenerate && !isGenerating) ? '#307b92' : MUTED, color: '#fff',
         border: 'none', borderRadius: 8, padding: '12px 28px', fontSize: 14, fontWeight: 700,
-        cursor: canGenerate ? 'pointer' : 'not-allowed', marginBottom: 28, opacity: canGenerate ? 1 : 0.5,
+        cursor: (canGenerate && !isGenerating) ? 'pointer' : 'not-allowed', marginBottom: 16,
+        opacity: (canGenerate && !isGenerating) ? 1 : 0.5,
+        display: 'inline-flex', alignItems: 'center', gap: 10,
       }}>
-        Generate Rotation
+        {isGenerating && (
+          <span className="ciq-spin" style={{
+            width: 14, height: 14, border: '2px solid rgba(255,255,255,0.45)',
+            borderTopColor: '#ffffff', display: 'inline-block', flexShrink: 0,
+          }} />
+        )}
+        {isGenerating ? 'Building rotation…' : 'Generate Rotation'}
       </button>
 
-      {result && <RotationGrid result={result} players={players} />}
+      {/* Building banner — makes it clear the optimiser is working, not frozen */}
+      {isGenerating && (
+        <div style={{
+          marginBottom: 28, display: 'flex', alignItems: 'center', gap: 10,
+          padding: '11px 16px', background: 'rgba(151,207,220,0.1)',
+          border: `1px solid ${TEAL}`, borderRadius: 8, fontSize: 12, color: SEC,
+        }}>
+          <span className="ciq-spin" style={{
+            width: 16, height: 16, border: `2px solid rgba(48,123,146,0.3)`,
+            borderTopColor: TEAL, display: 'inline-block', flexShrink: 0,
+          }} />
+          <span><strong style={{ color: TEAL }}>Building rotation…</strong> Optimising minutes, period balance, and sub windows. This can take a few seconds.</span>
+        </div>
+      )}
+
+      {!isGenerating && result && <RotationGrid result={result} players={players} />}
     </div>
   )
 }

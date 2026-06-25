@@ -746,7 +746,7 @@ export default async function PlayerProfilePage({
       </div>
 
       {/* ── Filter bar ── */}
-      <div style={{ background: '#f4f5f7', borderBottom: `1px solid ${BORDER}`, padding: '8px 28px' }}>
+      <div className="px-4 md:px-7 py-2" style={{ background: '#f4f5f7', borderBottom: `1px solid ${BORDER}` }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
           <FilterBar current={filter} currentType={isCustom ? 'all_types' : gameType} />
           <GamePicker games={pickerGames} />
@@ -761,8 +761,8 @@ export default async function PlayerProfilePage({
       </div>
 
       {/* ── Header ── */}
-      <div style={{ background: '#ffffff', borderBottom: `1px solid ${BORDER}`, padding: '16px 28px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 18 }}>
+      <div className="px-4 md:px-7 py-4" style={{ background: '#ffffff', borderBottom: `1px solid ${BORDER}` }}>
+        <div className="flex-wrap" style={{ display: 'flex', alignItems: 'center', gap: 18 }}>
           <div style={{
             width: 58, height: 58, borderRadius: '50%',
             background: 'linear-gradient(135deg, #d0eaf2, #b8dce8)',
@@ -800,10 +800,11 @@ export default async function PlayerProfilePage({
         </div>
       </div>
 
-      <div style={{ padding: '24px 28px', maxWidth: 1400, margin: '0 auto' }}>
+      <div className="px-4 md:px-7 py-6" style={{ maxWidth: 1400, margin: '0 auto' }}>
 
         {/* ── KPI strip ── */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 10, marginBottom: 24 }}>
+        {/* Phone: 3 cols. Desktop (md+): original 6 across. */}
+        <div className="grid grid-cols-3 md:grid-cols-6 gap-2.5 mb-6">
           {[
             { label: 'PPG',         value: pg(ps.pts),                        color: '#fbbf24' },
             { label: 'TS%',         value: `${ts_pct}%`,                      color: '#307b92' },
@@ -831,7 +832,7 @@ export default async function PlayerProfilePage({
             <span style={{ fontSize: 13, fontWeight: 700, color: '#307b92', letterSpacing: '0.08em' }}>OFFENSIVE CONTRIBUTIONS</span>
             <span style={{ fontSize: 11, color: '#6b7280', marginLeft: 4 }}>vs team average · ranked among squad</span>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5">
             {tree.pillars.offensive.map((p, i) => (
               <PillarCard key={i} pillar={p} rank={ranks[i]?.rank} totalRanked={ranks[i]?.total} tie={ranks[i]?.tie} sparklines={sparklines} />
             ))}
@@ -845,7 +846,7 @@ export default async function PlayerProfilePage({
             <span style={{ fontSize: 13, fontWeight: 700, color: '#1e6a82', letterSpacing: '0.08em' }}>DEFENSIVE CONTRIBUTIONS</span>
             <span style={{ fontSize: 11, color: '#6b7280', marginLeft: 4 }}>vs team average · ranked among squad</span>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 10 }}>
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-2.5">
             <DefStat label="Blocks / Game"        value={pg(ps.blk)}       teamAvg={tppg(aggregates.blk)}       higherBetter={true}  rank={ranks[4]?.rank} totalRanked={ranks[4]?.total} tie={ranks[4]?.tie} sparkline={sparklines['Blocks / Game']} />
             <DefStat label="Def Rebounds / Game"  value={pg(ps.dreb)}      teamAvg={tppg(aggregates.dreb)}      higherBetter={true}  rank={ranks[5]?.rank} totalRanked={ranks[5]?.total} tie={ranks[5]?.tie} sparkline={sparklines['Def Rebounds / Game']} />
             <DefStat label="Steals / Game"        value={pg(ps.stl)}       teamAvg={tppg(aggregates.stl)}       higherBetter={true}  rank={ranks[6]?.rank} totalRanked={ranks[6]?.total} tie={ranks[6]?.tie} sparkline={sparklines['Steals / Game']} />
@@ -858,7 +859,7 @@ export default async function PlayerProfilePage({
         </div>
 
         {/* ── Top contributions & development areas ── */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div style={{ background: CARD, border: '1px solid #a7f3d0', borderRadius: 12, padding: '18px 20px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
               <span style={{ fontSize: 14 }}>📈</span>

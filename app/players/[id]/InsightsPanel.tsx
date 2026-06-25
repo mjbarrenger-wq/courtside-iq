@@ -207,7 +207,7 @@ export function InsightsSkeleton() {
           <span style={{ fontSize: 16 }}>💡</span>
           <div style={{ ...pulse, width: 140, height: 14 }} />
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           {[0, 1, 2].map(i => (
             <div key={i} style={{ background: '#f0f2f7', border: `1px solid ${BORDER}`, borderRadius: 8, padding: '14px 16px' }}>
               <div style={{ ...pulse, width: 18, height: 18, marginBottom: 10 }} />
@@ -220,7 +220,7 @@ export function InsightsSkeleton() {
       </div>
 
       {/* Work Ons + Drills skeleton */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 20 }}>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-5">
         {[0, 1].map(col => (
           <div key={col} style={{ background: '#ffffff', border: `1px solid ${BORDER}`, borderRadius: 14, padding: '20px 24px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
@@ -276,7 +276,7 @@ export default async function InsightsPanel({
           <span style={{ fontSize: 16 }}>💡</span>
           <span style={{ fontSize: 13, fontWeight: 700, color: '#d97706', letterSpacing: '0.08em' }}>KEY INSIGHTS</span>
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           {devContent.insights.map((insight, i) => (
             <div key={i} style={{ background: '#f0f2f7', border: `1px solid ${BORDER}`, borderRadius: 8, padding: '14px 16px' }}>
               <div style={{ fontSize: 18, fontWeight: 800, color: '#d97706', opacity: 0.4, marginBottom: 6 }}>{i + 1}</div>
@@ -287,7 +287,7 @@ export default async function InsightsPanel({
       </div>
 
       {/* ── Work Ons + Drills ── */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 20 }}>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-5">
 
         {/* Coaching priorities */}
         <div style={{ background: CARD, border: '1px solid #e2e5eb', borderRadius: 14, padding: '20px 24px' }}>

@@ -239,11 +239,10 @@ export default function PracticeBuilder({
   return (
     <div>
       {/* Setup Panel */}
-      <div style={{
+      <div className="p-4 md:px-6 md:py-5" style={{
         background: CARD,
         border: `1px solid ${BORDER}`,
         borderRadius: 12,
-        padding: '20px 24px',
         marginBottom: 24,
       }}>
         <div style={{ fontSize: 13, fontWeight: 700, color: '#1a1f2e', marginBottom: 4 }}>Session Setup</div>
@@ -261,6 +260,7 @@ export default function PracticeBuilder({
               <button
                 key={d}
                 onClick={() => setDuration(d)}
+                className="min-h-[44px] md:min-h-0"
                 style={{
                   padding: '7px 20px',
                   borderRadius: 99,
@@ -295,6 +295,7 @@ export default function PracticeBuilder({
                   key={name}
                   onClick={() => !disabled && togglePillar(name)}
                   disabled={disabled}
+                  className="min-h-[44px] md:min-h-0"
                   style={{
                     display: 'flex',
                     alignItems: 'center',

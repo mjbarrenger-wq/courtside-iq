@@ -87,6 +87,13 @@ input[type="range"].date-slider-input::-moz-range-track {
   display: none;                  /* Chrome/Safari */
 }
 
+/* Spinner used by the rotation builder "building" state */
+@keyframes ciq-spin { to { transform: rotate(360deg); } }
+.ciq-spin {
+  animation: ciq-spin 0.7s linear infinite;
+  border-radius: 50%;
+}
+
 /* Semantic utility classes using CSS vars */
 /* Game row hover — used on main page Recent Results */
 .game-row-link > div {

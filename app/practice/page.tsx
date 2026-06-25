@@ -89,7 +89,7 @@ export default async function PracticePage() {
       padding: '0 0 48px',
     }}>
       {/* Header */}
-      <div style={{ background: CARD, borderBottom: `1px solid ${BORDER}`, padding: '12px 28px' }}>
+      <div className="px-4 md:px-7 py-3" style={{ background: CARD, borderBottom: `1px solid ${BORDER}` }}>
         <div style={{ fontSize: 20, fontWeight: 800, color: '#1a1f2e', letterSpacing: '0.05em' }}>
           PRACTICE BUILDER
         </div>
@@ -102,7 +102,7 @@ export default async function PracticePage() {
         </div>
       </div>
 
-      <div style={{ padding: '24px 28px', maxWidth: 960, margin: '0 auto' }}>
+      <div className="px-4 md:px-7 py-6" style={{ maxWidth: 960, margin: '0 auto' }}>
         <PracticeBuilder
           allPillars={allPillars}
           leakagePillars={leakagePillars}
