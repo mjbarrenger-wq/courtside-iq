@@ -286,7 +286,21 @@ export default function RotationPlanner({ players: initialPlayers, teamId, games
   // Derived
   const totalGameMins     = config.numPeriods * config.periodDuration
   const availablePlayers  = useMemo(() => players.filter(p => !constraints.find(c => c.playerId === p.id)?.unavailable), [players, constraints])
-  const targetMins        = availablePlayers.length > 0 ? (totalGameMins * 5) / availablePlayers.length : 0
+  // Even-minutes target is computed for the players who actually SHARE the balance:
+  // total court-minutes minus any minutes committed by per-player overrides, divided
+  // by the available players who DON'T have an override. So if 2 of 10 are out and
+  // 1 is fixed at 10 min via override, the remaining 7 split the rest evenly.
+  const overrideCommittedMins = useMemo(
+    () => constraints.filter(c => overrideIds.has(c.playerId) && !c.unavailable).reduce((s, c) => s + c.minMinutes, 0),
+    [constraints, overrideIds],
+  )
+  const balanceShareCount = useMemo(
+    () => availablePlayers.filter(p => !overrideIds.has(p.id)).length,
+    [availablePlayers, overrideIds],
+  )
+  const targetMins = balanceShareCount > 0
+    ? Math.max(0, (totalGameMins * 5 - overrideCommittedMins) / balanceShareCount)
+    : 0
   const starterCount      = useMemo(() => constraints.filter(c => c.isStarter && !c.unavailable).length, [constraints])
   const closerCount       = useMemo(() => constraints.filter(c => c.isCloser  && !c.unavailable).length, [constraints])
   const everyQCount       = useMemo(() => constraints.filter(c => c.mustPlayEveryQuarter && !c.unavailable).length, [constraints])
@@ -627,9 +641,10 @@ export default function RotationPlanner({ players: initialPlayers, teamId, games
               <div style={{ fontSize: 12, fontWeight: 600, color: config.balanceMinutes ? TEAL : SEC }}>
                 Balance across players
               </div>
-              {config.balanceMinutes && availablePlayers.length > 0 && (
+              {config.balanceMinutes && balanceShareCount > 0 && (
                 <div style={{ fontSize: 10, color: MUTED, marginTop: 2 }}>
-                  Target: {targetMins.toFixed(1)} min ({availablePlayers.length} players)
+                  Target: {targetMins.toFixed(1)} min ({balanceShareCount} player{balanceShareCount !== 1 ? 's' : ''} share the balance
+                  {overrideCommittedMins > 0 ? `, after ${overrideCommittedMins} min set by overrides` : ''})
                 </div>
               )}
             </div>

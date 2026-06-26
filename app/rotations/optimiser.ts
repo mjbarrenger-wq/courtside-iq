@@ -8,8 +8,9 @@ import type {
 import { DEFAULT_GAME_CONFIG, POSITION_GROUP } from './types'
 
 const PER_SLOT    = 5
-const NUM_STARTS  = 120  // random restarts
-const LOCAL_ITERS = 30   // hill-climbing passes per start (each pass = one accepted improvement)
+const NUM_STARTS  = 150  // random restarts (modest bump from 120; 200 froze the UI for little gain —
+                         // short stints are driven by minute-balance tightness, not search depth)
+const LOCAL_ITERS = 40   // hill-climbing passes per start (each pass = one accepted improvement)
 
 // ── Score weights ─────────────────────────────────────────────────────────────
 
@@ -34,26 +35,93 @@ const W = {
 function allPos(p: RotationPlayer): Position[] {
   return [...p.primaryPositions, ...p.secondaryPositions]
 }
-function isPerimeter(p: RotationPlayer) {
-  return allPos(p).some(pos => POSITION_GROUP[pos] === 'perimeter')
+
+// ── Position assignment feasibility (bipartite matching) ──────────────────────
+// A lineup is position-valid iff its players can be matched to 5 DISTINCT court
+// positions (PG/SG/SF/PF/C), each player taking one of their OWN primary or
+// secondary positions. Players with no positions set act as wildcards (eligible
+// for any spot) so they never block a lineup. This guarantees the on-court five
+// can always be arranged so nobody plays a position they aren't listed for.
+const ALL_POS_LIST: Position[] = ['PG', 'SG', 'SF', 'PF', 'C']
+
+function eligiblePositions(p: RotationPlayer | undefined): boolean[] {
+  if (!p) return [true, true, true, true, true]
+  const set = new Set<Position>([...p.primaryPositions, ...p.secondaryPositions])
+  if (set.size === 0) return [true, true, true, true, true]  // no positions → wildcard
+  return ALL_POS_LIST.map(pos => set.has(pos))
 }
-function isInterior(p: RotationPlayer) {
-  return allPos(p).some(pos => POSITION_GROUP[pos] === 'interior')
+
+// Size of the maximum player→position matching (Kuhn's augmenting paths).
+function maxMatchingSize(ids: string[], byId: Map<string, RotationPlayer>): number {
+  const elig = ids.map(id => eligiblePositions(byId.get(id)))
+  const matchPos = new Array<number>(ALL_POS_LIST.length).fill(-1)  // position → player index
+  const augment = (pi: number, seen: boolean[]): boolean => {
+    for (let posi = 0; posi < ALL_POS_LIST.length; posi++) {
+      if (elig[pi][posi] && !seen[posi]) {
+        seen[posi] = true
+        if (matchPos[posi] === -1 || augment(matchPos[posi], seen)) {
+          matchPos[posi] = pi
+          return true
+        }
+      }
+    }
+    return false
+  }
+  let matched = 0
+  for (let pi = 0; pi < elig.length; pi++) {
+    if (augment(pi, new Array<boolean>(ALL_POS_LIST.length).fill(false))) matched++
+  }
+  return matched
 }
-function hasPerimeter(ids: string[], byId: Map<string, RotationPlayer>) {
-  return ids.some(id => { const p = byId.get(id); return p ? isPerimeter(p) : false })
+
+// Valid when every player in the lineup can take a distinct eligible position.
+function posValid(ids: string[], byId: Map<string, RotationPlayer>): boolean {
+  return maxMatchingSize(ids, byId) === ids.length
 }
-function hasInterior(ids: string[], byId: Map<string, RotationPlayer>) {
-  return ids.some(id => { const p = byId.get(id); return p ? isInterior(p) : false })
-}
-function posValid(ids: string[], byId: Map<string, RotationPlayer>) {
-  const withPos = ids.filter(id => {
-    const p = byId.get(id)
-    return p && (p.primaryPositions.length > 0 || p.secondaryPositions.length > 0)
+
+// Assigns each player in a lineup a DISTINCT court position from their eligible
+// set, preferring PRIMARY positions and only dropping a player into a secondary
+// when that's needed to complete the five. Returns id → assigned position.
+// Pure/exported — used by the grid to label who's playing where each lineup.
+export function assignLineupPositions(
+  ids: string[],
+  byId: Map<string, RotationPlayer>,
+): Record<string, Position> {
+  const n = ids.length
+  const elig = ids.map(id => {
+    const p    = byId.get(id)
+    const all  = p ? new Set<Position>([...p.primaryPositions, ...p.secondaryPositions]) : new Set<Position>()
+    const prim = p ? new Set<Position>(p.primaryPositions) : new Set<Position>()
+    return { all, prim, wild: !p || all.size === 0 }
   })
-  if (withPos.length === 0) return true
-  return hasPerimeter(ids, byId) && hasInterior(ids, byId)
+  const canTake = (i: number, posi: number) => elig[i].wild || elig[i].all.has(ALL_POS_LIST[posi])
+  const isPrim  = (i: number, posi: number) => !elig[i].wild && elig[i].prim.has(ALL_POS_LIST[posi])
+
+  // Depth-first over distinct position assignments; keep the one with the most
+  // players in a PRIMARY spot. n ≤ 5 → at most 120 leaves, trivial.
+  let bestPerm: number[] | null = null
+  let bestPrim = -1
+  const used = new Array<boolean>(ALL_POS_LIST.length).fill(false)
+  const cur: number[] = []
+  const recurse = (i: number, primCount: number) => {
+    if (i === n) {
+      if (primCount > bestPrim) { bestPrim = primCount; bestPerm = [...cur] }
+      return
+    }
+    for (let posi = 0; posi < ALL_POS_LIST.length; posi++) {
+      if (used[posi] || !canTake(i, posi)) continue
+      used[posi] = true; cur.push(posi)
+      recurse(i + 1, primCount + (isPrim(i, posi) ? 1 : 0))
+      used[posi] = false; cur.pop()
+    }
+  }
+  recurse(0, 0)
+
+  const out: Record<string, Position> = {}
+  if (bestPerm) ids.forEach((id, i) => { out[id] = ALL_POS_LIST[bestPerm![i]] })
+  return out
 }
+
 function changes(prev: string[], next: string[]) {
   const s = new Set(prev)
   return next.filter(id => !s.has(id)).length
@@ -286,42 +354,53 @@ function pickLineup(params: {
     ]
   }
 
-  return fixBalance(lineup.slice(0, PER_SLOT), eligible, byId, prevLineup, slotIndex, totalSlots, slotsPlayed, minSlots, warnings)
+  return fixBalance(lineup.slice(0, PER_SLOT), eligible, byId, slotIndex, totalSlots, slotsPlayed, minSlots, validLocked)
 }
 
+// Repairs a lineup toward a valid 5-position matching by swapping bench players
+// in. Each pass takes the single swap that most improves matching coverage (ties
+// broken toward the least-disruptive minute change). Locked starters/closers are
+// never swapped out. If coverage can't be completed, returns the best effort —
+// the scorer penalises the residual and a warning is surfaced.
 function fixBalance(
-  lineup:      string[],
-  eligible:    RotationPlayer[],
-  byId:        Map<string, RotationPlayer>,
-  prevLineup:  string[],
-  slotIndex:   number,
-  totalSlots:  number,
-  slotsPlayed: Map<string, number>,
-  minSlots:    Map<string, number>,
-  warnings:    string[],
+  lineup:       string[],
+  eligible:     RotationPlayer[],
+  byId:         Map<string, RotationPlayer>,
+  slotIndex:    number,
+  totalSlots:   number,
+  slotsPlayed:  Map<string, number>,
+  minSlots:     Map<string, number>,
+  protectedIds: string[] = [],
 ): string[] {
   if (posValid(lineup, byId)) return lineup
 
-  const needPerim = !hasPerimeter(lineup, byId)
-  const needInter = !hasInterior(lineup, byId)
-  const subs = eligible.filter(p => !lineup.includes(p.id) && (
-    (needPerim && isPerimeter(p)) || (needInter && isInterior(p))
-  ))
-  if (subs.length === 0) return lineup
+  const urg     = (id: string) => urgency(id, slotsPlayed, minSlots, slotIndex, totalSlots)
+  const protect = new Set(protectedIds)
+  let cur = [...lineup]
 
-  const removable = lineup.filter(id => {
-    const p = byId.get(id)
-    if (!p) return true
-    if (needPerim && isPerimeter(p)) return false
-    if (needInter && isInterior(p))  return false
-    return true
-  })
-  if (removable.length === 0) return lineup
+  for (let k = 0; k < PER_SLOT && !posValid(cur, byId); k++) {
+    const curSize = maxMatchingSize(cur, byId)
+    const bench   = eligible.filter(p => !cur.includes(p.id))
+    let best: { lineup: string[]; size: number; cost: number } | null = null
 
-  const urg = (id: string) => urgency(id, slotsPlayed, minSlots, slotIndex, totalSlots)
-  const toRemove = removable.sort((a, b) => urg(a) - urg(b))[0]
-  const toAdd    = subs.sort((a, b) => urg(b.id) - urg(a.id))[0]
-  return lineup.map(id => id === toRemove ? toAdd.id : id)
+    for (const onId of cur) {
+      if (protect.has(onId)) continue
+      for (const sub of bench) {
+        const cand = cur.map(id => id === onId ? sub.id : id)
+        const size = maxMatchingSize(cand, byId)
+        if (size <= curSize) continue           // must strictly improve coverage
+        const cost = urg(onId) - urg(sub.id)    // lower = less disruptive minute-wise
+        if (!best || size > best.size || (size === best.size && cost < best.cost)) {
+          best = { lineup: cand, size, cost }
+        }
+      }
+    }
+
+    if (!best) break
+    cur = best.lineup
+  }
+
+  return cur
 }
 
 // ── Repairs ───────────────────────────────────────────────────────────────────
@@ -1161,6 +1240,15 @@ export function solve(
 
   const assignments = bestAssignments!
   const allWarnings = [...baseWarnings, ...bestWarnings]
+
+  // Surface any slots that couldn't be filled so every player sits in one of their
+  // own positions (happens only when the available players lack position coverage).
+  const invalidPosSlots = assignments.filter(l => !posValid(l, byId)).length
+  if (invalidPosSlots > 0) {
+    allWarnings.push(
+      `${invalidPosSlots} minute-slot${invalidPosSlots > 1 ? 's' : ''} could not be arranged so every player is in one of their primary/secondary positions — there isn't enough position coverage among the available players (check the position editor).`,
+    )
+  }
 
   // ── Build output ───────────────────────────────────────────────────────────
 

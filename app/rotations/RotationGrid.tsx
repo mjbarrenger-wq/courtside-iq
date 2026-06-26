@@ -3,7 +3,8 @@
 // Dynamic: reads numPeriods, periodDuration, noSubFirst/LastMins from result.config
 
 import { useState } from 'react'
-import type { RotationPlayer, PlayerConstraint, OptimiserResult } from './types'
+import type { RotationPlayer, PlayerConstraint, OptimiserResult, Position } from './types'
+import { assignLineupPositions } from './optimiser'
 
 interface Props {
   result: OptimiserResult
@@ -48,6 +49,38 @@ function playerColor(players: RotationPlayer[], playerId: string): string {
 function playerName(players: RotationPlayer[], id: string): string {
   const p = players.find(p => p.id === id)
   return p ? `#${p.jersey} ${p.firstName}` : id
+}
+
+// Static primary-position label for a player (e.g. "PG/SF"), for the name columns.
+function primaryPosLabel(players: RotationPlayer[], id: string): string {
+  const p = players.find(p => p.id === id)
+  return p && p.primaryPositions.length > 0 ? p.primaryPositions.join('/') : ''
+}
+
+// True when the assigned position is one of the player's secondary (not primary)
+// positions — used to flag "playing out of their main spot" in the labels.
+function isSecondaryAssignment(players: RotationPlayer[], id: string, pos: Position | undefined): boolean {
+  if (!pos) return false
+  const p = players.find(p => p.id === id)
+  if (!p || p.primaryPositions.length === 0) return false
+  return !p.primaryPositions.includes(pos)
+}
+
+// Small position chip shown next to a player. Teal = primary spot, amber = secondary.
+function PosTag({ pos, secondary }: { pos: Position | undefined; secondary: boolean }) {
+  if (!pos) return null
+  return (
+    <span style={{
+      display: 'inline-block', minWidth: 22, textAlign: 'center',
+      fontSize: 9, fontWeight: 800, letterSpacing: '0.03em',
+      color: secondary ? '#92400e' : '#307b92',
+      background: secondary ? '#fef3c7' : '#e8f4f8',
+      border: `1px solid ${secondary ? '#f59e0b' : '#93c5d7'}`,
+      borderRadius: 3, padding: '0 4px', marginRight: 5,
+    }} title={secondary ? 'Secondary position' : 'Primary position'}>
+      {pos}
+    </span>
+  )
 }
 
 function slotOf(plan: OptimiserResult['plan'], q: number, w: number) {
@@ -272,8 +305,13 @@ function MinutesView({ result, players }: { result: OptimiserResult; players: Ro
 
         return (
           <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 10 }}>
-            <div style={{ width: 100, fontSize: 12, color: SEC, textAlign: 'right', flexShrink: 0 }}>
+            <div style={{ width: 110, fontSize: 12, color: SEC, textAlign: 'right', flexShrink: 0 }}>
               #{p.jersey} {p.firstName}
+              {primaryPosLabel(players, p.id) && (
+                <span style={{ fontSize: 9, color: MUTED, fontWeight: 600, marginLeft: 4 }}>
+                  {primaryPosLabel(players, p.id)}
+                </span>
+              )}
             </div>
             <div style={{ flex: 1, background: 'rgba(255,255,255,0.05)', borderRadius: 4, height: 28, overflow: 'hidden', border: `1px solid ${BORDER}` }}>
               <div style={{
@@ -311,6 +349,7 @@ function SubSheetView({ result, players }: { result: OptimiserResult; players: R
   const { plan, config } = result
   const { numPeriods, periodDuration, noSubFirstMins, noSubLastMins } = config
   const periods = Array.from({ length: numPeriods }, (_, i) => i + 1)
+  const byId = new Map(players.map(p => [p.id, p]))
 
   return (
     <div>
@@ -327,22 +366,34 @@ function SubSheetView({ result, players }: { result: OptimiserResult; players: R
               {periodLabel(numPeriods, period).toUpperCase()}
             </div>
 
-            {/* Starting lineup */}
-            <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 10, paddingBottom: 10, borderBottom: `1px solid ${BORDER}` }}>
-              <span style={{ fontSize: 11, fontWeight: 700, color: MUTED, width: 50, flexShrink: 0 }}>START</span>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-                {(pSlots[0]?.playerIds ?? []).map(id => (
-                  <span key={id} style={{
-                    background: playerColor(players, id) + '22',
-                    border: `1px solid ${playerColor(players, id)}44`,
-                    color: playerColor(players, id),
-                    borderRadius: 12, padding: '2px 8px', fontSize: 11, fontWeight: 600,
-                  }}>
-                    {playerName(players, id)}
-                  </span>
-                ))}
-              </div>
-            </div>
+            {/* Starting lineup — ordered by court position with each player's assigned spot */}
+            {(() => {
+              const startIds = pSlots[0]?.playerIds ?? []
+              const posMap   = assignLineupPositions(startIds, byId)
+              const order: Position[] = ['PG', 'SG', 'SF', 'PF', 'C']
+              const sorted = [...startIds].sort(
+                (a, b) => order.indexOf(posMap[a]) - order.indexOf(posMap[b]),
+              )
+              return (
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 10, paddingBottom: 10, borderBottom: `1px solid ${BORDER}` }}>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: MUTED, width: 50, flexShrink: 0 }}>START</span>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                    {sorted.map(id => (
+                      <span key={id} style={{
+                        display: 'inline-flex', alignItems: 'center',
+                        background: playerColor(players, id) + '22',
+                        border: `1px solid ${playerColor(players, id)}44`,
+                        color: playerColor(players, id),
+                        borderRadius: 12, padding: '2px 8px 2px 4px', fontSize: 11, fontWeight: 600,
+                      }}>
+                        <PosTag pos={posMap[id]} secondary={isSecondaryAssignment(players, id, posMap[id])} />
+                        {playerName(players, id)}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )
+            })()}
 
             {/* Sub events — only at windows where lineup actually changed AND not locked */}
             {pSlots.slice(1).map((slot, wi) => {
@@ -355,19 +406,21 @@ function SubSheetView({ result, players }: { result: OptimiserResult; players: R
 
               const locked    = isLockedWindow(slot.window, noSubFirstMins, noSubLastMins, periodDuration)
               const timeStamp = windowTimeLabel(slot.window, periodDuration)
+              const slotPos   = assignLineupPositions(slot.playerIds, byId)
 
               return (
                 <div key={slot.window} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, marginBottom: 8, paddingLeft: 4, opacity: locked ? 0.4 : 1 }}>
                   <span style={{ fontSize: 12, color: locked ? MUTED : AMBER, fontWeight: 700, width: 50, flexShrink: 0, fontVariantNumeric: 'tabular-nums' }}>
                     {timeStamp}
                   </span>
-                  <div style={{ fontSize: 12, color: SEC, lineHeight: 1.6 }}>
+                  <div style={{ fontSize: 12, color: SEC, lineHeight: 1.6, display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 2 }}>
                     {subIn.map((id, i) => (
-                      <span key={id}>
+                      <span key={id} style={{ display: 'inline-flex', alignItems: 'center' }}>
+                        <PosTag pos={slotPos[id]} secondary={isSecondaryAssignment(players, id, slotPos[id])} />
                         <span style={{ color: GREEN, fontWeight: 600 }}>{playerName(players, id)}</span>
-                        {' in for '}
+                        <span style={{ margin: '0 4px' }}>in for</span>
                         <span style={{ color: RED }}>{playerName(players, subOut[i] ?? subOut[0])}</span>
-                        {i < subIn.length - 1 ? ' · ' : ''}
+                        {i < subIn.length - 1 ? <span style={{ margin: '0 4px' }}>·</span> : null}
                       </span>
                     ))}
                   </div>
