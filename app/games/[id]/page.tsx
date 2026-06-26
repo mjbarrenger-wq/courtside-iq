@@ -1,7 +1,6 @@
-import { Suspense } from 'react'
 import { getSeasonAggregates } from '@/lib/getSeasonAggregates'
 import { computeDriverTree } from '@/lib/driverTree'
-import GameDebrief, { DebriefSkeleton } from './GameDebrief'
+import GameDebrief from './GameDebrief'
 
 export const dynamic = 'force-dynamic'
 
@@ -506,18 +505,8 @@ export default async function BoxScorePage({
           </div>
         )}
 
-        {/* ── AI Coaching Debrief (Suspense) ── */}
-        <Suspense fallback={<DebriefSkeleton />}>
-          <GameDebrief
-            opponentName={opponentName}
-            isWin={isWin}
-            teamScore={game.team_score}
-            oppScore={game.opponent_score}
-            gameDate={gameDate}
-            gameTree={gameTree}
-            seasonTree={seasonTree}
-          />
-        </Suspense>
+        {/* ── AI Coaching Debrief (DB-first, regenerate on demand) ── */}
+        <GameDebrief gameId={id} />
 
         {/* ── Box score ── */}
         <div style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: 14, overflow: 'hidden' }}>
