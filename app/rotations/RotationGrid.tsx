@@ -515,6 +515,11 @@ export default function RotationGrid({ result, players }: Props) {
                 <span style={{ fontSize: 12, color: '#c9a84c' }}>{v.msg}</span>
               </div>
             ))}
+            {result.constraintReport.some(r => !r.minStintMet) && (
+              <div style={{ marginTop: 10, paddingTop: 10, borderTop: `1px solid rgba(251,191,36,0.2)`, fontSize: 11, color: MUTED, lineHeight: 1.6 }}>
+                <strong style={{ color: AMBER }}>Lots of short stints?</strong> That happens when minutes are balanced tightly across a deep bench. For longer stints: turn off <strong>Balance across players</strong>, raise <strong>Min gap between subs</strong>, lower <strong>Min stint time</strong>, or mark players who aren&apos;t playing as <strong>Out</strong> so fewer players share more minutes.
+              </div>
+            )}
           </div>
         )
       })()}

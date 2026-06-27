@@ -632,7 +632,10 @@ function scoreAssignments(
   if (config.balanceMinutes && available.length > 0) {
     const target = (config.numPeriods * config.periodDuration * PER_SLOT) / available.length
     for (const p of available) {
-      score -= Math.abs((played.get(p.id) ?? 0) - target) * W.timeVariance
+      // Within 1 minute of target is "balanced enough" (≤2 min spread overall) — no
+      // penalty there, so the solver doesn't chop stints chasing exact-equal minutes.
+      const dev = Math.max(0, Math.abs((played.get(p.id) ?? 0) - target) - 1)
+      score -= dev * W.timeVariance
     }
   }
 
@@ -889,15 +892,18 @@ function solveOnce(
   const totalPlayerMins = numPeriods * periodDuration * PER_SLOT
   const targetMins      = totalPlayerMins / available.length
 
+  // Even-minutes band: target rounded to the nearest whole minute, with a ±1
+  // spread so balanced players land within 2 minutes of each other. Looser than an
+  // exact target — gives the solver room to keep stints whole instead of chopping them.
   const minSlots = new Map(available.map(p => {
     const c    = cMap.get(p.id)
-    const mins = config.balanceMinutes ? Math.floor(targetMins) : (c?.minMinutes ?? 10)
+    const mins = config.balanceMinutes ? Math.max(0, Math.round(targetMins) - 1) : (c?.minMinutes ?? 10)
     return [p.id, Math.ceil(mins)]
   }))
   const maxSlots = new Map(available.map(p => {
     const c    = cMap.get(p.id)
     const mins = config.balanceMinutes
-      ? Math.min(numPeriods * periodDuration, Math.ceil(targetMins) + 2)
+      ? Math.min(numPeriods * periodDuration, Math.round(targetMins) + 1)
       : (c?.maxMinutes ?? numPeriods * periodDuration)
     return [p.id, Math.min(TOTAL_SLOTS, Math.floor(mins))]
   }))
@@ -1108,15 +1114,18 @@ export function solve(
   const totalPlayerMins = numPeriods * periodDuration * PER_SLOT
   const targetMins      = totalPlayerMins / (available.length || 1)
 
+  // Even-minutes band: target rounded to the nearest whole minute, with a ±1
+  // spread so balanced players land within 2 minutes of each other. Looser than an
+  // exact target — gives the solver room to keep stints whole instead of chopping them.
   const minSlots = new Map(available.map(p => {
     const c    = cMap.get(p.id)
-    const mins = config.balanceMinutes ? Math.floor(targetMins) : (c?.minMinutes ?? 10)
+    const mins = config.balanceMinutes ? Math.max(0, Math.round(targetMins) - 1) : (c?.minMinutes ?? 10)
     return [p.id, Math.ceil(mins)]
   }))
   const maxSlots = new Map(available.map(p => {
     const c    = cMap.get(p.id)
     const mins = config.balanceMinutes
-      ? Math.min(numPeriods * periodDuration, Math.ceil(targetMins) + 2)
+      ? Math.min(numPeriods * periodDuration, Math.round(targetMins) + 1)
       : (c?.maxMinutes ?? numPeriods * periodDuration)
     return [p.id, Math.min(TOTAL_SLOTS, Math.floor(mins))]
   }))

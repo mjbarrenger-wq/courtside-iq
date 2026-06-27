@@ -347,8 +347,9 @@ export default function RotationPlanner({ players: initialPlayers, teamId, games
         ? { ...c }
         : {
             ...c,
-            minMinutes: Math.floor(perPlayer),
-            maxMinutes: Math.ceil(perPlayer) + 2,
+            // Whole-minute target with a ±1 (≤2 min) spread for the non-override sharers.
+            minMinutes: Math.max(0, Math.round(perPlayer) - 1),
+            maxMinutes: Math.round(perPlayer) + 1,
           })
       // Values pre-computed — pass balanceMinutes:false so solver doesn't overwrite them
       return solve(players, merged, { ...config, minStintMins, maxQtrImbalance, balanceMinutes: false })
@@ -608,10 +609,10 @@ export default function RotationPlanner({ players: initialPlayers, teamId, games
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 4 }}>
               <span style={{ fontSize: 11, color: MUTED }}>Default min minutes</span>
               <span style={{ fontSize: 16, fontWeight: 700, color: PRIMARY, fontVariantNumeric: 'tabular-nums' }}>
-                {config.balanceMinutes ? Math.floor(targetMins) : defaultMin} min
+                {config.balanceMinutes ? Math.max(0, Math.round(targetMins) - 1) : defaultMin} min
               </span>
             </div>
-            <Slider value={config.balanceMinutes ? Math.floor(targetMins) : defaultMin}
+            <Slider value={config.balanceMinutes ? Math.max(0, Math.round(targetMins) - 1) : defaultMin}
               min={0} max={totalGameMins} disabled={config.balanceMinutes}
               onChange={v => { setDefaultMin(v); if (v > defaultMax) setDefaultMax(v) }} />
           </div>
@@ -621,10 +622,10 @@ export default function RotationPlanner({ players: initialPlayers, teamId, games
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 4 }}>
               <span style={{ fontSize: 11, color: MUTED }}>Default max minutes</span>
               <span style={{ fontSize: 16, fontWeight: 700, color: PRIMARY, fontVariantNumeric: 'tabular-nums' }}>
-                {config.balanceMinutes ? Math.ceil(targetMins) + 2 : defaultMax} min
+                {config.balanceMinutes ? Math.round(targetMins) + 1 : defaultMax} min
               </span>
             </div>
-            <Slider value={config.balanceMinutes ? Math.ceil(targetMins) + 2 : defaultMax}
+            <Slider value={config.balanceMinutes ? Math.round(targetMins) + 1 : defaultMax}
               min={defaultMin} max={totalGameMins} disabled={config.balanceMinutes}
               onChange={v => setDefaultMax(v)} />
           </div>
@@ -643,7 +644,7 @@ export default function RotationPlanner({ players: initialPlayers, teamId, games
               </div>
               {config.balanceMinutes && balanceShareCount > 0 && (
                 <div style={{ fontSize: 10, color: MUTED, marginTop: 2 }}>
-                  Target: {targetMins.toFixed(1)} min ({balanceShareCount} player{balanceShareCount !== 1 ? 's' : ''} share the balance
+                  Target: ~{Math.round(targetMins)} min ({balanceShareCount} player{balanceShareCount !== 1 ? 's' : ''} share the balance
                   {overrideCommittedMins > 0 ? `, after ${overrideCommittedMins} min set by overrides` : ''})
                 </div>
               )}
@@ -798,7 +799,7 @@ export default function RotationPlanner({ players: initialPlayers, teamId, games
                           </div>
                         ) : (
                           <span style={{ fontSize: 10, color: MUTED, fontVariantNumeric: 'tabular-nums' }}>
-                            {config.balanceMinutes ? `~${Math.floor(targetMins)}` : defaultMin}–{config.balanceMinutes ? Math.ceil(targetMins) + 2 : defaultMax} min
+                            {config.balanceMinutes ? Math.max(0, Math.round(targetMins) - 1) : defaultMin}–{config.balanceMinutes ? Math.round(targetMins) + 1 : defaultMax} min
                           </span>
                         )}
                       </div>
