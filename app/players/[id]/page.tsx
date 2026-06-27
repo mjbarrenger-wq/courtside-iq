@@ -20,7 +20,7 @@ const PILLAR_TOOLTIPS: Record<string, string> = {
   'Shot Efficiency':     'Primary: TS% — True Shooting % accounts for 2-pointers, 3-pointers and free throws on equal footing. The most complete measure of scoring efficiency. Higher is better.',
   'Possession Control':  'Primary: TO% — Turnovers per estimated possession (TOs ÷ (FGA + 0.44×FTA + TOs)). Captures ball security relative to usage, not just raw count. Lower is better.',
   'Second Chances':      'Primary: OReb/G — Offensive rebounds per game. Each offensive board extends a possession and creates another scoring opportunity. Higher is better.',
-  'Rim Pressure':        'Primary: FTA/G × (0.5 + 0.5 × FT%) — Rewards getting to the line with a conversion modifier. Full credit for makes, half credit for misses. Higher is better.',
+  'Rim Pressure':        'Primary: FT Rate (FTA/FGA) — the recognized fourth factor, how often the player gets to the line per shot taken (pace-neutral). FT% is shown separately as a conversion diagnostic, not folded in. Higher is better.',
 }
 
 const DEF_STAT_TOOLTIPS: Record<string, string> = {
@@ -511,7 +511,7 @@ export default async function PlayerProfilePage({
     rankStat(p => { const fga = p.twopt_att + p.threept_att; const pts = 2*p.twopt_made + 3*p.threept_made + p.ft_made; const d = 2*(fga + 0.44*p.ft_att); return d > 0 ? pts/d : 0 }, true),   // Shot Efficiency (TS%)
     rankStat(p => { const poss = p.twopt_att + p.threept_att + 0.44*p.ft_att + p.turnovers; return poss > 0 ? p.turnovers/poss : 999 }, false),  // Possession Control (TO% lower better)
     rankStat(p => p.games > 0 ? p.oreb / p.games : 0, true),                                                                                      // Second Chances (OReb/G)
-    rankStat(p => p.games > 0 && p.ft_att > 0 ? (p.ft_att/p.games) * (0.5 + 0.5*(p.ft_made/p.ft_att)) : 0, true),                               // Rim Pressure
+    rankStat(p => { const fga = p.twopt_att + p.threept_att; return fga > 0 ? p.ft_att/fga : 0 }, true),                                          // Rim Pressure (FT Rate FTA/FGA)
     rankStat(p => p.games > 0 ? p.blk  / p.games : 0, true),                                                                                      // Shot Suppression (BLK/G)
     rankStat(p => p.games > 0 ? p.dreb / p.games : 0, true),                                                                                      // Possession Ending (DReb/G)
     rankStat(p => p.games > 0 ? p.stl  / p.games : 0, true),                                                                                      // Possession Creation (STL/G)
