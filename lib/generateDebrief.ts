@@ -9,7 +9,9 @@ import { supabase } from '@/lib/supabase'
 
 const TEAM_ID = 'b1000000-0000-0000-0000-000000000001'
 const MODEL = 'claude-sonnet-4-6'
-export const DEBRIEF_PROMPT_VERSION = 1
+// v2: optionally folds in play-by-play (quarter/half flow + lineup +/-) when a
+// game has lineup_stints imported. Games without play-by-play are unaffected.
+export const DEBRIEF_PROMPT_VERSION = 2
 const ENTITY_TYPE = 'game_debrief'
 const VIEW_KEY = 'default'
 
@@ -22,6 +24,60 @@ export interface StoredDebrief {
   generatedAt: string
 }
 
+// Builds the optional play-by-play section. Returns null when the game has no
+// imported lineup_stints, so the debrief falls back to box-score-only behaviour.
+async function buildPbpBlock(gameId: string): Promise<string | null> {
+  const { data: stints } = await supabase
+    .from('lineup_stints')
+    .select('period, seconds, player_ids, pf, pa, off_poss, def_poss')
+    .eq('game_id', gameId)
+  if (!stints || stints.length === 0) return null
+
+  const { data: players } = await supabase.from('players').select('id, first_name, jersey_number')
+  const info: Record<string, { first: string; jersey: number }> = {}
+  for (const p of players ?? []) info[p.id] = { first: p.first_name, jersey: p.jersey_number ?? 999 }
+
+  // Scoring by period (from per-stint points for/against)
+  const byQ: Record<number, { pf: number; pa: number }> = {}
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  for (const s of stints as any[]) { const q = s.period; (byQ[q] ||= { pf: 0, pa: 0 }); byQ[q].pf += s.pf || 0; byQ[q].pa += s.pa || 0 }
+  const periods = Object.keys(byQ).map(Number).sort((a, b) => a - b)
+  const qLines = periods.map(q => `Q${q} ${byQ[q].pf}-${byQ[q].pa}`).join(', ')
+  let halfLine = ''
+  if (periods.length === 4) {
+    const h1f = byQ[1].pf + byQ[2].pf, h1a = byQ[1].pa + byQ[2].pa
+    const h2f = byQ[3].pf + byQ[4].pf, h2a = byQ[3].pa + byQ[4].pa
+    halfLine = `First half ${h1f}-${h1a} (net ${h1f - h1a >= 0 ? '+' : ''}${h1f - h1a}), second half ${h2f}-${h2a} (net ${h2f - h2a >= 0 ? '+' : ''}${h2f - h2a})`
+  }
+
+  // Aggregate lineups within this game
+  const agg: Record<string, { ids: string[]; secs: number; pf: number; pa: number; op: number; dp: number }> = {}
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  for (const s of stints as any[]) {
+    const ids: string[] = Array.isArray(s.player_ids) ? s.player_ids : []
+    const key = [...ids].sort().join('|'); if (!key) continue
+    const a = (agg[key] ||= { ids, secs: 0, pf: 0, pa: 0, op: 0, dp: 0 })
+    a.secs += Number(s.seconds) || 0; a.pf += s.pf || 0; a.pa += s.pa || 0
+    a.op += Number(s.off_poss) || 0; a.dp += Number(s.def_poss) || 0
+  }
+  const rows = Object.values(agg).map(a => {
+    const off = a.op > 0 ? a.pf / a.op : 0, def = a.dp > 0 ? a.pa / a.dp : 0
+    const names = a.ids.map(id => info[id] ?? { first: '?', jersey: 999 }).sort((x, y) => x.jersey - y.jersey).map(p => p.first)
+    return { names, min: a.secs / 60, pm: a.pf - a.pa, net: +(off - def).toFixed(2) }
+  }).filter(r => r.min >= 1.5).sort((a, b) => b.net - a.net)
+  const fmt = (r: { names: string[]; min: number; pm: number; net: number }) =>
+    `${r.names.join('/')} (${r.min.toFixed(1)}m, +/- ${r.pm >= 0 ? '+' : ''}${r.pm}, net PPP ${r.net >= 0 ? '+' : ''}${r.net})`
+  const best = rows.slice(0, 2).map(fmt)
+  const worst = rows.length > 2 ? rows.slice(-1).map(fmt) : []
+
+  return `PLAY-BY-PLAY DETAIL (this game has lineup-level data — use it to explain HOW the game unfolded):
+- Scoring by quarter (us-them): ${qLines}
+${halfLine ? `- ${halfLine}` : ''}
+- Most productive lineups on court: ${best.join('; ') || 'n/a'}
+${worst.length ? `- Least productive lineup: ${worst.join('; ')}` : ''}
+RELIABILITY: lineup minutes are small in a single game, so per-lineup PPP is directional only. The trustworthy signals are the quarter/half scoring pattern and plus/minus — build the narrative on those, and mention specific lineups only as supporting colour, not as verdicts.`
+}
+
 function buildPrompt(args: {
   opponentName: string
   isWin: boolean
@@ -30,8 +86,9 @@ function buildPrompt(args: {
   gameDate: string
   gameTree: DriverTreeOutput
   seasonTree: DriverTreeOutput
+  pbpBlock: string | null
 }): string {
-  const { opponentName, isWin, teamScore, oppScore, gameDate, gameTree, seasonTree } = args
+  const { opponentName, isWin, teamScore, oppScore, gameDate, gameTree, seasonTree, pbpBlock } = args
 
   const allGamePillars = [...gameTree.pillars.offensive, ...gameTree.pillars.defensive]
   const allSeasonPillars = [...seasonTree.pillars.offensive, ...seasonTree.pillars.defensive]
@@ -68,13 +125,13 @@ ${weakPillars.length > 0 ? weakPillars.map(p => `- ${p.name}: ${p.gameDelta >= 0
 OFFENCE / DEFENCE SPLIT:
 - Off PPP this game: ${gameTree.off_ppp} (season: ${seasonTree.off_ppp})
 - Def PPP this game: ${gameTree.def_ppp} (season: ${seasonTree.def_ppp})
-
+${pbpBlock ? `\n${pbpBlock}\n` : ''}
 TASK: Write a coaching debrief in 2-3 short paragraphs (150-250 words total). Structure:
-1. The performance story — what drove the ${isWin ? 'win' : 'loss'} in performance terms (not the final score)
+1. The performance story — what drove the ${isWin ? 'win' : 'loss'} in performance terms (not the final score)${pbpBlock ? '; if play-by-play detail is provided, use the quarter/half pattern to explain how the game actually flowed — building or surrendering a lead, fading or finishing strong' : ''}
 2. What stood out vs their usual level — where did they over- or under-perform relative to the season?
 3. One specific coaching focus for the next training session based on this game
 
-Do not recap the score. Do not list every stat. Write like a basketball professional briefing a coaching peer. Be specific about the basketball behaviours behind the numbers.
+Do not recap the score. Do not list every stat. Write like a basketball professional briefing a coaching peer. Be specific about the basketball behaviours behind the numbers.${pbpBlock ? ' When you reference play-by-play, lean on the quarter/half flow and plus/minus; do not over-interpret small-sample per-lineup PPP.' : ''}
 
 ${COACHING_WRITING_STANDARDS}`
 }
@@ -111,10 +168,11 @@ export async function generateAndStoreDebrief(gameId: string): Promise<DebriefRe
     .single()
   if (gErr || !game) return { ok: false, error: 'Game not found.' }
 
-  // 2. Driver trees (this game vs season)
-  const [gameAggs, seasonAggs] = await Promise.all([
+  // 2. Driver trees (this game vs season) + optional play-by-play detail
+  const [gameAggs, seasonAggs, pbpBlock] = await Promise.all([
     getSeasonAggregates(TEAM_ID, [gameId]),
     getSeasonAggregates(TEAM_ID),
+    buildPbpBlock(gameId),
   ])
   const gameTree = computeDriverTree(gameAggs)
   const seasonTree = computeDriverTree(seasonAggs)
@@ -129,7 +187,7 @@ export async function generateAndStoreDebrief(gameId: string): Promise<DebriefRe
   const prompt = buildPrompt({
     opponentName, isWin,
     teamScore: game.team_score, oppScore: game.opponent_score,
-    gameDate, gameTree, seasonTree,
+    gameDate, gameTree, seasonTree, pbpBlock,
   })
 
   // 3. Call the AI
