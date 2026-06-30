@@ -1,5 +1,6 @@
 import { Suspense } from 'react'
 import { getSeasonAggregates } from '@/lib/getSeasonAggregates'
+import { getBenchmarks } from '@/lib/getBenchmarks'
 import { computeDriverTree, computePlayerDriverTree, PillarScore, MetricScore, DriverTreeOutput, PlayerStats } from '@/lib/driverTree'
 import { COACHING_WRITING_STANDARDS } from '@/lib/writingStandards'
 import { FilterBar } from './FilterBar'
@@ -65,7 +66,7 @@ const PILLAR_DELTA_UNIT: Record<string, string> = {
   'Shot Efficiency':       'eFG% pp',
   'Possession Control':    'TO% pp',
   'Second Chances':        'OReb% pp',
-  'Rim Pressure':     'FT% pp',
+  'Rim Pressure':     'FTA/FGA',
   'Shot Suppression':      'eFG% pp',
   'Possession Ending':     'DReb% pp',
   'Possession Creation':   'STL/G',
@@ -86,12 +87,12 @@ const PILLAR_KEY: Record<string, string> = {
 
 // Returns drills matched to the current view's weakest pillars
 function getRelevantDashboardDrills(
-  leakageAreas: { pillar: string; delta: number }[],
+  leakageAreas: { pillar: string; delta: number; pp100?: number | null }[],
   allDrills: DashboardDrill[],
   limit = 4,
 ): DashboardDrill[] {
   const weakPillars = leakageAreas
-    .sort((a, b) => a.delta - b.delta) // most negative first
+    .sort((a, b) => (a.pp100 ?? a.delta) - (b.pp100 ?? b.delta)) // most negative pts/100 first
     .map(d => PILLAR_KEY[d.pillar])
     .filter(Boolean)
 
@@ -278,7 +279,7 @@ const PILLAR_TOOLTIPS: Record<string, string> = {
   'Shot Efficiency':       'Primary: TS% — True Shooting % accounts for 2-pointers, 3-pointers and free throws on equal footing. The most complete measure of scoring efficiency. Higher is better.',
   'Possession Control':    'Primary: TO% — Turnovers per estimated possession (TOs ÷ (FGA + 0.44×FTA + TOs)). Captures ball security relative to usage, not just raw count. Lower is better.',
   'Second Chances':        'Primary: OReb/G — Offensive rebounds per game. Each offensive board extends a possession, giving the team another scoring opportunity. Higher is better.',
-  'Rim Pressure':     'Primary: FTA/G × (0.5 + 0.5 × FT%) — Rewards getting to the line with a conversion modifier. Full credit for makes, half credit for misses — drawing the foul still has value. Higher is better.',
+  'Rim Pressure':     'Primary: FT Rate (FTA/FGA) — the recognized fourth factor, measuring how often the team gets to the line per shot taken (pace-neutral). FT% is shown separately as a conversion diagnostic, not folded in. Pillar value is FT points per 100 possessions. Higher is better.',
   'Shot Suppression':      'Team: Opp eFG% — opponent shooting efficiency allowed. Player: BLK/G — best available proxy for shot contest activity. Note: individual shot suppression data (contested shots, opponent FG% when guarded) is not tracked in this dataset.',
   'Possession Ending':     'Primary: DReb/G — Defensive rebounds per game. Finishing defensive possessions denies second-chance points. Higher is better.',
   'Possession Creation':   'Primary: STL/G (player) / Def TO% (team) — Steals and forced turnovers that directly generate new possessions. Higher is better.',
@@ -334,8 +335,28 @@ function PillarCard({ pillar, side, sparkValues, vsLabel = 'Opp', estimated = fa
         )}
         <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 1 }}>vs {vsLabel}: {pillar.opp_score}</div>
         <div style={{ fontSize: 12, fontWeight: 700, color: pos ? '#059669' : '#dc2626', marginTop: 2 }}>
-          {pos ? '+' : ''}{pillar.delta}
+          {pos ? '+' : ''}{pillar.delta} <span style={{ fontWeight: 500, color: 'var(--text-muted)' }}>margin</span>
+          <InfoTip text={vsLabel === 'schedule' ? TIP.margin : TIP.teamAvg} />
         </div>
+        {pillar.level != null && pillar.baseline != null && pillar.metrics[0] && (
+          <div style={{ marginTop: 5, paddingTop: 5, borderTop: '1px dashed #e2e5eb' }}>
+            <div style={{ fontSize: 9, color: 'var(--text-muted)', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+              vs field{pillar.provisional ? ' *' : ''}<InfoTip text={TIP.field} />
+            </div>
+            <div style={{ fontSize: 11, fontWeight: 700, color: pillar.level >= 0 ? '#059669' : '#dc2626' }}>
+              <span style={{ fontWeight: 500, color: 'var(--text-muted)' }}>{pillar.metrics[0].value} vs {pillar.baseline} </span>
+              ({pillar.level >= 0 ? '+' : ''}{pillar.level})
+            </div>
+          </div>
+        )}
+        {pillar.pp100 != null && (
+          <div style={{ marginTop: 5, paddingTop: 5, borderTop: '1px solid #e2e5eb' }}>
+            <div style={{ fontSize: 9, color: 'var(--text-muted)', letterSpacing: '0.04em', textTransform: 'uppercase' }}>value<InfoTip text={TIP.value} /></div>
+            <div style={{ fontSize: 13, fontWeight: 800, color: pillar.pp100 >= 0 ? '#059669' : '#dc2626' }}>
+              {pillar.pp100 >= 0 ? '+' : ''}{pillar.pp100}<span style={{ fontSize: 9, fontWeight: 500, color: 'var(--text-muted)' }}> pts/100</span>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Metrics — flex:1 ensures equal height */}
@@ -362,13 +383,39 @@ function PillarCard({ pillar, side, sparkValues, vsLabel = 'Opp', estimated = fa
 }
 
 // ── KPI stat box ─────────────────────────────────────────────────────────────
-function KPIStat({ label, value, opp, sparkValues, color = '#fbbf24', prefix = '' }: {
-  label: string; value: string | number; opp?: string; sparkValues?: number[]; color?: string; prefix?: string
+// Reusable hover tooltip — reuses the .pillar-info CSS injected in the page <style>.
+function InfoTip({ text }: { text: string }) {
+  return (
+    <span className="pillar-info" style={{ marginLeft: 4, verticalAlign: 'middle' }}>
+      <span className="pillar-info-icon">i</span>
+      <span className="pillar-info-tooltip">{text}</span>
+    </span>
+  )
+}
+
+// Plain-language explanations for the data points coaches see. Written to the
+// coaching-translation principle: define the number, then say why it matters.
+const TIP = {
+  offPpp:       'Offensive points per possession — points we score ÷ our possessions (FGA + 0.44×FTA − OREB + TOV). Pace-neutral, so it compares fairly across fast and slow games.',
+  defPpp:       'Defensive points per possession — points the opponent scores per their possession. Lower is better.',
+  netPpp:       'Net rating per possession = Offensive PPP − Defensive PPP. The end KPI: how many more points per possession we score than we allow.',
+  pace:         'Possessions per game. Context only, not a target — efficiency (PPP) is judged independent of how fast you play.',
+  possessions:  'Total possessions in the selected games (FGA + 0.44×FTA − OREB + TOV). Free throws and offensive rebounds are handled so one trip down the floor counts once.',
+  margin:       'Margin vs schedule — our value minus the opponents we actually played. Shows who won the matchup, but a soft schedule inflates it.',
+  teamAvg:      'This player vs the team average across the selected games.',
+  field:        'Level vs field — our value against division reference values, independent of schedule. An asterisk means the baseline is a provisional estimate, editable in the benchmarks table.',
+  value:        'Points per 100 possessions this pillar is worth versus the field. Offensive pillars add points; defensive pillars prevent them. A common currency, so every pillar is directly comparable.',
+  pp100panel:   'Each factor’s margin (offence + defence) in points per 100 possessions. The four margins are exact and sum to the modelled Net rating; the residual is interaction the model does not split. The offence/defence split apportions each margin and rests on provisional baselines.',
+  driversRanked:'Ranked by points per 100 possessions versus the field — a common currency — not by raw stat gaps. That is why a small turnover-rate gap can outrank a large rebounding-percentage gap.',
+}
+
+function KPIStat({ label, value, opp, sparkValues, color = '#fbbf24', prefix = '', info }: {
+  label: string; value: string | number; opp?: string; sparkValues?: number[]; color?: string; prefix?: string; info?: string
 }) {
   return (
     <div style={{ textAlign: 'center', minWidth: 110 }}>
       <div style={{ fontSize: 11, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 3 }}>
-        {label}
+        {label}{info && <InfoTip text={info} />}
       </div>
       <div style={{ fontSize: 32, fontWeight: 800, color: 'var(--text-primary)', lineHeight: 1 }}>
         {prefix}{value}
@@ -509,8 +556,8 @@ export default async function DashboardPage({
     ? playersRaw.map((p: any) => ({ id: p.id, name: `${p.first_name} ${p.last_name}`, jersey: p.jersey_number }))
     : []
 
-  // Fetch aggregates + per-game data + drills in parallel
-  const [aggregates, perGameOpp, perGamePlayers, drillsRaw] = await Promise.all([
+  // Fetch aggregates + per-game data + drills + team bracket in parallel
+  const [aggregates, perGameOpp, perGamePlayers, drillsRaw, teamRows] = await Promise.all([
     getSeasonAggregates(TEAM_ID, filter === 'all' && !isCustom ? undefined : gameIds),
     fetchJson(
       `opponent_game_stats?select=game_id,opp_off_ppp,opp_def_ppp,opp_twopt_made,opp_twopt_att,opp_threept_made,opp_threept_att,opp_turnovers,opp_oreb,opp_dreb,opp_possessions&game_id=in.${idList}&order=game_id.asc`
@@ -519,7 +566,12 @@ export default async function DashboardPage({
       `player_game_stats?select=player_id,game_id,twopt_made,twopt_att,threept_made,threept_att,ft_made,ft_att,turnovers,ast,oreb,dreb,stl,blk,def_fouls,def_ppp,plus_minus&game_id=in.${idList}`
     ),
     fetchJson(`drills?select=*`),
+    fetchJson(`teams?id=eq.${TEAM_ID}&select=age_group,gender,division`),
   ])
+
+  // Field baselines for this team's bracket (Tier 1 — "level vs field" reading)
+  const bracket = Array.isArray(teamRows) ? teamRows[0] : undefined
+  const benchmarks = bracket ? await getBenchmarks(bracket) : {}
 
   // Does this team have real opponent data?
   const hasOppData = Array.isArray(perGameOpp) && perGameOpp.length > 0
@@ -666,8 +718,10 @@ export default async function DashboardPage({
           return poss > 0 ? p.turnovers / poss : 999
         }, false),
         pillarRank(playerId, p => p.games > 0 ? p.oreb / p.games : 0, true),           // Second Chances — OReb/G higher better
-        pillarRank(playerId, p => p.games > 0 && p.ft_att > 0                              // Rim Pressure — FTA/G × (0.5 + 0.5 × FT%) combined metric
-          ? (p.ft_att / p.games) * (0.5 + 0.5 * (p.ft_made / p.ft_att)) : 0, true),
+        pillarRank(playerId, p => {                                                        // Rim Pressure — FT Rate (FTA/FGA), matches pillar score
+          const fga = p.twopt_att + p.threept_att
+          return fga > 0 ? p.ft_att / fga : 0
+        }, true),
         // Defensive
         pillarRank(playerId, p => p.games > 0 ? p.blk / p.games : 0, true),            // Shot Suppression — BLK/G higher better (matches pillar score)
         pillarRank(playerId, p => p.games > 0 ? p.dreb / p.games : 0, true),           // Possession Ending — DReb/G higher better
@@ -716,7 +770,7 @@ export default async function DashboardPage({
     }
   }
 
-  const tree         = playerTree ?? computeDriverTree(aggregates)
+  const tree         = playerTree ?? computeDriverTree(aggregates, benchmarks)
   const isPlayerMode = !!playerTree
 
   // Build full pillar list for insight selection (all 8, sorted by |delta|)
@@ -847,13 +901,13 @@ export default async function DashboardPage({
             label={isPlayerMode ? 'Off PPP (On-Court)' : 'Offensive PPP'}
             value={tree.off_ppp}
             opp={isPlayerMode ? undefined : String(tree.opp_off_ppp)}
-            sparkValues={offTrend} color="#97cfdc"
+            sparkValues={offTrend} color="#97cfdc" info={TIP.offPpp}
           />
           <KPIStat
             label={isPlayerMode ? 'Def PPP (On-Court)' : 'Defensive PPP'}
             value={tree.def_ppp}
             opp={isPlayerMode ? undefined : String(tree.opp_def_ppp)}
-            sparkValues={defTrend} color="#7a9eb5"
+            sparkValues={defTrend} color="#7a9eb5" info={TIP.defPpp}
           />
 
           {/* Net PPP / Player Net hero */}
@@ -864,6 +918,7 @@ export default async function DashboardPage({
           }}>
             <div style={{ fontSize: 11, color: '#374151', textTransform: 'uppercase', letterSpacing: '0.12em', marginBottom: 4 }}>
               {isPlayerMode ? `#${selectedPlayer?.jersey} ${selectedPlayer?.name}` : 'NET PPP'}
+              {!isPlayerMode && <InfoTip text={TIP.netPpp} />}
             </div>
             <div style={{ fontSize: 46, fontWeight: 900, color: netPos ? '#059669' : '#dc2626', lineHeight: 1 }}>
               {netPos ? '+' : ''}{tree.net_ppp}
@@ -890,13 +945,13 @@ export default async function DashboardPage({
             label={isPlayerMode ? 'Games Played' : 'Pace (Poss/G)'}
             value={isPlayerMode ? tree.pace : pace.toFixed(1)}
             opp={isPlayerMode ? undefined : (aggregates.opp_possessions / aggregates.games).toFixed(1)}
-            color="#fbbf24"
+            color="#fbbf24" info={isPlayerMode ? undefined : TIP.pace}
           />
           <KPIStat
             label={isPlayerMode ? 'vs Team Avg' : 'Possessions'}
             value={isPlayerMode ? `${aggregates.games} gms` : Math.round(aggregates.possessions).toLocaleString()}
             opp={isPlayerMode ? undefined : Math.round(aggregates.opp_possessions).toLocaleString()}
-            color="#fbbf24"
+            color="#fbbf24" info={isPlayerMode ? undefined : TIP.possessions}
           />
         </div>
 
@@ -954,19 +1009,85 @@ export default async function DashboardPage({
           <div className="grid grid-cols-2 md:grid-cols-8 gap-2 items-stretch">
             {tree.pillars.offensive.map((p, i) => (
               <PillarCard key={`off-${i}`} pillar={p} side="off"
-                vsLabel={isPlayerMode ? 'Team Avg' : 'Opp'}
+                vsLabel={isPlayerMode ? 'Team Avg' : 'schedule'}
                 sparkValues={[pillarSparks.shotEfficiency, pillarSparks.possessionControl, pillarSparks.extraPossessions, pillarSparks.pressureCreation][i]}
                 rank={pillarRanks?.[i]?.rank} totalRanked={pillarRanks?.[i]?.total} tie={pillarRanks?.[i]?.tie} />
             ))}
             {tree.pillars.defensive.map((p, i) => (
               <PillarCard key={`def-${i}`} pillar={p} side="def"
-                vsLabel={isPlayerMode ? 'Team Avg' : 'Opp'}
+                vsLabel={isPlayerMode ? 'Team Avg' : 'schedule'}
                 estimated={!isPlayerMode && !hasOppData}
                 sparkValues={[pillarSparks.shotSuppression, pillarSparks.possessionEnding, pillarSparks.pressureDisruption, pillarSparks.discipline][i]}
                 rank={pillarRanks?.[4 + i]?.rank} totalRanked={pillarRanks?.[4 + i]?.total} tie={pillarRanks?.[4 + i]?.tie} />
             ))}
           </div>
+
+          {/* Reading guide — distinguishes schedule margin from field level (Tier 1) */}
+          {!isPlayerMode && (
+            <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 8, lineHeight: 1.5 }}>
+              <strong>margin</strong> = how you fared against the opponents you actually played (your schedule).{' '}
+              <strong>vs field</strong> = where you sit against division reference values.{' '}
+              <strong>value</strong> = points per 100 possessions the pillar is worth vs the field — the common currency used to rank drivers.{' '}
+              <span style={{ whiteSpace: 'nowrap' }}>* provisional</span> — reference estimate, not measured league data; editable in the benchmarks table.
+            </div>
+          )}
+
+          {/* Possession reconciliation warning (Tier 0 data-quality check) */}
+          {!isPlayerMode && tree.possession_check?.flagged && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#fef3c7', border: '1px solid #f59e0b', borderRadius: 6, padding: '7px 14px', marginTop: 8, fontSize: 11, color: '#92400e' }}>
+              <span style={{ fontSize: 14 }}>⚠️</span>
+              <span><strong>Possession counts don&apos;t reconcile.</strong> Your possessions ({tree.possession_check.our_per_game}/g) and opponent possessions ({tree.possession_check.opp_per_game}/g) differ by {tree.possession_check.divergence_per_game}/g. A gap this large usually means a box-score entry error — check the game logs.</span>
+            </div>
+          )}
         </div>
+
+        {/* ── Points-per-100 decomposition (Tier 2) ── */}
+        {!isPlayerMode && tree.pp100 && (() => {
+          const pp = tree.pp100!
+          const maxAbs = Math.max(0.1, ...pp.factors.map(f => Math.abs(f.margin_pp100)))
+          return (
+            <div style={{ background: '#ffffff', border: '1px solid #e2e5eb', borderRadius: 12, padding: '18px 20px', marginTop: 28 }}>
+              <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, marginBottom: 4 }}>
+                <span style={{ fontSize: 13, fontWeight: 700, color: '#1a1f2e' }}>WHAT DRIVES THE NET RATING — POINTS PER 100 POSSESSIONS<InfoTip text={TIP.pp100panel} /></span>
+                <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                  Net <strong style={{ color: pp.net_pp100_actual >= 0 ? '#059669' : '#dc2626' }}>{pp.net_pp100_actual >= 0 ? '+' : ''}{pp.net_pp100_actual}</strong> /100
+                </span>
+              </div>
+              <div style={{ fontSize: 10, color: 'var(--text-muted)', marginBottom: 14 }}>
+                Each factor&apos;s margin (offence + defence) in points per 100 possessions. The four sum to the modelled Net rating; the rest is interaction.
+              </div>
+
+              {pp.factors.map((f, i) => {
+                const good = f.margin_pp100 >= 0
+                const wPct = (Math.abs(f.margin_pp100) / maxAbs) * 50  // half-width = diverging from centre
+                return (
+                  <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '5px 0' }}>
+                    <span style={{ flex: '0 0 110px', fontSize: 12, color: '#374151' }}>{f.factor}</span>
+                    <div style={{ flex: 1, position: 'relative', height: 18, background: '#f3f4f6', borderRadius: 4 }}>
+                      <div style={{ position: 'absolute', left: '50%', top: 0, bottom: 0, width: 1, background: '#cbd5e1' }} />
+                      <div style={{
+                        position: 'absolute', top: 2, bottom: 2,
+                        left: good ? '50%' : `${50 - wPct}%`, width: `${wPct}%`,
+                        background: good ? '#059669' : '#dc2626', borderRadius: 3,
+                      }} />
+                    </div>
+                    <span style={{ flex: '0 0 56px', textAlign: 'right', fontSize: 12, fontWeight: 700, color: good ? '#059669' : '#dc2626' }}>
+                      {good ? '+' : ''}{f.margin_pp100}
+                    </span>
+                    <span style={{ flex: '0 0 96px', textAlign: 'right', fontSize: 10, color: 'var(--text-muted)' }}>
+                      off {f.offensive_pp100 >= 0 ? '+' : ''}{f.offensive_pp100} · def {f.defensive_pp100 >= 0 ? '+' : ''}{f.defensive_pp100}
+                    </span>
+                  </div>
+                )
+              })}
+
+              <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 12, lineHeight: 1.5, borderTop: '1px solid #e2e5eb', paddingTop: 10 }}>
+                Modelled Net {pp.net_pp100_modeled >= 0 ? '+' : ''}{pp.net_pp100_modeled} vs actual {pp.net_pp100_actual >= 0 ? '+' : ''}{pp.net_pp100_actual} (residual {pp.residual_pp100 >= 0 ? '+' : ''}{pp.residual_pp100}).{' '}
+                Factor margins are exact; the {' '}<strong>off / def split</strong>{pp.provisional_split ? ' rests on provisional baselines' : ''} only apportions each margin between attack and defence.
+              </div>
+            </div>
+          )
+        })()}
 
         {/* ── Bottom Summary ── */}
         <div className="grid grid-cols-1 md:grid-cols-[1fr_1fr_1fr_1.3fr] gap-4 mt-7">
@@ -976,16 +1097,16 @@ export default async function DashboardPage({
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
               <div style={{ width: 28, height: 28, background: '#059669', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14 }}>📈</div>
               <span style={{ fontSize: 13, fontWeight: 700, color: '#059669' }}>{isPlayerMode ? 'TOP CONTRIBUTIONS' : 'TOP POSITIVE DRIVERS'}</span>
+              {!isPlayerMode && <InfoTip text={TIP.driversRanked} />}
             </div>
             {tree.top_drivers.map((d, i) => (
               <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '7px 0', borderBottom: i < tree.top_drivers.length - 1 ? `1px solid #a7f3d0` : 'none' }}>
                 <span style={{ fontSize: 12, color: '#374151' }}>• {d.pillar}</span>
                 <span style={{ fontSize: 12, fontWeight: 700, color: '#059669' }}>
-                  +{d.delta}
-                  {!isPlayerMode && PILLAR_DELTA_UNIT[d.pillar] && (
-                    <span style={{ fontSize: 10, fontWeight: 400, color: '#6b7280', marginLeft: 3 }}>
-                      {PILLAR_DELTA_UNIT[d.pillar]}
-                    </span>
+                  {!isPlayerMode && d.pp100 != null ? (
+                    <>+{d.pp100}<span style={{ fontSize: 10, fontWeight: 400, color: '#6b7280', marginLeft: 3 }}>pts/100</span></>
+                  ) : (
+                    <>+{d.delta}{PILLAR_DELTA_UNIT[d.pillar] && <span style={{ fontSize: 10, fontWeight: 400, color: '#6b7280', marginLeft: 3 }}>{PILLAR_DELTA_UNIT[d.pillar]}</span>}</>
                   )}
                 </span>
               </div>
@@ -997,16 +1118,16 @@ export default async function DashboardPage({
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
               <div style={{ width: 28, height: 28, background: '#dc2626', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14 }}>📉</div>
               <span style={{ fontSize: 13, fontWeight: 700, color: '#dc2626' }}>{isPlayerMode ? 'DEVELOPMENT AREAS' : 'BIGGEST LEAKAGE AREAS'}</span>
+              {!isPlayerMode && <InfoTip text={TIP.driversRanked} />}
             </div>
             {tree.leakage_areas.map((d, i) => (
               <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '7px 0', borderBottom: i < tree.leakage_areas.length - 1 ? `1px solid #fca5a5` : 'none' }}>
                 <span style={{ fontSize: 12, color: '#374151' }}>• {d.pillar}</span>
                 <span style={{ fontSize: 12, fontWeight: 700, color: '#dc2626' }}>
-                  {d.delta}
-                  {!isPlayerMode && PILLAR_DELTA_UNIT[d.pillar] && (
-                    <span style={{ fontSize: 10, fontWeight: 400, color: '#6b7280', marginLeft: 3 }}>
-                      {PILLAR_DELTA_UNIT[d.pillar]}
-                    </span>
+                  {!isPlayerMode && d.pp100 != null ? (
+                    <>{d.pp100}<span style={{ fontSize: 10, fontWeight: 400, color: '#6b7280', marginLeft: 3 }}>pts/100</span></>
+                  ) : (
+                    <>{d.delta}{PILLAR_DELTA_UNIT[d.pillar] && <span style={{ fontSize: 10, fontWeight: 400, color: '#6b7280', marginLeft: 3 }}>{PILLAR_DELTA_UNIT[d.pillar]}</span>}</>
                   )}
                 </span>
               </div>

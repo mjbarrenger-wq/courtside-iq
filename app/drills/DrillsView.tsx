@@ -23,10 +23,11 @@ const DIFFICULTY_CONFIG = {
   competitive: { label: 'Competitive',color: '#dc2626', order: 3 },
 }
 
-// Priority tier based on delta
-function getPriority(delta: number): 'high' | 'medium' | 'low' {
-  if (delta < -3) return 'high'
-  if (delta < 2)  return 'medium'
+// Priority tier based on the pillar's value in points per 100 possessions (Tier 2).
+// A common-currency scale, so the same threshold means the same thing for every pillar.
+function getPriority(pp100: number): 'high' | 'medium' | 'low' {
+  if (pp100 < -2) return 'high'
+  if (pp100 < 2)  return 'medium'
   return 'low'
 }
 

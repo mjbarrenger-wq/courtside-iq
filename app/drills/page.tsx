@@ -1,10 +1,20 @@
 import { getSeasonAggregates } from '@/lib/getSeasonAggregates'
+import { getBenchmarks } from '@/lib/getBenchmarks'
 import { computeDriverTree } from '@/lib/driverTree'
 import DrillsView from './DrillsView'
 
 const TEAM_ID = 'b1000000-0000-0000-0000-000000000001'
 const SUPABASE_URL  = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const SUPABASE_KEY  = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+
+async function fetchTeamBracket() {
+  const res = await fetch(
+    `${SUPABASE_URL}/rest/v1/teams?id=eq.${TEAM_ID}&select=age_group,gender,division`,
+    { headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` }, cache: 'no-store' }
+  )
+  const rows = await res.json()
+  return Array.isArray(rows) ? rows[0] : undefined
+}
 
 export interface Drill {
   id: string
@@ -44,24 +54,29 @@ async function fetchDrills(): Promise<Drill[]> {
 }
 
 export default async function DrillsPage() {
-  const [agg, drills] = await Promise.all([
+  const [agg, drills, bracket] = await Promise.all([
     getSeasonAggregates(TEAM_ID),
     fetchDrills(),
+    fetchTeamBracket(),
   ])
 
-  const tree = computeDriverTree(agg)
+  const benchmarks = bracket ? await getBenchmarks(bracket) : {}
+  const tree = computeDriverTree(agg, benchmarks)
 
-  // Map each db pillar key → delta score from the driver tree
-  const pillarDeltaMap: Record<string, number> = {
-    shot_efficiency:   tree.pillars.offensive[0].delta,
-    possession_control: tree.pillars.offensive[1].delta,
-    extra_possessions: tree.pillars.offensive[2].delta,
-    pressure_creation: tree.pillars.offensive[3].delta,
-    shot_suppression:  tree.pillars.defensive[0].delta,
-    possession_ending: tree.pillars.defensive[1].delta,
-    pressure_disruption: tree.pillars.defensive[2].delta,
-    discipline:        tree.pillars.defensive[3].delta,
+  // Map each db pillar key → its PP100 value (points per 100 possessions, Tier 2).
+  // Priority is keyed off points, a common currency, not raw mixed-unit deltas.
+  const off = tree.pillars.offensive
+  const def = tree.pillars.defensive
+  const pillarValueMap: Record<string, number> = {
+    shot_efficiency:     off[0].pp100 ?? off[0].delta,
+    possession_control:  off[1].pp100 ?? off[1].delta,
+    extra_possessions:   off[2].pp100 ?? off[2].delta,
+    pressure_creation:   off[3].pp100 ?? off[3].delta,
+    shot_suppression:    def[0].pp100 ?? def[0].delta,
+    possession_ending:   def[1].pp100 ?? def[1].delta,
+    pressure_disruption: def[2].pp100 ?? def[2].delta,
+    discipline:          def[3].pp100 ?? def[3].delta,
   }
 
-  return <DrillsView drills={drills} pillarDeltaMap={pillarDeltaMap} />
+  return <DrillsView drills={drills} pillarDeltaMap={pillarValueMap} />
 }

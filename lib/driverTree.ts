@@ -44,22 +44,66 @@ export interface MetricScore {
   name: string
   value: number
   opp_value: number
-  delta: number
+  delta: number            // margin vs opponents/team (sign-corrected: + = good)
   format: 'pct' | 'num'
+  // Tier 1 — level vs field baseline. Null when no benchmark row exists.
+  baseline?: number | null // field reference mean for this metric
+  level?: number | null    // value vs baseline, sign-corrected (+ = above field average)
+  provisional?: boolean     // true when the baseline is a reference estimate, not measured
 }
 
 export interface PillarScore {
   name: string
   score: number
   opp_score: number
-  delta: number
+  delta: number             // margin vs opponents (sign-corrected: + = good)
   metrics: MetricScore[]
+  // Tier 1 — mirrors the headline metric (metrics[0]) for convenient card display.
+  baseline?: number | null
+  level?: number | null
+  provisional?: boolean
+  // Tier 2 — this pillar's value in points per 100 possessions vs the field baseline
+  // (offensive pillars = points added; defensive pillars = points prevented).
+  pp100?: number | null
+}
+
+// Field reference values, keyed by metric name (must match MetricScore.name).
+export type BenchmarkMap = Record<string, { mean: number; stdev?: number | null; provisional?: boolean }>
+
+// Possession reconciliation — our and opponent possession counts should be within
+// ~1–2 per game in a clean game. A large divergence flags a data-entry error.
+export interface PossessionCheck {
+  our_per_game: number
+  opp_per_game: number
+  divergence_per_game: number
+  flagged: boolean
 }
 
 export interface Driver {
   pillar: string
   description: string
   delta: number
+  pp100?: number | null   // Tier 2 — points per 100 possessions (common-currency value)
+}
+
+// Tier 2 — a Four-Factor pairing expressed in points per 100 possessions.
+// margin_pp100 (our side − opp side) is exact and baseline-free; the offensive/
+// defensive split uses provisional field baselines, so it only apportions the margin.
+export interface FactorPP100 {
+  factor: string
+  offensive_pillar: string
+  defensive_pillar: string
+  offensive_pp100: number
+  defensive_pp100: number
+  margin_pp100: number
+}
+
+export interface PP100Decomposition {
+  factors: FactorPP100[]
+  net_pp100_modeled: number   // sum of factor margins (the modelled Net rating edge)
+  net_pp100_actual: number    // (off_ppp − def_ppp) × 100, the figure actually posted
+  residual_pp100: number      // actual − modelled (interaction / approximation error)
+  provisional_split: boolean  // off/def attribution rests on provisional baselines
 }
 
 export interface DriverTreeOutput {
@@ -75,6 +119,8 @@ export interface DriverTreeOutput {
   }
   top_drivers: Driver[]
   leakage_areas: Driver[]
+  possession_check?: PossessionCheck
+  pp100?: PP100Decomposition
 }
 
 function r(n: number, d = 2) {
@@ -89,16 +135,68 @@ function per_game(total: number, games: number) {
   return r(total / games, 1)
 }
 
-export function computeDriverTree(a: SeasonAggregates): DriverTreeOutput {
+// Canonical possession estimate — the single definition used everywhere downstream.
+// Poss = FGA + 0.44·FTA − OREB + TOV. Offensive rebounds are subtracted because they
+// extend the same possession rather than starting a new one.
+function possessions(fga: number, fta: number, oreb: number, tov: number) {
+  return fga + 0.44 * fta - oreb + tov
+}
+
+// Metrics where a lower value is better — used to sign the level-vs-baseline reading.
+const LOWER_BETTER = new Set([
+  'TO%', 'TO/G', 'Opp eFG%', 'Opp 2Pt%', 'Opp 3Pt%', 'Opp OReb/G',
+  'Def Fouls/G', 'Fouls/G', 'Off Fouls/G', 'Opp FTA/G', 'Opp FT%',
+])
+
+// Attaches a field-baseline reading to a metric. Level is sign-corrected so that a
+// positive number always means "better than the field", regardless of metric direction.
+function withBaseline(m: MetricScore, benchmarks?: BenchmarkMap): MetricScore {
+  const b = benchmarks?.[m.name]
+  if (!b) return { ...m, baseline: null, level: null, provisional: true }
+  const level = (LOWER_BETTER.has(m.name) ? r(b.mean - m.value, 1) : r(m.value - b.mean, 1)) || 0  // || 0 normalises -0
+  return { ...m, baseline: b.mean, level, provisional: b.provisional ?? true }
+}
+
+// Applies baselines to every metric in a pillar and lifts the headline metric's
+// reading (metrics[0]) onto the pillar for card display.
+function applyBaselines(p: PillarScore, benchmarks?: BenchmarkMap): PillarScore {
+  const metrics = p.metrics.map(m => withBaseline(m, benchmarks))
+  const head = metrics[0]
+  return {
+    ...p,
+    metrics,
+    baseline: head?.baseline ?? null,
+    level: head?.level ?? null,
+    provisional: head?.provisional ?? true,
+  }
+}
+
+export function computeDriverTree(a: SeasonAggregates, benchmarks?: BenchmarkMap): DriverTreeOutput {
   const g = a.games
 
-  // --- Core PPP ---
-  const off_ppp = r(a.pts / a.possessions, 3)
-  const def_ppp = r(a.opp_pts / a.opp_possessions, 3)
+  // --- Canonical possessions (Tier 0: one definition, computed here from raw counts) ---
+  const our_fga = a.twopt_att + a.threept_att
+  const opp_fga_total = a.opp_twopt_att + a.opp_threept_att
+  const our_poss = possessions(our_fga, a.ft_att, a.oreb, a.turnovers)
+  const opp_poss = possessions(opp_fga_total, a.opp_ft_att, a.opp_oreb, a.opp_turnovers)
+
+  // Reconciliation — both teams should have near-equal possessions in a clean game.
+  const our_poss_pg = per_game(our_poss, g)
+  const opp_poss_pg = per_game(opp_poss, g)
+  const possession_check: PossessionCheck = {
+    our_per_game: our_poss_pg,
+    opp_per_game: opp_poss_pg,
+    divergence_per_game: r(Math.abs(our_poss_pg - opp_poss_pg), 1),
+    flagged: Math.abs(our_poss_pg - opp_poss_pg) > 3,
+  }
+
+  // --- Core PPP (uses the canonical counts) ---
+  const off_ppp = r(a.pts / our_poss, 3)
+  const def_ppp = r(a.opp_pts / opp_poss, 3)
   const opp_off_ppp = def_ppp
   const opp_def_ppp = off_ppp
   const net_ppp = r(off_ppp - def_ppp, 3)
-  const pace = r(a.possessions / g, 1)
+  const pace = r(our_poss / g, 1)
 
   // --- Offensive Pillar 1: Shot Efficiency ---
   const efg = pct(a.twopt_made + 1.5 * a.threept_made, a.twopt_att + a.threept_att)
@@ -122,11 +220,16 @@ export function computeDriverTree(a: SeasonAggregates): DriverTreeOutput {
   }
 
   // --- Offensive Pillar 2: Possession Control ---
-  const fga = a.twopt_att + a.threept_att
+  // TO% uses the canonical Basketball-Reference / Oliver turnover-rate denominator
+  // (FGA + 0.44·FTA + TOV) — the recognized "turnover rate". Note this intentionally
+  // does NOT subtract offensive rebounds, unlike the PPP possession count above:
+  // both follow Oliver's reference definitions, which differ by design. Benchmarks
+  // are seeded on this same scale.
+  const fga = our_fga
   const to_pct = pct(a.turnovers, fga + 0.44 * a.ft_att + a.turnovers)
   const ato = r(a.ast / a.turnovers, 2)
 
-  const opp_fga = a.opp_twopt_att + a.opp_threept_att
+  const opp_fga = opp_fga_total
   const opp_to_pct = pct(a.opp_turnovers, opp_fga + 0.44 * a.opp_ft_att + a.opp_turnovers)
   const opp_ato = a.opp_turnovers > 0 ? r(a.opp_ast / a.opp_turnovers, 2) : 0
 
@@ -165,24 +268,27 @@ export function computeDriverTree(a: SeasonAggregates): DriverTreeOutput {
     ]
   }
 
-  // --- Offensive Pillar 4: Pressure Creation (FTs) ---
+  // --- Offensive Pillar 4: Free Throws (FTs) ---
+  // Tier 2: the arbitrary FTA/G × (0.5 + 0.5·FT%) composite is retired. The headline
+  // is now FT Rate (FTA/FGA) — the recognized fourth factor, pace-neutral — with FT%
+  // kept as a separate conversion diagnostic. The pillar's point value lives in the
+  // PP100 decomposition below (FT points per 100), not in an invented weighting.
   const ft_pct = pct(a.ft_made, a.ft_att)
   const ftf_pg = per_game(a.ft_att, g)
   const ft_made_pg = per_game(a.ft_made, g)
+  const ft_rate = fga > 0 ? r(a.ft_att / fga, 3) : 0
 
   const opp_ft_pct = pct(a.opp_ft_made, a.opp_ft_att)
   const opp_ftf_pg = per_game(a.opp_ft_att, g)
-
-  // Combined pressure score: FTA/G × (0.5 + 0.5 × FT%) — mirrors player view formula
-  const pressure_score     = r(ftf_pg     * (0.5 + 0.5 * (ft_pct     / 100)), 2)
-  const opp_pressure_score = r(opp_ftf_pg * (0.5 + 0.5 * (opp_ft_pct / 100)), 2)
+  const opp_ft_rate = opp_fga > 0 ? r(a.opp_ft_att / opp_fga, 3) : 0
 
   const pressureCreation: PillarScore = {
     name: 'Rim Pressure',
-    score: pressure_score,
-    opp_score: opp_pressure_score,
-    delta: r(pressure_score - opp_pressure_score, 2),
+    score: ft_rate,
+    opp_score: opp_ft_rate,
+    delta: r(ft_rate - opp_ft_rate, 3),
     metrics: [
+      { name: 'FT Rate',   value: ft_rate,    opp_value: opp_ft_rate,                 delta: r(ft_rate - opp_ft_rate, 3),       format: 'num' },
       { name: 'FTA/G',     value: ftf_pg,     opp_value: opp_ftf_pg,                  delta: r(ftf_pg - opp_ftf_pg, 1),         format: 'num' },
       { name: 'FT%',       value: ft_pct,     opp_value: opp_ft_pct,                  delta: r(ft_pct - opp_ft_pct, 1),         format: 'pct' },
       { name: 'FT Made/G', value: ft_made_pg, opp_value: per_game(a.opp_ft_made, g),  delta: r(ft_made_pg - per_game(a.opp_ft_made, g), 1), format: 'num' },
@@ -238,8 +344,10 @@ export function computeDriverTree(a: SeasonAggregates): DriverTreeOutput {
   // --- Defensive Pillar 3: Pressure & Disruption ---
   // Def TO% = opp turnovers / opp possessions (higher = better for us)
   // Compared to opp forcing TOs against us (our TO% from possessions perspective)
-  const def_to_pct = pct(a.opp_turnovers, a.opp_possessions)
-  const us_to_pct  = pct(a.turnovers, a.possessions)
+  // Forced-turnover rate, on the same canonical TOV% denominator as the offensive
+  // pillar so the two readings are directly comparable and benchmark-aligned.
+  const def_to_pct = opp_to_pct
+  const us_to_pct  = to_pct
   const stl_pg     = per_game(a.stl, g)
   const opp_stl_pg = per_game(a.opp_stl ?? 0, g)
 
@@ -274,19 +382,84 @@ export function computeDriverTree(a: SeasonAggregates): DriverTreeOutput {
     ]
   }
 
+  // --- Tier 2: points-per-100-possessions decomposition ---
+  // Each pillar's value is expressed in points per 100 possessions vs the field
+  // baseline. Offensive pillars = points our offence adds; defensive pillars = points
+  // our defence prevents. Each offensive+defensive pair nets to a baseline-free margin
+  // (the baseline cancels), and the eight sum (+ residual) to actual Net rating. Shooting
+  // and free-throw values are direct points; turnover/rebound values price each possession
+  // at its average worth. These are attribution estimates — the residual carries the
+  // interaction term. The off/def split rests on provisional baselines; the margins do not.
+  const per100 = (x: number, poss: number) => poss > 0 ? (x / poss) * 100 : 0
+  const ppp_val = (off_ppp + def_ppp) / 2
+
+  const b_efg     = (benchmarks?.['eFG%']?.mean ?? benchmarks?.['Opp eFG%']?.mean ?? 42) / 100
+  const b_to100   = benchmarks?.['TO%']?.mean ?? 22        // turnovers per 100
+  const b_oreb100 = benchmarks?.['OReb/100']?.mean ?? 11   // offensive rebounds per 100
+  const b_ftm100  = benchmarks?.['FTM/100']?.mean ?? 13    // FT points per 100
+  const splitProvisional =
+    (benchmarks?.['eFG%']?.provisional ?? benchmarks?.['Opp eFG%']?.provisional ?? true) ||
+    !benchmarks?.['OReb/100'] || !benchmarks?.['FTM/100']
+
+  const fga_us_100   = per100(our_fga, our_poss)
+  const fga_opp_100  = per100(opp_fga_total, opp_poss)
+  const to_us_100    = per100(a.turnovers, our_poss)
+  const to_opp_100   = per100(a.opp_turnovers, opp_poss)
+  const oreb_us_100  = per100(a.oreb, our_poss)
+  const oreb_opp_100 = per100(a.opp_oreb, opp_poss)
+  const ftm_us_100   = per100(a.ft_made, our_poss)
+  const ftm_opp_100  = per100(a.opp_ft_made, opp_poss)
+  const efg_us_f     = efg / 100
+  const efg_opp_f    = opp_efg / 100
+
+  const pp_shotEff    = r(2 * (efg_us_f - b_efg) * fga_us_100, 1)
+  const pp_shotSupp   = r(2 * (b_efg - efg_opp_f) * fga_opp_100, 1)
+  const pp_possCtrl   = r((b_to100 - to_us_100) * ppp_val, 1)
+  const pp_possCreate = r((to_opp_100 - b_to100) * ppp_val, 1)
+  const pp_secondCh   = r((oreb_us_100 - b_oreb100) * ppp_val, 1)
+  const pp_possEnd    = r((b_oreb100 - oreb_opp_100) * ppp_val, 1)
+  const pp_ft         = r(ftm_us_100 - b_ftm100, 1)
+  const pp_discipline = r(b_ftm100 - ftm_opp_100, 1)
+
+  shotEff.pp100          = pp_shotEff
+  possCtrl.pp100         = pp_possCtrl
+  extraPoss.pp100        = pp_secondCh
+  pressureCreation.pp100 = pp_ft
+  shotSupp.pp100         = pp_shotSupp
+  possEnding.pp100       = pp_possEnd
+  pressureDisrupt.pp100  = pp_possCreate
+  discipline.pp100       = pp_discipline
+
+  const factors: FactorPP100[] = [
+    { factor: 'Shooting',      offensive_pillar: 'Shot Efficiency',    defensive_pillar: 'Shot Suppression',    offensive_pp100: pp_shotEff,  defensive_pp100: pp_shotSupp,   margin_pp100: r(pp_shotEff + pp_shotSupp, 1) },
+    { factor: 'Ball Security', offensive_pillar: 'Possession Control', defensive_pillar: 'Possession Creation', offensive_pp100: pp_possCtrl, defensive_pp100: pp_possCreate, margin_pp100: r(pp_possCtrl + pp_possCreate, 1) },
+    { factor: 'Rebounding',    offensive_pillar: 'Second Chances',     defensive_pillar: 'Possession Ending',   offensive_pp100: pp_secondCh, defensive_pp100: pp_possEnd,    margin_pp100: r(pp_secondCh + pp_possEnd, 1) },
+    { factor: 'Free Throws',   offensive_pillar: 'Rim Pressure',       defensive_pillar: 'Discipline',          offensive_pp100: pp_ft,       defensive_pp100: pp_discipline, margin_pp100: r(pp_ft + pp_discipline, 1) },
+  ]
+  const net_modeled = r(factors.reduce((s, f) => s + f.margin_pp100, 0), 1)
+  const net_actual  = r((off_ppp - def_ppp) * 100, 1)
+  const pp100: PP100Decomposition = {
+    factors,
+    net_pp100_modeled: net_modeled,
+    net_pp100_actual:  net_actual,
+    residual_pp100:    r(net_actual - net_modeled, 1),
+    provisional_split: splitProvisional,
+  }
+
   // --- All pillars ---
   const allPillars = [shotEff, possCtrl, extraPoss, pressureCreation, shotSupp, possEnding, pressureDisrupt, discipline]
 
-  // --- Top Drivers & Leakage (sorted by |delta|) ---
+  // --- Top Drivers & Leakage — ranked by PP100 (common currency, Tier 2) ---
   const pillarDrivers: Driver[] = allPillars.map(p => ({
     pillar: p.name,
-    description: `${p.name}: ${p.score > p.opp_score ? '+' : ''}${p.delta} vs opponents (${p.score} vs ${p.opp_score})`,
-    delta: p.delta
+    description: `${p.name}: ${(p.pp100 ?? 0) >= 0 ? '+' : ''}${p.pp100} pts/100 vs field`,
+    delta: p.delta,
+    pp100: p.pp100 ?? 0,
   }))
 
-  const sorted = [...pillarDrivers].sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta))
-  const top_drivers = sorted.filter(d => d.delta > 0).slice(0, 3)
-  const leakage_areas = sorted.filter(d => d.delta < 0).slice(0, 3)
+  const sorted = [...pillarDrivers].sort((a, b) => Math.abs(b.pp100 ?? 0) - Math.abs(a.pp100 ?? 0))
+  const top_drivers   = sorted.filter(d => (d.pp100 ?? 0) > 0).slice(0, 3)
+  const leakage_areas = sorted.filter(d => (d.pp100 ?? 0) < 0).slice(0, 3)
 
   return {
     off_ppp,
@@ -296,11 +469,13 @@ export function computeDriverTree(a: SeasonAggregates): DriverTreeOutput {
     net_ppp,
     pace,
     pillars: {
-      offensive: [shotEff, possCtrl, extraPoss, pressureCreation],
-      defensive: [shotSupp, possEnding, pressureDisrupt, discipline],
+      offensive: [shotEff, possCtrl, extraPoss, pressureCreation].map(p => applyBaselines(p, benchmarks)),
+      defensive: [shotSupp, possEnding, pressureDisrupt, discipline].map(p => applyBaselines(p, benchmarks)),
     },
     top_drivers,
     leakage_areas,
+    possession_check,
+    pp100,
   }
 }
 
@@ -419,18 +594,19 @@ export function computePlayerDriverTree(
     ],
   }
 
-  // Combined pressure score: FTA/G weighted by conversion rate
-  // Full credit for makes, half credit for misses (drawing the foul still has possession value)
-  const player_pressure_score = r(player_ftf_pg * (0.5 + 0.5 * (player_ft_pct / 100)), 2)
-  const team_pressure_score   = r(team_ftf_ppg  * (0.5 + 0.5 * (team_ft_pct  / 100)), 2)
-  const team_ft_made_ppg      = tppg(team.ft_made)
+  // Tier 2: composite retired here too. Headline is FT Rate (FTA/FGA), the recognized
+  // fourth factor; FT% stays a separate conversion diagnostic.
+  const player_ft_rate = player_fga > 0 ? r(player.ft_att / player_fga, 3) : 0
+  const team_ft_rate   = team_fga > 0 ? r(team.ft_att / team_fga, 3) : 0
+  const team_ft_made_ppg = tppg(team.ft_made)
 
   const pressureCreation: PillarScore = {
     name: 'Rim Pressure',
-    score: player_pressure_score,
-    opp_score: team_pressure_score,
-    delta: r(player_pressure_score - team_pressure_score, 2),
+    score: player_ft_rate,
+    opp_score: team_ft_rate,
+    delta: r(player_ft_rate - team_ft_rate, 3),
     metrics: [
+      { name: 'FT Rate',   value: player_ft_rate,              opp_value: team_ft_rate,      delta: r(player_ft_rate - team_ft_rate, 3),                                format: 'num' },
       { name: 'FTA/G',     value: player_ftf_pg,               opp_value: team_ftf_ppg,     delta: r(player_ftf_pg - team_ftf_ppg, 1),                                 format: 'num' },
       { name: 'FT%',       value: player_ft_pct,               opp_value: team_ft_pct,       delta: r(player_ft_pct - team_ft_pct, 1),                                  format: 'pct' },
       { name: 'FT Made/G', value: r(player.ft_made / g, 1),    opp_value: team_ft_made_ppg,  delta: r(r(player.ft_made / g, 1) - team_ft_made_ppg, 1),                  format: 'num' },
