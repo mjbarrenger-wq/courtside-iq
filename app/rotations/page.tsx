@@ -3,6 +3,7 @@
 
 import type { Metadata } from 'next'
 import RotationPlanner from './RotationPlanner'
+import LineupPerformance, { type LineupRow } from './LineupPerformance'
 import { listRotationPlans } from './actions'
 import type { RotationPlayer, GameOption } from './types'
 
@@ -27,11 +28,12 @@ async function fetchJson(path: string) {
 }
 
 export default async function RotationsPage() {
-  const [playersRaw, statsRaw, gamesRaw, opponentsRaw, plans] = await Promise.all([
+  const [playersRaw, statsRaw, gamesRaw, opponentsRaw, stintsRaw, plans] = await Promise.all([
     fetchJson(`players?select=*&order=jersey_number.asc`),
     fetchJson(`player_game_stats?select=player_id,points,oreb,dreb,turnovers,ft_att,twopt_att,threept_att`),
     fetchJson(`games?select=id,game_date,opponent_id&team_id=eq.${TEAM_ID}&order=game_date.desc`),
     fetchJson(`opponents?select=id,name`),
+    fetchJson(`lineup_stints?select=game_id,seconds,player_ids,pf,pa,off_poss,def_poss&team_id=eq.${TEAM_ID}`),
     listRotationPlans(TEAM_ID),
   ])
 
@@ -70,6 +72,37 @@ export default async function RotationsPage() {
       }
     })
 
+  // ── Lineup performance (from imported play-by-play / lineup_stints) ──────────
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const pInfo: Record<string, { first: string; jersey: number }> = Object.fromEntries(
+    (Array.isArray(playersRaw) ? playersRaw : []).map((p: any) => [p.id, { first: p.first_name, jersey: p.jersey_number ?? 999 }]),
+  )
+  const stintArr = Array.isArray(stintsRaw) ? stintsRaw : []
+  const gamesWithPbp = new Set(stintArr.map((s: any) => s.game_id)).size // eslint-disable-line @typescript-eslint/no-explicit-any
+  const agg: Record<string, { ids: string[]; secs: number; pf: number; pa: number; op: number; dp: number }> = {}
+  for (const s of stintArr as any[]) { // eslint-disable-line @typescript-eslint/no-explicit-any
+    const ids: string[] = Array.isArray(s.player_ids) ? s.player_ids : []
+    const key = [...ids].sort().join('|')
+    if (!key) continue
+    const a = (agg[key] ||= { ids, secs: 0, pf: 0, pa: 0, op: 0, dp: 0 })
+    a.secs += Number(s.seconds) || 0
+    a.pf += s.pf || 0; a.pa += s.pa || 0
+    a.op += Number(s.off_poss) || 0; a.dp += Number(s.def_poss) || 0
+  }
+  const lineupRows: LineupRow[] = Object.values(agg).map((a) => {
+    const off = a.op > 0 ? a.pf / a.op : 0
+    const def = a.dp > 0 ? a.pa / a.dp : 0
+    const names = a.ids
+      .map((id) => pInfo[id] ?? { first: '?', jersey: 999 })
+      .sort((x, y) => x.jersey - y.jersey)
+      .map((p) => p.first)
+    return {
+      names, minutes: a.secs / 60, plusMinus: a.pf - a.pa,
+      offPpp: Math.round(off * 100) / 100, defPpp: Math.round(def * 100) / 100,
+      netPpp: Math.round((off - def) * 100) / 100, offPoss: a.op, defPoss: a.dp,
+    }
+  }).sort((x, y) => y.minutes - x.minutes)
+
   return (
     <main style={{
       background: BG, minHeight: '100vh', color: '#1a1f2e',
@@ -105,6 +138,8 @@ export default async function RotationsPage() {
         </div>
 
         <RotationPlanner players={players} teamId={TEAM_ID} games={games} initialPlans={plans} />
+
+        <LineupPerformance rows={lineupRows} gameCount={gamesWithPbp} totalGames={games.length} />
       </div>
     </main>
   )
