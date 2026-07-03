@@ -9,7 +9,7 @@ const NAV_ITEMS = [
   { label: 'Trends',     href: '/trends' },
   { label: 'Quadrants',  href: '/players' },
   { label: 'Profiles',   href: '/profiles' },
-  { label: 'Games',      href: '/games' },
+  { label: 'Game Config', href: '/games' },
   { label: 'Rotations',  href: '/rotations' },
   { label: 'Practice',   href: '/practice' },
   { label: 'Drills',     href: '/drills' },

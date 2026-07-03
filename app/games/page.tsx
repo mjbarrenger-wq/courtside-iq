@@ -54,9 +54,9 @@ export default async function GamesSetupPage() {
           <div style={{ fontSize: 11, color: MUTED, marginBottom: 6 }}>
             <a href="/" style={{ color: MUTED, textDecoration: 'none' }}>Overview</a>
             <span style={{ margin: '0 6px' }}>›</span>
-            <span style={{ color: '#307b92' }}>Game Setup</span>
+            <span style={{ color: '#307b92' }}>Game Config</span>
           </div>
-          <div style={{ fontSize: 22, fontWeight: 800, color: '#1a1f2e' }}>Game Setup</div>
+          <div style={{ fontSize: 22, fontWeight: 800, color: '#1a1f2e' }}>Game Config</div>
           <div style={{ fontSize: 13, color: MUTED, marginTop: 4 }}>
             Configure game type (regular season, finals, tournament, grading, practice) and details for every game.
             {unassignedCount > 0 && (
