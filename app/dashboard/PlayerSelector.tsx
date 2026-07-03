@@ -11,9 +11,11 @@ export interface PlayerOption {
 export function PlayerSelector({
   players,
   currentPlayerId,
+  basePath = '/dashboard',
 }: {
   players: PlayerOption[]
   currentPlayerId?: string
+  basePath?: string
 }) {
   const router      = useRouter()
   const searchParams = useSearchParams()
@@ -25,7 +27,7 @@ export function PlayerSelector({
     } else {
       params.set('player', playerId)
     }
-    router.push(`/dashboard?${params.toString()}`)
+    router.push(`${basePath}?${params.toString()}`)
   }
 
   return (

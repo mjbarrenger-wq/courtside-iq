@@ -4,16 +4,16 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 
 const NAV_ITEMS = [
-  { label: 'Overview',   href: '/' },
-  { label: 'Dashboard',  href: '/dashboard' },
-  { label: 'Trends',     href: '/trends' },
-  { label: 'Quadrants',  href: '/players' },
-  { label: 'Profiles',   href: '/profiles' },
+  { label: 'Overview',    href: '/' },
+  { label: 'Driver Tree', href: '/dashboard' },
+  { label: 'Quadrants',   href: '/players' },
+  { label: 'Profiles',    href: '/profiles' },
+  { label: 'Trends',      href: '/trends' },
+  { label: 'Practice',    href: '/practice' },
+  { label: 'Drills',      href: '/drills' },
+  { label: 'Rotations',   href: '/rotations' },
   { label: 'Game Config', href: '/games' },
-  { label: 'Rotations',  href: '/rotations' },
-  { label: 'Practice',   href: '/practice' },
-  { label: 'Drills',     href: '/drills' },
-  { label: 'Glossary',   href: '/glossary' },
+  { label: 'Glossary',    href: '/glossary' },
 ]
 
 export function NavBar() {
