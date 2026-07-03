@@ -38,6 +38,16 @@ const SB_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE
 const TEAM_ID = 'b1000000-0000-0000-0000-000000000001'
 const FORCE = process.env.FORCE === '1'
 const DRY = process.env.DRY_RUN === '1' // parse + validate counts only, no DB reads/writes
+const SQL_OUT = process.env.SQL_OUT === '1' // print SQL to stdout instead of writing via REST (offline)
+
+// Offline jersey->id map (used by DRY_RUN and SQL_OUT, which don't hit the DB).
+const J2ID_STATIC = {
+  6: 'c1000000-0000-0000-0000-000000000003', 9: 'c1000000-0000-0000-0000-000000000002',
+  18: 'c1000000-0000-0000-0000-000000000004', 24: 'c1000000-0000-0000-0000-000000000005',
+  26: 'c1000000-0000-0000-0000-000000000006', 38: 'c1000000-0000-0000-0000-000000000001',
+  50: 'c1000000-0000-0000-0000-000000000007', 55: 'c1000000-0000-0000-0000-000000000008',
+  64: 'c1000000-0000-0000-0000-000000000009', 79: 'c1000000-0000-0000-0000-000000000010',
+}
 
 const [, , GAME_ID, FILE] = process.argv
 if (!GAME_ID || !FILE) {
@@ -62,11 +72,26 @@ const clkToSec = (c) => {
 const secToClk = (s) => `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, '0')}`
 const poss = (fga, fta, or, to) => +(fga + 0.44 * fta - or + to).toFixed(2)
 
+// Offline: emit the load SQL instead of writing via REST (used when the runner
+// has no network to Supabase). Pipe/copy this into the SQL editor.
+function printSql(pbp, stintRows) {
+  const out = []
+  out.push(`delete from play_by_play where game_id='${GAME_ID}';`)
+  out.push(`delete from lineup_stints where game_id='${GAME_ID}';`)
+  const pv = pbp.map((r) =>
+    `('${GAME_ID}',${r.event_order},${r.period},'${r.clock_time}',${r.player_id ? `'${r.player_id}'` : 'null'},${r.jersey_number ?? 'null'},'${r.event_type}','${r.team_side}',${r.points},${r.team_score},${r.opp_score})`).join(',\n')
+  out.push(`insert into play_by_play (game_id,event_order,period,clock_time,player_id,jersey_number,event_type,team_side,points,team_score,opp_score) values\n${pv};`)
+  const sv = stintRows.map((s) =>
+    `('${GAME_ID}','${TEAM_ID}',${s.period},'${s.start_clock}','${s.end_clock}',${s.seconds},ARRAY[${s.player_ids.map((id) => `'${id}'`).join(',')}]::uuid[],${s.pf},${s.pa},${s.off_poss},${s.def_poss},${s.off_ppp},${s.def_ppp},${s.net_ppp})`).join(',\n')
+  out.push(`insert into lineup_stints (game_id,team_id,period,start_clock,end_clock,seconds,player_ids,pf,pa,off_poss,def_poss,off_ppp,def_ppp,net_ppp) values\n${sv};`)
+  console.log(out.join('\n'))
+}
+
 async function main() {
   // ── Player map: jersey -> id ────────────────────────────────────────────────
   let J2ID
-  if (DRY) {
-    J2ID = new Proxy({}, { get: (_, j) => `jersey-${String(j)}` }) // identity stand-in
+  if (DRY || SQL_OUT) {
+    J2ID = J2ID_STATIC // offline modes use the known map
   } else {
     const playersRaw = await getJson(`players?select=id,jersey_number,first_name,last_name`)
     if (!Array.isArray(playersRaw) || !playersRaw.length) {
@@ -174,8 +199,9 @@ async function main() {
   const badCheckpoints = checkpoints.filter((c) => c.stated !== c.tracked)
   if (badCheckpoints.length) problems.push(`${badCheckpoints.length}/${checkpoints.length} lineup checkpoints did not match`)
 
-  const ourBox = DRY ? null : await getJson(`player_game_stats?select=points&game_id=eq.${GAME_ID}`)
-  const oppBox = DRY ? null : await getJson(`opponent_game_stats?select=*&game_id=eq.${GAME_ID}`)
+  const offline = DRY || SQL_OUT
+  const ourBox = offline ? null : await getJson(`player_game_stats?select=points&game_id=eq.${GAME_ID}`)
+  const oppBox = offline ? null : await getJson(`opponent_game_stats?select=*&game_id=eq.${GAME_ID}`)
   const ourBoxPts = Array.isArray(ourBox) ? ourBox.reduce((s, r) => s + (r.points || 0), 0) : null
   const oppBoxPts = Array.isArray(oppBox) && oppBox[0] && 'points' in oppBox[0] ? oppBox[0].points : null
   if (ourBoxPts != null && ourBoxPts > 0 && ourBoxPts !== ourRun)
@@ -184,21 +210,16 @@ async function main() {
     problems.push(`opp points ${oppRun} ≠ box score ${oppBoxPts}`)
 
   const totalSecs = stints.reduce((a, s) => a + s.seconds, 0)
-  console.log(`Parsed: ${pbp.length} events, ${stints.length} stints | score ${ourRun}-${oppRun} | ` +
+  // Diagnostics go to stderr so SQL_OUT mode emits clean SQL on stdout.
+  console.error(`Parsed: ${pbp.length} events, ${stints.length} stints | score ${ourRun}-${oppRun} | ` +
     `checkpoints ${checkpoints.length - badCheckpoints.length}/${checkpoints.length} ok | stint-secs ${totalSecs}`)
-  if (ourBoxPts != null) console.log(`Box score check: our ${ourRun}/${ourBoxPts}, opp ${oppRun}/${oppBoxPts ?? 'n/a'}`)
+  if (ourBoxPts != null) console.error(`Box score check: our ${ourRun}/${ourBoxPts}, opp ${oppRun}/${oppBoxPts ?? 'n/a'}`)
 
   if (problems.length) {
     console.error('✗ Validation failed:\n  - ' + problems.join('\n  - '))
     if (!FORCE) { console.error('Aborting. Re-run with FORCE=1 to import anyway.'); process.exit(1) }
     console.error('FORCE=1 set — importing despite the above.')
   }
-
-  if (DRY) { console.log(`✓ DRY_RUN — parsed cleanly, no DB writes. ${stints.length} stints would be written.`); return }
-
-  // ── Write ───────────────────────────────────────────────────────────────────
-  await rest(`play_by_play?game_id=eq.${GAME_ID}`, { method: 'DELETE', headers: { Prefer: 'return=minimal' } })
-  await rest(`lineup_stints?game_id=eq.${GAME_ID}`, { method: 'DELETE', headers: { Prefer: 'return=minimal' } })
 
   const stintRows = stints.map((s) => {
     const op = poss(s.fga, s.fta, s.oreb, s.to), dp = poss(s.ofga, s.ofta, s.ooreb, s.oto)
@@ -208,6 +229,13 @@ async function main() {
       player_ids: s.js.map((j) => J2ID[j]), pf: s.pf, pa: s.pa,
       off_poss: op, def_poss: dp, off_ppp: offp, def_ppp: defp, net_ppp: +(offp - defp).toFixed(3) }
   })
+
+  if (DRY) { console.log(`✓ DRY_RUN — parsed cleanly, no DB writes. ${stintRows.length} stints would be written.`); return }
+  if (SQL_OUT) { printSql(pbp, stintRows); return }
+
+  // ── Write ───────────────────────────────────────────────────────────────────
+  await rest(`play_by_play?game_id=eq.${GAME_ID}`, { method: 'DELETE', headers: { Prefer: 'return=minimal' } })
+  await rest(`lineup_stints?game_id=eq.${GAME_ID}`, { method: 'DELETE', headers: { Prefer: 'return=minimal' } })
 
   const ins = async (table, rows) => {
     const r = await rest(table, { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify(rows) })
