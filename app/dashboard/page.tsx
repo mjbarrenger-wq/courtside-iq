@@ -550,6 +550,50 @@ export default async function DashboardPage({
   const gameIds = filteredGames.map((g: any) => g.id)
   const idList  = `(${gameIds.join(',')})`
 
+  // A Type filter (or a custom range) matched zero games — show a clean empty
+  // state instead of computing a driver tree from zero games (which used to
+  // silently fall back to the unfiltered season, and would otherwise divide by
+  // zero throughout computeDriverTree). Skips the rest of the page's fetching.
+  if (gameIds.length === 0) {
+    const typeLabel = GAME_TYPE_CONFIG.find(t => t.key === gameType)?.label ?? gameType
+    return (
+      <main style={{ background: '#f4f5f7', minHeight: '100vh', color: '#1a1f2e', fontFamily: "'Inter', system-ui, sans-serif", WebkitFontSmoothing: 'antialiased', padding: '0 0 40px' }}>
+        <div className="px-4 md:px-7 py-3" style={{ background: '#ffffff', borderBottom: '1px solid #e2e5eb' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
+            <div>
+              <div style={{ fontSize: 20, fontWeight: 800, color: '#1a1f2e', letterSpacing: '0.05em' }}>
+                COACHING INTELLIGENCE DASHBOARD
+              </div>
+              <div style={{ fontSize: 12, color: '#374151', marginTop: 2 }}>
+                WGT 12.2 — No games match this filter &nbsp;·&nbsp;
+                <span style={{ color: '#307b92', fontWeight: 700 }}>CMD Sports Analytics</span>
+              </div>
+            </div>
+            <Suspense fallback={<div style={{ width: 200, height: 28 }} />}>
+              <FilterBar current={isCustom ? 'all' : filter} currentType={isCustom ? 'all_types' : gameType} />
+            </Suspense>
+          </div>
+        </div>
+        <div className="px-4 md:px-7">
+          <div style={{
+            background: '#ffffff', border: '1px solid #e2e5eb', borderRadius: 14,
+            marginTop: 20, padding: '48px 24px', textAlign: 'center',
+          }}>
+            <div style={{ fontSize: 14, fontWeight: 700, color: '#1a1f2e', marginBottom: 6 }}>
+              No games match this filter
+            </div>
+            <div style={{ fontSize: 12, color: '#6b7280' }}>
+              {isCustom
+                ? 'No games in the selected custom range.'
+                : <>No games are currently tagged as <strong>{typeLabel}</strong>. Assign types on the{' '}
+                    <a href="/games" style={{ color: '#307b92', fontWeight: 600 }}>Game Config</a> page, or switch the Type filter above.</>}
+            </div>
+          </div>
+        </div>
+      </main>
+    )
+  }
+
   // Fetch players list (always needed for selector)
   const playersRaw = await fetchJson(`players?team_id=eq.${TEAM_ID}&select=id,first_name,last_name,jersey_number&order=jersey_number.asc`)
   const allPlayers = Array.isArray(playersRaw)
@@ -558,7 +602,7 @@ export default async function DashboardPage({
 
   // Fetch aggregates + per-game data + drills + team bracket in parallel
   const [aggregates, perGameOpp, perGamePlayers, drillsRaw, teamRows] = await Promise.all([
-    getSeasonAggregates(TEAM_ID, filter === 'all' && !isCustom ? undefined : gameIds),
+    getSeasonAggregates(TEAM_ID, filter === 'all' && gameType === 'all_types' && !isCustom ? undefined : gameIds),
     fetchJson(
       `opponent_game_stats?select=game_id,opp_off_ppp,opp_def_ppp,opp_twopt_made,opp_twopt_att,opp_threept_made,opp_threept_att,opp_turnovers,opp_oreb,opp_dreb,opp_possessions&game_id=in.${idList}&order=game_id.asc`
     ),

@@ -237,7 +237,7 @@ export default function BubbleChart({ players }: { players: PlayerBubble[] }) {
           x={PAD.left + CW / 2} y={H - 8}
           fontSize={11} fill={TEXT_MED} textAnchor="middle"
         >
-          Defensive PPP  |  Lower is better to the right
+          Defensive PPP  |  To the right is better
         </text>
         {defTicks.map(v => (
           <g key={`dt-${v}`}>

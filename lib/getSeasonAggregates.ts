@@ -11,17 +11,39 @@ async function fetchJson(path: string) {
   return res.json()
 }
 
+function emptyAggregates(): SeasonAggregates {
+  return {
+    pts: 0, possessions: 0, twopt_made: 0, twopt_att: 0, threept_made: 0, threept_att: 0,
+    ft_made: 0, ft_att: 0, turnovers: 0, off_fouls: 0, oreb: 0, dreb: 0, total_reb: 0,
+    ast: 0, ftf: 0, stl: 0, blk: 0, def_fouls: 0, plus_minus: 0, vps: 0, games: 0,
+    opp_pts: 0, opp_possessions: 0, opp_twopt_made: 0, opp_twopt_att: 0,
+    opp_threept_made: 0, opp_threept_att: 0, opp_ft_made: 0, opp_ft_att: 0,
+    opp_turnovers: 0, opp_oreb: 0, opp_dreb: 0, opp_def_fouls: 0,
+    opp_ast: 0, opp_stl: 0, opp_blk: 0,
+  }
+}
+
 export async function getSeasonAggregates(
   teamId: string,
-  gameIds?: string[]   // optional — pass to filter to specific games
+  gameIds?: string[]   // omit entirely for no filter; pass [] to mean "matched zero games"
 ): Promise<SeasonAggregates> {
 
-  const hasFilter = gameIds && gameIds.length > 0
-  const idList    = hasFilter ? `(${gameIds!.join(',')})` : null
+  // IMPORTANT: `gameIds === undefined` means "no filter, fetch every team game" —
+  // that's the intentional shortcut callers use. `gameIds` as an explicit EMPTY
+  // ARRAY means "a filter was applied and it matched nothing", which must NOT
+  // fall back to fetching the whole team. These used to be conflated (both read
+  // as `hasFilter = false`), so a Type filter with zero matching games silently
+  // showed the full season instead of a blank/zero result.
+  const isFiltered = gameIds !== undefined
+  if (isFiltered && gameIds.length === 0) {
+    return emptyAggregates()
+  }
+
+  const idList = isFiltered ? `(${gameIds!.join(',')})` : null
 
   // Fetch games first so we always have game IDs for the player/opp stat queries
   const games = await fetchJson(
-    hasFilter
+    isFiltered
       ? `games?id=in.${idList}&select=*`
       : `games?team_id=eq.${teamId}&select=*`
   )
