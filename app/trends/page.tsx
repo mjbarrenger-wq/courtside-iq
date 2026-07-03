@@ -84,20 +84,44 @@ export default async function TrendsPage({
   const gameIds = filteredGames.map((g: any) => g.id)
   const idList  = gameIds.length ? `(${gameIds.join(',')})` : null
 
-  // Box-score categories are only computed at team level. If a player is
-  // selected and the URL still points at a team-only stat, fall back to 'ppp'.
-  const requestedCat = STAT_CATEGORIES.some(c => c.key === rawStat) ? (rawStat as StatKey) : 'ppp'
-  const category: StatKey = (playerId && getStatCategory(requestedCat).teamOnly) ? 'ppp' : requestedCat
+  const category: StatKey = STAT_CATEGORIES.some(c => c.key === rawStat) ? (rawStat as StatKey) : 'ppp'
 
   // ── Per-game data, branch on team vs player mode ──────────────────────────────
+  // Both modes end up populating the same boxByGame shape via computeBoxStats —
+  // team mode sums raw fields across every player_game_stats row for a game
+  // before computing, player mode just runs the same formulas on that one
+  // player's own row. This is what makes every category (not just PPP)
+  // available in player mode too.
   const pppByGame: Record<string, { off: number | null; def: number | null; net: number | null }> = {}
   const boxByGame:  Record<string, {
-    ppg: number; toPct: number; efg: number; reb: number; ast: number; stl: number; blk: number; ftPct: number
+    ppg: number; toPct: number; efg: number; reb: number; oreb: number; dreb: number
+    ast: number; stl: number; blk: number; ftPct: number
   }> = {}
+
+  type RawBox = {
+    twopt_made: number; twopt_att: number; threept_made: number; threept_att: number
+    ft_made: number; ft_att: number; turnovers: number; ast: number; oreb: number; dreb: number
+    stl: number; blk: number
+  }
+  function computeBoxStats(s: RawBox, ppg: number) {
+    const fga = s.twopt_att + s.threept_att
+    return {
+      ppg,
+      toPct: pct(s.turnovers, fga + 0.44 * s.ft_att + s.turnovers),
+      efg:   pct(s.twopt_made + 1.5 * s.threept_made, fga),
+      reb:   s.oreb + s.dreb,
+      oreb:  s.oreb,
+      dreb:  s.dreb,
+      ast:   s.ast,
+      stl:   s.stl,
+      blk:   s.blk,
+      ftPct: pct(s.ft_made, s.ft_att),
+    }
+  }
 
   if (playerId) {
     const rows = idList
-      ? await fetchJson(`player_game_stats?select=game_id,off_ppp,def_ppp,net_ppp&player_id=eq.${playerId}&game_id=in.${idList}`)
+      ? await fetchJson(`player_game_stats?select=game_id,off_ppp,def_ppp,net_ppp,points,twopt_made,twopt_att,threept_made,threept_att,ft_made,ft_att,turnovers,ast,oreb,dreb,stl,blk&player_id=eq.${playerId}&game_id=in.${idList}`)
       : []
     if (Array.isArray(rows)) {
       for (const r of rows) {
@@ -106,6 +130,7 @@ export default async function TrendsPage({
           def: r.def_ppp != null ? Number(r.def_ppp) : null,
           net: r.net_ppp != null ? Number(r.net_ppp) : null,
         }
+        boxByGame[r.game_id] = computeBoxStats(r, r.points ?? 0)
       }
     }
   } else if (idList) {
@@ -128,7 +153,7 @@ export default async function TrendsPage({
     }
 
     if (Array.isArray(statRows)) {
-      const sums: Record<string, any> = {}
+      const sums: Record<string, RawBox> = {}
       for (const r of statRows) {
         if (!sums[r.game_id]) {
           sums[r.game_id] = { twopt_made:0, twopt_att:0, threept_made:0, threept_att:0,
@@ -149,19 +174,8 @@ export default async function TrendsPage({
         s.blk          += r.blk          || 0
       }
       for (const gameId of Object.keys(sums)) {
-        const s = sums[gameId]
-        const fga = s.twopt_att + s.threept_att
         const game = filteredGames.find((g: any) => g.id === gameId)
-        boxByGame[gameId] = {
-          ppg:   game?.team_score ?? 0,
-          toPct: pct(s.turnovers, fga + 0.44 * s.ft_att + s.turnovers),
-          efg:   pct(s.twopt_made + 1.5 * s.threept_made, fga),
-          reb:   s.oreb + s.dreb,
-          ast:   s.ast,
-          stl:   s.stl,
-          blk:   s.blk,
-          ftPct: pct(s.ft_made, s.ft_att),
-        }
+        boxByGame[gameId] = computeBoxStats(sums[gameId], game?.team_score ?? 0)
       }
     }
   }
@@ -184,6 +198,8 @@ export default async function TrendsPage({
       toPct:  box?.toPct ?? null,
       efg:    box?.efg ?? null,
       reb:    box?.reb ?? null,
+      oreb:   box?.oreb ?? null,
+      dreb:   box?.dreb ?? null,
       ast:    box?.ast ?? null,
       stl:    box?.stl ?? null,
       blk:    box?.blk ?? null,
@@ -229,7 +245,7 @@ export default async function TrendsPage({
     }}>
 
       {/* Header */}
-      <div style={{ background: CARD, borderBottom: `1px solid ${BORDER}`, padding: '12px 28px' }}>
+      <div className="px-4 md:px-7" style={{ background: CARD, borderBottom: `1px solid ${BORDER}`, padding: '12px 0' }}>
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
           <div>
             <div style={{ fontSize: 20, fontWeight: 800, color: '#1a1f2e', letterSpacing: '0.05em' }}>
@@ -246,7 +262,7 @@ export default async function TrendsPage({
               <FilterBar current={filter} currentType={gameType} />
             </Suspense>
             <Suspense fallback={<div style={{ width: 190, height: 28 }} />}>
-              <StatCategoryMenu current={category} playerSelected={!!playerId} />
+              <StatCategoryMenu current={category} />
             </Suspense>
             <Suspense fallback={<div style={{ width: 160, height: 28 }} />}>
               <PlayerSelector players={allPlayers} currentPlayerId={playerId} basePath="/trends" />
@@ -255,10 +271,10 @@ export default async function TrendsPage({
         </div>
       </div>
 
-      <div style={{ padding: '24px 28px', maxWidth: 1200, margin: '0 auto' }}>
+      <div className="px-4 md:px-7 py-6" style={{ maxWidth: 1200, margin: '0 auto' }}>
 
         {/* Main chart card */}
-        <div style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: 14, padding: '24px 28px', marginBottom: 20 }}>
+        <div className="p-4 md:px-7 md:py-6" style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: 14, marginBottom: 20 }}>
           <div style={{ marginBottom: 18 }}>
             <div style={{ fontSize: 14, fontWeight: 700, color: '#1a1f2e' }}>
               {category === 'ppp' ? 'PPP by Game' : singleCat.label + ' by Game'}
@@ -277,7 +293,9 @@ export default async function TrendsPage({
             <div style={{ fontSize: 13, fontWeight: 700, color: '#1a1f2e', marginBottom: 12 }}>
               Season Trajectory
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: `repeat(${splitMetrics.length}, 1fr)`, gap: 12 }}>
+            <div
+              className={splitMetrics.length > 1 ? 'grid grid-cols-1 md:grid-cols-3 gap-3' : 'grid grid-cols-1 gap-3'}
+            >
               {splitMetrics.map(m => {
                 const f = halfAvg(firstHalf, m.key)
                 const s = halfAvg(secondHalf, m.key)

@@ -9,6 +9,8 @@ export interface PlayerRow {
   gp: number
   ppg: number
   rpg: number
+  orpg: number
+  drpg: number
   apg: number
   spg: number
   bpg: number
@@ -29,6 +31,8 @@ const COLS: { key: SortKey; label: string; title: string; lowerBetter?: boolean;
   { key: 'gp',     label: 'GP',    title: 'Games played' },
   { key: 'ppg',    label: 'PPG',   title: 'Points per game' },
   { key: 'rpg',    label: 'RPG',   title: 'Rebounds per game' },
+  { key: 'orpg',   label: 'OREB',  title: 'Offensive rebounds per game' },
+  { key: 'drpg',   label: 'DREB',  title: 'Defensive rebounds per game' },
   { key: 'apg',    label: 'APG',   title: 'Assists per game' },
   { key: 'spg',    label: 'SPG',   title: 'Steals per game' },
   { key: 'bpg',    label: 'BPG',   title: 'Blocks per game' },
@@ -74,7 +78,7 @@ export default function PlayerStatsTable({ players }: { players: PlayerRow[] }) 
           full-size and legible. On desktop the parent is far wider than min-width,
           so width:100% wins and the layout is unchanged. */}
       <div className="overflow-x-auto">
-      <table className="min-w-[680px]" style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+      <table className="min-w-[820px]" style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
         <thead>
           <tr style={{ background: '#f0f2f7' }}>
             <th style={{ padding: '10px 14px', textAlign: 'left', fontSize: 10, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.08em', borderBottom: `1px solid ${BORDER}` }}>

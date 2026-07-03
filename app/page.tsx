@@ -60,6 +60,8 @@ export default async function Home() {
       gp,
       ppg:    avg('points'),
       rpg:    Math.round(((sum('oreb') + sum('dreb')) / Math.max(gp, 1)) * 10) / 10,
+      orpg:   Math.round((sum('oreb') / Math.max(gp, 1)) * 10) / 10,
+      drpg:   Math.round((sum('dreb') / Math.max(gp, 1)) * 10) / 10,
       apg:    avg('ast'),
       spg:    avg('stl'),
       bpg:    avg('blk'),
@@ -350,21 +352,24 @@ export default async function Home() {
                 <a key={g.id} href={`/games/${g.id}`} style={{ textDecoration: 'none' }} className="game-row-link">
                   <div style={{
                     display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                    padding: '8px 10px', borderRadius: 8,
+                    padding: '8px 10px', borderRadius: 8, gap: 8, flexWrap: 'wrap',
                     background: '#f8f9fb', border: `1px solid ${BORDER}`,
                   }}>
-                    <span style={{ fontSize: 11, color: '#6b7280', width: 60 }}>{date}</span>
-                    <span style={{ fontSize: 12, color: '#374151', flex: 1, textAlign: 'center' }}>
+                    <span style={{ fontSize: 11, color: '#6b7280', width: 60, flexShrink: 0 }}>{date}</span>
+                    <span style={{
+                      fontSize: 12, color: '#374151', flex: 1, minWidth: 60, textAlign: 'center',
+                      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                    }}>
                       {g.home_away === 'home' ? 'vs' : '@'} {g.opponent_name}
                     </span>
-                    <span style={{ fontSize: 13, fontWeight: 700, color: '#1a1f2e', width: 80, textAlign: 'center' }}>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: '#1a1f2e', width: 80, textAlign: 'center', flexShrink: 0 }}>
                       {g.team_score} – {g.opponent_score}
                     </span>
                     <span style={{
-                      fontSize: 11, fontWeight: 800, width: 28, textAlign: 'center',
+                      fontSize: 11, fontWeight: 800, width: 28, textAlign: 'center', flexShrink: 0,
                       color: g.result === 'W' ? '#059669' : '#dc2626',
                     }}>{g.result}</span>
-                    <span style={{ fontSize: 10, color: '#6b7280', width: 72, textAlign: 'right', fontWeight: 500 }}>
+                    <span style={{ fontSize: 10, color: '#6b7280', width: 72, textAlign: 'right', fontWeight: 500, flexShrink: 0 }}>
                       Game Debrief →
                     </span>
                   </div>

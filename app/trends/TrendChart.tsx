@@ -18,6 +18,8 @@ export interface GamePoint {
   toPct: number | null
   efg: number | null
   reb: number | null
+  oreb: number | null
+  dreb: number | null
   ast: number | null
   stl: number | null
   blk: number | null

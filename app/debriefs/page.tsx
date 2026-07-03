@@ -84,7 +84,7 @@ export default async function DebriefsPage({
     }}>
 
       {/* Header */}
-      <div style={{ background: CARD, borderBottom: `1px solid ${BORDER}`, padding: '12px 28px' }}>
+      <div className="px-4 md:px-7" style={{ background: CARD, borderBottom: `1px solid ${BORDER}`, padding: '12px 0' }}>
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
           <div>
             <div style={{ fontSize: 20, fontWeight: 800, color: '#1a1f2e', letterSpacing: '0.05em' }}>
@@ -101,7 +101,7 @@ export default async function DebriefsPage({
         </div>
       </div>
 
-      <div style={{ padding: '24px 28px', maxWidth: 1000, margin: '0 auto' }}>
+      <div className="px-4 md:px-7 py-6" style={{ maxWidth: 1000, margin: '0 auto' }}>
         <div style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: 14, overflow: 'hidden' }}>
           <div style={{ padding: '13px 20px', borderBottom: `1px solid ${BORDER}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <span style={{ fontSize: 13, fontWeight: 700, color: TEAL }}>ALL GAMES</span>

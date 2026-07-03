@@ -191,7 +191,7 @@ export default async function BoxScorePage({
     pts: sum('pts'), fgm: sum('fgm'), fga: sum('fga'),
     tpm: sum('tpm'), tpa: sum('tpa'),
     ftm: sum('ftm'), fta: sum('fta'),
-    reb: sum('reb'), ast: sum('ast'),
+    reb: sum('reb'), oreb: sum('oreb'), dreb: sum('dreb'), ast: sum('ast'),
     stl: sum('stl'), blk: sum('blk'),
     to:  sum('to'),
   }
@@ -206,6 +206,8 @@ export default async function BoxScorePage({
     { key: 'ft',      label: 'FTM-FTA',  align: 'center' },
     { key: 'ft_pct',  label: 'FT%',      align: 'center' },
     { key: 'reb',     label: 'REB',      align: 'center' },
+    { key: 'oreb',    label: 'OREB',     align: 'center' },
+    { key: 'dreb',    label: 'DREB',     align: 'center' },
     { key: 'ast',     label: 'AST',      align: 'center' },
     { key: 'stl',     label: 'STL',      align: 'center' },
     { key: 'blk',     label: 'BLK',      align: 'center' },
@@ -223,7 +225,7 @@ export default async function BoxScorePage({
     }}>
 
       {/* ── Header ── */}
-      <div style={{ background: HEADER, borderBottom: `1px solid ${BORDER}`, padding: '16px 32px' }}>
+      <div className="px-4 md:px-8" style={{ background: HEADER, borderBottom: `1px solid ${BORDER}`, padding: '16px 0' }}>
         <div style={{ maxWidth: 1060, margin: '0 auto' }}>
 
           {/* Breadcrumb */}
@@ -275,16 +277,15 @@ export default async function BoxScorePage({
       </div>
 
       {/* ── Debrief content ── */}
-      <div style={{ maxWidth: 1060, margin: '24px auto', padding: '0 32px' }}>
+      <div className="px-4 md:px-8" style={{ maxWidth: 1060, margin: '24px auto', padding: '0' }}>
 
         {/* ── Net PPP + Off/Def split ── */}
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: 'auto 1fr',
-          gap: 16,
-          marginBottom: 20,
-          alignItems: 'stretch',
-        }}>
+        <div
+          className="grid grid-cols-1 md:grid-cols-[auto_1fr] gap-4 md:gap-4"
+          style={{
+            marginBottom: 20,
+            alignItems: 'stretch',
+          }}>
           {/* Net PPP card */}
           <div style={{
             background: CARD,
@@ -324,17 +325,16 @@ export default async function BoxScorePage({
           </div>
 
           {/* Off / Def PPP split */}
-          <div style={{
+          <div className="p-4 md:px-7 md:py-5" style={{
             background: CARD,
             border: `1px solid ${BORDER}`,
             borderRadius: 14,
-            padding: '20px 28px',
             display: 'grid',
             gridTemplateColumns: '1fr 1fr',
             gap: 0,
           }}>
             {/* Offence */}
-            <div style={{ paddingRight: 24 }}>
+            <div style={{ paddingRight: 24, minWidth: 0 }}>
               <div style={{ fontSize: 10, fontWeight: 700, color: MUTED, letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 10 }}>Offence</div>
               <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 4 }}>
                 <span style={{ fontSize: 32, fontWeight: 900, color: '#1a1f2e', lineHeight: 1 }}>{gameTree.off_ppp}</span>
@@ -356,7 +356,7 @@ export default async function BoxScorePage({
             </div>
 
             {/* Defence */}
-            <div style={{ borderLeft: `1px solid ${BORDER}`, paddingLeft: 24 }}>
+            <div style={{ borderLeft: `1px solid ${BORDER}`, paddingLeft: 24, minWidth: 0 }}>
               <div style={{ fontSize: 10, fontWeight: 700, color: MUTED, letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 10 }}>Defence</div>
               <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 4 }}>
                 <span style={{ fontSize: 32, fontWeight: 900, color: '#1a1f2e', lineHeight: 1 }}>{gameTree.def_ppp}</span>
@@ -393,21 +393,20 @@ export default async function BoxScorePage({
             <span style={{ fontSize: 13, fontWeight: 700, color: TEAL }}>DRIVER BREAKDOWN — THIS GAME</span>
             <span style={{ fontSize: 10, color: MUTED }}>▲/▼ shows performance vs season average</span>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)' }}>
+          <div className="grid grid-cols-2 md:grid-cols-4">
             {pillarComparisons.map((p, i) => {
               const color      = PILLAR_COLORS[p.name] ?? TEAL
               const side       = PILLAR_SIDE[p.name] ?? 'OFF'
               const aboveAvg   = p.vsAvg >= 0
               const pillarPos  = p.gameDelta >= 0
-              const col        = i % 4
-              const row        = Math.floor(i / 4)
               return (
                 <div
                   key={p.name}
                   style={{
                     padding: '16px 18px',
-                    borderRight: col < 3 ? `1px solid ${BORDER}` : 'none',
-                    borderBottom: row === 0 ? `1px solid ${BORDER}` : 'none',
+                    borderRight: `1px solid ${BORDER}`,
+                    borderBottom: `1px solid ${BORDER}`,
+                    minWidth: 0,
                   }}
                 >
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10 }}>
@@ -457,16 +456,18 @@ export default async function BoxScorePage({
             <div style={{ padding: '13px 20px', borderBottom: `1px solid ${BORDER}` }}>
               <span style={{ fontSize: 13, fontWeight: 700, color: TEAL }}>TOP CONTRIBUTORS</span>
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)' }}>
+            <div className="grid grid-cols-1 md:grid-cols-3">
               {contributors.map((c, i) => (
                 <a
                   key={c.id}
                   href={`/players/${c.id}`}
+                  className={`${i < contributors.length - 1 ? 'border-b' : ''} md:border-b-0 ${i < 2 ? 'md:border-r' : ''}`}
                   style={{
                     padding: '16px 20px',
-                    borderRight: i < 2 ? `1px solid ${BORDER}` : 'none',
+                    borderColor: BORDER,
                     textDecoration: 'none',
                     display: 'block',
+                    minWidth: 0,
                   }}
                 >
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
@@ -486,14 +487,14 @@ export default async function BoxScorePage({
                       {i === 0 && <div style={{ fontSize: 9, fontWeight: 700, color: TEAL, letterSpacing: '0.08em' }}>GAME LEADER</div>}
                     </div>
                   </div>
-                  <div style={{ display: 'flex', gap: 16 }}>
+                  <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
                     {[
                       { label: 'PTS', val: c.pts, highlight: true },
                       { label: 'AST', val: c.ast },
                       { label: 'STL', val: c.stl },
                       { label: 'TO',  val: c.to, bad: true },
                     ].map(stat => (
-                      <div key={stat.label}>
+                      <div key={stat.label} style={{ minWidth: 0 }}>
                         <div style={{ fontSize: 20, fontWeight: 900, color: stat.bad && c.to > 3 ? RED : stat.highlight ? '#1a1f2e' : SEC, lineHeight: 1 }}>{stat.val}</div>
                         <div style={{ fontSize: 9, color: MUTED, fontWeight: 700, marginTop: 2 }}>{stat.label}</div>
                       </div>
@@ -519,7 +520,7 @@ export default async function BoxScorePage({
           </div>
 
           <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 820 }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 940 }}>
               <thead>
                 <tr style={{ background: '#f0f2f7' }}>
                   <th style={{
@@ -565,7 +566,9 @@ export default async function BoxScorePage({
                       <td style={{ padding: '9px 12px', textAlign: 'center', fontSize: 12, color: SEC, borderBottom: `1px solid ${BORDER}` }}>{r.tpm}-{r.tpa}</td>
                       <td style={{ padding: '9px 12px', textAlign: 'center', fontSize: 12, color: SEC, borderBottom: `1px solid ${BORDER}` }}>{r.ftm}-{r.fta}</td>
                       <td style={{ padding: '9px 12px', textAlign: 'center', fontSize: 11, color: MUTED, borderBottom: `1px solid ${BORDER}` }}>{pct(r.ftm, r.fta)}</td>
-                      <td title={`OReb: ${r.oreb}  DReb: ${r.dreb}`} style={{ padding: '9px 12px', textAlign: 'center', fontSize: 12, fontWeight: 600, color: TEAL, borderBottom: `1px solid ${BORDER}`, cursor: 'default' }}>{r.reb}</td>
+                      <td style={{ padding: '9px 12px', textAlign: 'center', fontSize: 12, fontWeight: 600, color: TEAL, borderBottom: `1px solid ${BORDER}` }}>{r.reb}</td>
+                      <td style={{ padding: '9px 12px', textAlign: 'center', fontSize: 12, color: SEC, borderBottom: `1px solid ${BORDER}` }}>{r.oreb}</td>
+                      <td style={{ padding: '9px 12px', textAlign: 'center', fontSize: 12, color: SEC, borderBottom: `1px solid ${BORDER}` }}>{r.dreb}</td>
                       <td style={{ padding: '9px 12px', textAlign: 'center', fontSize: 12, color: SEC, borderBottom: `1px solid ${BORDER}` }}>{r.ast}</td>
                       <td style={{ padding: '9px 12px', textAlign: 'center', fontSize: 12, color: SEC, borderBottom: `1px solid ${BORDER}` }}>{r.stl}</td>
                       <td style={{ padding: '9px 12px', textAlign: 'center', fontSize: 12, color: SEC, borderBottom: `1px solid ${BORDER}` }}>{r.blk}</td>
@@ -586,6 +589,8 @@ export default async function BoxScorePage({
                   <td style={{ padding: '10px 12px', textAlign: 'center', fontSize: 11, fontWeight: 700, color: SEC }}>{totals.ftm}-{totals.fta}</td>
                   <td style={{ padding: '10px 12px', textAlign: 'center', fontSize: 11, color: MUTED }}>{pct(totals.ftm, totals.fta)}</td>
                   <td style={{ padding: '10px 12px', textAlign: 'center', fontSize: 11, fontWeight: 700, color: TEAL }}>{totals.reb}</td>
+                  <td style={{ padding: '10px 12px', textAlign: 'center', fontSize: 11, fontWeight: 700, color: SEC }}>{totals.oreb}</td>
+                  <td style={{ padding: '10px 12px', textAlign: 'center', fontSize: 11, fontWeight: 700, color: SEC }}>{totals.dreb}</td>
                   <td style={{ padding: '10px 12px', textAlign: 'center', fontSize: 11, fontWeight: 700, color: SEC }}>{totals.ast}</td>
                   <td style={{ padding: '10px 12px', textAlign: 'center', fontSize: 11, fontWeight: 700, color: SEC }}>{totals.stl}</td>
                   <td style={{ padding: '10px 12px', textAlign: 'center', fontSize: 11, fontWeight: 700, color: SEC }}>{totals.blk}</td>
@@ -597,7 +602,7 @@ export default async function BoxScorePage({
           </div>
 
           <div style={{ padding: '10px 20px', borderTop: `1px solid ${BORDER}`, fontSize: 10, color: MUTED }}>
-            REB hover shows offensive / defensive split · TO highlighted red when &gt; 4 · Click any player name to view their development profile
+REB = OREB + DREB · TO highlighted red when &gt; 4 · Click any player name to view their development profile
           </div>
         </div>
       </div>

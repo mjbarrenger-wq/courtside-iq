@@ -5,19 +5,12 @@ import { STAT_CATEGORIES, type StatKey } from './statCategories'
 
 export function StatCategoryMenu({
   current,
-  playerSelected,
 }: {
   current: StatKey
-  playerSelected: boolean
 }) {
   const router       = useRouter()
   const searchParams = useSearchParams()
   const pathname     = usePathname()
-
-  // Box-score categories are only computed at team level — player_game_stats
-  // gives us a player's own off/def/net PPP per game for free, but not their
-  // per-game eFG%/TO%/etc breakdown, so those options are hidden in player mode.
-  const options = STAT_CATEGORIES.filter(c => !playerSelected || !c.teamOnly)
 
   const onChange = (key: string) => {
     const params = new URLSearchParams(searchParams.toString())
@@ -51,7 +44,7 @@ export function StatCategoryMenu({
           minWidth: 190,
         }}
       >
-        {options.map(c => (
+        {STAT_CATEGORIES.map(c => (
           <option key={c.key} value={c.key}>{c.label}</option>
         ))}
       </select>

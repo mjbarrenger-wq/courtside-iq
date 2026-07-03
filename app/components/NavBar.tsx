@@ -8,12 +8,12 @@ const NAV_ITEMS = [
   { label: 'Driver Tree', href: '/dashboard' },
   { label: 'Quadrants',   href: '/players' },
   { label: 'Profiles',    href: '/profiles' },
+  { label: 'Debriefs',    href: '/debriefs' },
   { label: 'Trends',      href: '/trends' },
   { label: 'Practice',    href: '/practice' },
   { label: 'Drills',      href: '/drills' },
   { label: 'Rotations',   href: '/rotations' },
   { label: 'Game Config', href: '/games' },
-  { label: 'Debriefs',    href: '/debriefs' },
   { label: 'Glossary',    href: '/glossary' },
 ]
 
