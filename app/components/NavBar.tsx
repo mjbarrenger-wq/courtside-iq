@@ -13,6 +13,7 @@ const NAV_ITEMS = [
   { label: 'Drills',      href: '/drills' },
   { label: 'Rotations',   href: '/rotations' },
   { label: 'Game Config', href: '/games' },
+  { label: 'Debriefs',    href: '/debriefs' },
   { label: 'Glossary',    href: '/glossary' },
 ]
 
@@ -46,9 +47,16 @@ export function NavBar() {
       {/* Nav links */}
       <div className="nav-scroll flex items-center gap-0.5 overflow-x-auto md:overflow-visible">
         {NAV_ITEMS.map(({ label, href }) => {
+          // Individual debriefs live at /games/[id] — nested under the Game
+          // Config route but conceptually part of Debriefs, so they shouldn't
+          // both highlight the same way a plain startsWith(href) would give.
           const isActive = href === '/'
             ? pathname === '/'
-            : pathname.startsWith(href)
+            : href === '/games'
+              ? pathname === '/games'
+              : href === '/debriefs'
+                ? pathname === '/debriefs' || pathname.startsWith('/games/')
+                : pathname.startsWith(href)
           return (
             <Link
               key={href}

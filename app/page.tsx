@@ -365,7 +365,7 @@ export default async function Home() {
                       color: g.result === 'W' ? '#059669' : '#dc2626',
                     }}>{g.result}</span>
                     <span style={{ fontSize: 10, color: '#6b7280', width: 72, textAlign: 'right', fontWeight: 500 }}>
-                      Box Score →
+                      Game Debrief →
                     </span>
                   </div>
                 </a>
