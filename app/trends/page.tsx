@@ -45,8 +45,13 @@ function applyFilter(allGames: any[], filter: FilterKey): any[] {
   }
 }
 
-function pct(made: number, att: number): number {
-  return att > 0 ? Math.round((made / att) * 1000) / 10 : 0
+// Returns null (not 0) when there were no attempts — a game where a player/team
+// took zero shots or zero free throws isn't a "0% shooting" game, it's a game
+// with no data for that percentage stat, and should be excluded from averages
+// and chart lines rather than dragging them down. Counting stats (points,
+// rebounds, assists etc.) don't have this problem — 0 of those is real data.
+function pct(made: number, att: number): number | null {
+  return att > 0 ? Math.round((made / att) * 1000) / 10 : null
 }
 
 export default async function TrendsPage({
@@ -94,8 +99,8 @@ export default async function TrendsPage({
   // available in player mode too.
   const pppByGame: Record<string, { off: number | null; def: number | null; net: number | null }> = {}
   const boxByGame:  Record<string, {
-    ppg: number; toPct: number; efg: number; reb: number; oreb: number; dreb: number
-    ast: number; stl: number; blk: number; ftPct: number
+    ppg: number; toPct: number | null; efg: number | null; reb: number; oreb: number; dreb: number
+    ast: number; stl: number; blk: number; ftPct: number | null
   }> = {}
 
   type RawBox = {

@@ -109,10 +109,11 @@ export default async function Home() {
       <div className="px-4 md:px-8 pt-8" style={{ maxWidth: 1100, margin: '0 auto' }}>
 
         {/* ── Nav cards ── */}
-        {/* Phone: 1 col. Small tablet: 2 cols. Desktop (md+): original 5 across. */}
+        {/* One card per nav bar destination (Overview excluded — this page IS Overview), */}
+        {/* ordered to match the nav bar sequence. Phone: 1 col. Small tablet: 2 cols. Desktop (md+): 5 across, 2 rows. */}
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-5 mb-10">
 
-          {/* Coaching Intelligence */}
+          {/* Driver Tree */}
           <a href="/dashboard" style={{ textDecoration: 'none', display: 'flex' }}>
             <div style={{
               background: CARD, border: `1px solid ${BORDER}`,
@@ -146,7 +147,7 @@ export default async function Home() {
             </div>
           </a>
 
-          {/* Player Quadrants */}
+          {/* Quadrants */}
           <a href="/players" style={{ textDecoration: 'none', display: 'flex' }}>
             <div style={{
               background: CARD, border: `1px solid ${BORDER}`,
@@ -174,6 +175,142 @@ export default async function Home() {
                     background: '#eef1f6', border: `1px solid ${BORDER}`,
                     borderRadius: 20, padding: '3px 10px', fontSize: 10,
                     fontWeight: 600, color: '#307b92',
+                  }}>{tag}</span>
+                ))}
+              </div>
+            </div>
+          </a>
+
+          {/* Profiles */}
+          <a href="/profiles" style={{ textDecoration: 'none', display: 'flex' }}>
+            <div style={{
+              background: CARD, border: `1px solid ${BORDER}`,
+              borderTop: '3px solid #f59e0b',
+              borderRadius: 14, padding: '28px 28px 24px',
+              cursor: 'pointer', flex: 1,
+              display: 'flex', flexDirection: 'column',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: '#d97706', letterSpacing: '0.08em' }}>
+                  PLAYER DEVELOPMENT
+                </div>
+                <span style={{ fontSize: 18, color: '#d97706' }}>→</span>
+              </div>
+              <div style={{ fontSize: 22, fontWeight: 800, color: '#1a1f2e', marginBottom: 10, lineHeight: 1.2 }}>
+                Player Profiles
+              </div>
+              <div style={{ fontSize: 13, color: '#6b7280', lineHeight: 1.7, flex: 1 }}>
+                Individual development profiles for every player. Select a player from the quadrant
+                view to see pillar scores, team ranks, AI insights, and drill recommendations.
+              </div>
+              <div style={{ marginTop: 18, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                {['Insights', 'Work Ons', 'Drills'].map(tag => (
+                  <span key={tag} style={{
+                    background: '#fffbeb', border: `1px solid #fcd34d`,
+                    borderRadius: 20, padding: '3px 10px', fontSize: 10,
+                    fontWeight: 600, color: '#d97706',
+                  }}>{tag}</span>
+                ))}
+              </div>
+            </div>
+          </a>
+
+          {/* Debriefs */}
+          <a href="/debriefs" style={{ textDecoration: 'none', display: 'flex' }}>
+            <div style={{
+              background: CARD, border: `1px solid ${BORDER}`,
+              borderTop: '3px solid #8b5cf6',
+              borderRadius: 14, padding: '28px 28px 24px',
+              cursor: 'pointer', flex: 1,
+              display: 'flex', flexDirection: 'column',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: '#7c3aed', letterSpacing: '0.08em' }}>
+                  GAME RECAPS
+                </div>
+                <span style={{ fontSize: 18, color: '#7c3aed' }}>→</span>
+              </div>
+              <div style={{ fontSize: 22, fontWeight: 800, color: '#1a1f2e', marginBottom: 10, lineHeight: 1.2 }}>
+                Game Debriefs
+              </div>
+              <div style={{ fontSize: 13, color: '#6b7280', lineHeight: 1.7, flex: 1 }}>
+                Every game on the schedule with an AI coaching narrative, pillar-by-pillar breakdown,
+                and full box score. Filter by result or game type.
+              </div>
+              <div style={{ marginTop: 18, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                {['AI Narrative', 'Box Scores', 'All Games'].map(tag => (
+                  <span key={tag} style={{
+                    background: '#f5f3ff', border: `1px solid #ddd6fe`,
+                    borderRadius: 20, padding: '3px 10px', fontSize: 10,
+                    fontWeight: 600, color: '#7c3aed',
+                  }}>{tag}</span>
+                ))}
+              </div>
+            </div>
+          </a>
+
+          {/* Trends */}
+          <a href="/trends" style={{ textDecoration: 'none', display: 'flex' }}>
+            <div style={{
+              background: CARD, border: `1px solid ${BORDER}`,
+              borderTop: '3px solid #38bdf8',
+              borderRadius: 14, padding: '28px 28px 24px',
+              cursor: 'pointer', flex: 1,
+              display: 'flex', flexDirection: 'column',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: '#0284c7', letterSpacing: '0.08em' }}>
+                  SEASON ANALYTICS
+                </div>
+                <span style={{ fontSize: 18, color: '#0284c7' }}>→</span>
+              </div>
+              <div style={{ fontSize: 22, fontWeight: 800, color: '#1a1f2e', marginBottom: 10, lineHeight: 1.2 }}>
+                Season Trends
+              </div>
+              <div style={{ fontSize: 13, color: '#6b7280', lineHeight: 1.7, flex: 1 }}>
+                Chart any stat across the season — PPP, shooting, rebounds, and more — for the team
+                or an individual player, filtered by game type.
+              </div>
+              <div style={{ marginTop: 18, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                {['Stat Trends', 'Player View', 'Filters'].map(tag => (
+                  <span key={tag} style={{
+                    background: '#f0f9ff', border: `1px solid #bae6fd`,
+                    borderRadius: 20, padding: '3px 10px', fontSize: 10,
+                    fontWeight: 600, color: '#0284c7',
+                  }}>{tag}</span>
+                ))}
+              </div>
+            </div>
+          </a>
+
+          {/* Practice */}
+          <a href="/practice" style={{ textDecoration: 'none', display: 'flex' }}>
+            <div style={{
+              background: CARD, border: `1px solid ${BORDER}`,
+              borderTop: '3px solid #10b981',
+              borderRadius: 14, padding: '28px 28px 24px',
+              cursor: 'pointer', flex: 1,
+              display: 'flex', flexDirection: 'column',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: '#059669', letterSpacing: '0.08em' }}>
+                  TRAINING TOOLS
+                </div>
+                <span style={{ fontSize: 18, color: '#059669' }}>→</span>
+              </div>
+              <div style={{ fontSize: 22, fontWeight: 800, color: '#1a1f2e', marginBottom: 10, lineHeight: 1.2 }}>
+                Practice Builder
+              </div>
+              <div style={{ fontSize: 13, color: '#6b7280', lineHeight: 1.7, flex: 1 }}>
+                AI-generated 60 or 90-minute session plans built around your team's current weakest
+                pillars, with structured blocks and coaching cues.
+              </div>
+              <div style={{ marginTop: 18, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                {['AI Sessions', '60/90 Min', 'Pillar-Targeted'].map(tag => (
+                  <span key={tag} style={{
+                    background: '#ecfdf5', border: `1px solid #a7f3d0`,
+                    borderRadius: 20, padding: '3px 10px', fontSize: 10,
+                    fontWeight: 600, color: '#059669',
                   }}>{tag}</span>
                 ))}
               </div>
@@ -214,40 +351,6 @@ export default async function Home() {
             </div>
           </a>
 
-          {/* Glossary */}
-          <a href="/glossary" style={{ textDecoration: 'none', display: 'flex' }}>
-            <div style={{
-              background: CARD, border: `1px solid ${BORDER}`,
-              borderTop: '3px solid #64748b',
-              borderRadius: 14, padding: '28px 28px 24px',
-              cursor: 'pointer', flex: 1,
-              display: 'flex', flexDirection: 'column',
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: '#6b7280', letterSpacing: '0.08em' }}>
-                  REFERENCE
-                </div>
-                <span style={{ fontSize: 18, color: '#6b7280' }}>→</span>
-              </div>
-              <div style={{ fontSize: 22, fontWeight: 800, color: '#1a1f2e', marginBottom: 10, lineHeight: 1.2 }}>
-                Glossary
-              </div>
-              <div style={{ fontSize: 13, color: '#6b7280', lineHeight: 1.7, flex: 1 }}>
-                Definitions for every metric in the platform — formulas, basketball meaning,
-                and how each stat connects to performance outcomes.
-              </div>
-              <div style={{ marginTop: 18, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                {['Formulas', 'Definitions', 'Searchable'].map(tag => (
-                  <span key={tag} style={{
-                    background: '#eef1f6', border: `1px solid ${BORDER}`,
-                    borderRadius: 20, padding: '3px 10px', fontSize: 10,
-                    fontWeight: 600, color: '#6b7280',
-                  }}>{tag}</span>
-                ))}
-              </div>
-            </div>
-          </a>
-
           {/* Rotation Planner */}
           <a href="/rotations" style={{ textDecoration: 'none', display: 'flex' }}>
             <div style={{
@@ -282,34 +385,68 @@ export default async function Home() {
             </div>
           </a>
 
-          {/* Player Profiles */}
-          <a href="/profiles" style={{ textDecoration: 'none', display: 'flex' }}>
+          {/* Game Config */}
+          <a href="/games" style={{ textDecoration: 'none', display: 'flex' }}>
             <div style={{
               background: CARD, border: `1px solid ${BORDER}`,
-              borderTop: '3px solid #f59e0b',
+              borderTop: '3px solid #8b5cf6',
               borderRadius: 14, padding: '28px 28px 24px',
               cursor: 'pointer', flex: 1,
               display: 'flex', flexDirection: 'column',
             }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: '#d97706', letterSpacing: '0.08em' }}>
-                  PLAYER DEVELOPMENT
+                <div style={{ fontSize: 11, fontWeight: 700, color: '#7c3aed', letterSpacing: '0.08em' }}>
+                  ADMIN
                 </div>
-                <span style={{ fontSize: 18, color: '#d97706' }}>→</span>
+                <span style={{ fontSize: 18, color: '#7c3aed' }}>→</span>
               </div>
               <div style={{ fontSize: 22, fontWeight: 800, color: '#1a1f2e', marginBottom: 10, lineHeight: 1.2 }}>
-                Player Profiles
+                Game Config
               </div>
               <div style={{ fontSize: 13, color: '#6b7280', lineHeight: 1.7, flex: 1 }}>
-                Individual development profiles for every player. Select a player from the quadrant
-                view to see pillar scores, team ranks, AI insights, and drill recommendations.
+                Assign game type, round, venue, and opponent details for every game — the source data
+                behind the Type filters used across the platform.
               </div>
               <div style={{ marginTop: 18, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                {['Insights', 'Work Ons', 'Drills'].map(tag => (
+                {['Game Type', 'Bulk Edit', 'Setup'].map(tag => (
                   <span key={tag} style={{
-                    background: '#fffbeb', border: `1px solid #fcd34d`,
+                    background: '#f5f3ff', border: `1px solid #ddd6fe`,
                     borderRadius: 20, padding: '3px 10px', fontSize: 10,
-                    fontWeight: 600, color: '#d97706',
+                    fontWeight: 600, color: '#7c3aed',
+                  }}>{tag}</span>
+                ))}
+              </div>
+            </div>
+          </a>
+
+          {/* Glossary */}
+          <a href="/glossary" style={{ textDecoration: 'none', display: 'flex' }}>
+            <div style={{
+              background: CARD, border: `1px solid ${BORDER}`,
+              borderTop: '3px solid #64748b',
+              borderRadius: 14, padding: '28px 28px 24px',
+              cursor: 'pointer', flex: 1,
+              display: 'flex', flexDirection: 'column',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: '#6b7280', letterSpacing: '0.08em' }}>
+                  REFERENCE
+                </div>
+                <span style={{ fontSize: 18, color: '#6b7280' }}>→</span>
+              </div>
+              <div style={{ fontSize: 22, fontWeight: 800, color: '#1a1f2e', marginBottom: 10, lineHeight: 1.2 }}>
+                Glossary
+              </div>
+              <div style={{ fontSize: 13, color: '#6b7280', lineHeight: 1.7, flex: 1 }}>
+                Definitions for every metric in the platform — formulas, basketball meaning,
+                and how each stat connects to performance outcomes.
+              </div>
+              <div style={{ marginTop: 18, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                {['Formulas', 'Definitions', 'Searchable'].map(tag => (
+                  <span key={tag} style={{
+                    background: '#eef1f6', border: `1px solid ${BORDER}`,
+                    borderRadius: 20, padding: '3px 10px', fontSize: 10,
+                    fontWeight: 600, color: '#6b7280',
                   }}>{tag}</span>
                 ))}
               </div>
