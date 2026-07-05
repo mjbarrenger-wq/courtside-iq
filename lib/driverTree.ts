@@ -138,7 +138,11 @@ function per_game(total: number, games: number) {
 // Canonical possession estimate — the single definition used everywhere downstream.
 // Poss = FGA + 0.44·FTA − OREB + TOV. Offensive rebounds are subtracted because they
 // extend the same possession rather than starting a new one.
-function possessions(fga: number, fta: number, oreb: number, tov: number) {
+//
+// Exported so the play-by-play aggregator (lib/pbpAggregate.ts) and the native
+// finalize action reuse the identical formula rather than re-implementing it —
+// two copies of the same math are exactly what has bitten this project before.
+export function possessions(fga: number, fta: number, oreb: number, tov: number) {
   return fga + 0.44 * fta - oreb + tov
 }
 

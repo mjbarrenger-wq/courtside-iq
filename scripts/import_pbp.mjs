@@ -30,6 +30,7 @@
  */
 
 import fs from 'fs'
+import { reconstructStints, stintToRow } from '../lib/pbpAggregate.ts'
 
 const SB_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL ||
   'https://pxefkxtshmuhsuixzgrz.supabase.co'
@@ -69,8 +70,10 @@ const clkToSec = (c) => {
   const m = String(c).match(/(\d+):(\d+(?:\.\d+)?)/)
   return m ? parseInt(m[1]) * 60 + parseFloat(m[2]) : null
 }
-const secToClk = (s) => `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, '0')}`
-const poss = (fga, fta, or, to) => +(fga + 0.44 * fta - or + to).toFixed(2)
+// Stint reconstruction, possession math, and secToClk now live in the shared
+// lib/pbpAggregate.ts so this importer and the native finalize action stay in
+// lock-step. clkToSec above is kept local — it parses the Hoopsalytics "M:SS"
+// paste clock, which is a concern of this file's text parser, not aggregation.
 
 // Offline: emit the load SQL instead of writing via REST (used when the runner
 // has no network to Supabase). Pipe/copy this into the SQL editor.
@@ -104,20 +107,10 @@ async function main() {
 
   // ── Parse ───────────────────────────────────────────────────────────────────
   const lineup = new Set()
+  const starters = [] // jerseys named on the "Starter" lines — the tip-off five
   let q = 0, curClock = 600, ord = 0, ourRun = 0, oppRun = 0
-  const pbp = [], stints = [], checkpoints = []
-  let cur = null
+  const pbp = [], checkpoints = []
   const jerseysOf = (set) => [...set].map((s) => +s.match(/#(\d+)/)[1]).sort((a, b) => a - b)
-  const newWin = (period, startSec) => {
-    cur = { period, start: startSec, end: startSec, fga: 0, fta: 0, oreb: 0, to: 0, pf: 0,
-      ofga: 0, ofta: 0, ooreb: 0, oto: 0, pa: 0 }
-  }
-  const closeWin = (endSec) => {
-    if (cur && lineup.size === 5) {
-      cur.end = endSec; cur.seconds = Math.max(0, cur.start - endSec); cur.js = jerseysOf(lineup)
-      if (cur.seconds > 0) stints.push({ ...cur })
-    }
-  }
   const ev = (et, jersey, side, pts) => {
     ord++; pbp.push({ event_order: ord, period: q, clock_time: String(curClock),
       player_id: jersey ? J2ID[jersey] : null, jersey_number: jersey ?? null,
@@ -129,8 +122,8 @@ async function main() {
     const line = raw.replace(/\t/g, ' ').trim()
     if (!line) continue
     const qm = line.match(/^Q(\d)\s/)
-    if (qm) { const nq = +qm[1]; if (nq !== q) { q = nq; newWin(q, 600) } }
-    if (line.startsWith('End Quarter')) { closeWin(0); cur = null; continue }
+    if (qm) { const nq = +qm[1]; if (nq !== q) q = nq }
+    if (line.startsWith('End Quarter')) continue
     const cm = line.match(/^Q\d\s+(\d+:\d+(?:\.\d+)?)/)
     if (cm) curClock = clkToSec(cm[1])
 
@@ -141,16 +134,15 @@ async function main() {
     }
     if (/Starter /.test(line)) {
       const nm = line.match(/Starter (.+?#\d+)/)[1].trim(); lineup.add(nm)
-      if (!cur) newWin(1, 600); continue
+      starters.push(+nm.match(/#(\d+)/)[1]); continue
     }
     if (/Sub IN /.test(line) || /Sub OUT /.test(line)) {
-      closeWin(curClock)
       for (const m of line.matchAll(/Sub IN (.+?#\d+)/g)) { ev('sub_in', +m[1].match(/#(\d+)/)[1], 'team'); lineup.add(m[1].trim()) }
       for (const m of line.matchAll(/Sub OUT (.+?#\d+)/g)) {
         ev('sub_out', +m[1].match(/#(\d+)/)[1], 'team')
         for (const p of [...lineup]) if (p === m[1].trim()) lineup.delete(p)
       }
-      newWin(q, curClock); continue
+      continue
     }
 
     const opp = /by Other/.test(line)
@@ -174,25 +166,15 @@ async function main() {
 
     if (pts) { if (opp) oppRun += pts; else ourRun += pts }
     ev(et, jersey, opp ? 'opponent' : 'team', pts)
-
-    if (cur && lineup.size === 5) {
-      if (opp) {
-        if (et === 'made_2pt' || et === 'made_3pt') { cur.pa += pts; cur.ofga++ }
-        else if (et === 'missed_2pt' || et === 'missed_3pt') cur.ofga++
-        else if (et === 'made_ft') { cur.pa += 1; cur.ofta++ }
-        else if (et === 'missed_ft') cur.ofta++
-        else if (et === 'oreb') cur.ooreb++
-        else if (et === 'turnover') cur.oto++
-      } else {
-        if (et === 'made_2pt' || et === 'made_3pt') { cur.pf += pts; cur.fga++ }
-        else if (et === 'missed_2pt' || et === 'missed_3pt') cur.fga++
-        else if (et === 'made_ft') { cur.pf += 1; cur.fta++ }
-        else if (et === 'missed_ft') cur.fta++
-        else if (et === 'oreb') cur.oreb++
-        else if (et === 'turnover') cur.to++
-      }
-    }
   }
+
+  // ── Reconstruct stints from the parsed event log ────────────────────────────
+  // The shared aggregator replays the ordered events (seeded with the starting
+  // five) to rebuild every on-court window and its Off/Def PPP — the same logic
+  // the native finalize action uses. clock_time is stored as seconds-remaining.
+  const startingLineup = starters.map((j) => J2ID[j]).filter(Boolean)
+  const aggEvents = pbp.map((r) => ({ ...r, clock_sec: parseFloat(r.clock_time) }))
+  const stints = reconstructStints(aggEvents, startingLineup)
 
   // ── Validate ────────────────────────────────────────────────────────────────
   const problems = []
@@ -221,14 +203,7 @@ async function main() {
     console.error('FORCE=1 set — importing despite the above.')
   }
 
-  const stintRows = stints.map((s) => {
-    const op = poss(s.fga, s.fta, s.oreb, s.to), dp = poss(s.ofga, s.ofta, s.ooreb, s.oto)
-    const offp = op > 0 ? +(s.pf / op).toFixed(3) : 0, defp = dp > 0 ? +(s.pa / dp).toFixed(3) : 0
-    return { game_id: GAME_ID, team_id: TEAM_ID, period: s.period,
-      start_clock: secToClk(s.start), end_clock: secToClk(s.end), seconds: s.seconds,
-      player_ids: s.js.map((j) => J2ID[j]), pf: s.pf, pa: s.pa,
-      off_poss: op, def_poss: dp, off_ppp: offp, def_ppp: defp, net_ppp: +(offp - defp).toFixed(3) }
-  })
+  const stintRows = stints.map((s) => stintToRow(s, GAME_ID, TEAM_ID))
 
   if (DRY) { console.log(`✓ DRY_RUN — parsed cleanly, no DB writes. ${stintRows.length} stints would be written.`); return }
   if (SQL_OUT) { printSql(pbp, stintRows); return }

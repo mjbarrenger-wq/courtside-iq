@@ -1,7 +1,7 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import { updateGame, type GameEditableFields } from './actions'
+import { updateGame, deleteGame, type GameEditableFields } from './actions'
 import { GAME_TYPE_CONFIG, type GameTypeKey } from '../dashboard/filterConfig'
 
 const BG     = '#f4f5f7'
@@ -25,6 +25,7 @@ export interface GameRow {
   team_score: number | null
   opponent_score: number | null
   result: string | null
+  video_urls: string[] | null
 }
 
 export interface OpponentOption {
@@ -69,6 +70,7 @@ export default function GamesSetupTable({
   )
   const [saving, setSaving] = useState<Set<string>>(new Set())
   const [saved, setSaved] = useState<Set<string>>(new Set())
+  const [deleting, setDeleting] = useState<Set<string>>(new Set())
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [search, setSearch] = useState('')
   const [typeFilter, setTypeFilter] = useState<GameTypeKey>('all_types')
@@ -142,6 +144,31 @@ export default function GamesSetupTable({
         return next
       })
     }, 1800)
+  }
+
+  async function deleteRow(id: string) {
+    const row = rows.find(r => r.id === id)
+    if (!row) return
+    const label = `${opponentName(row.opponent_id)} · ${row.game_date}`
+    const ok = window.confirm(
+      `Delete game vs ${label}?\n\nThis permanently removes the game and its box score, ` +
+      `lineup stints, play-by-play and stored debrief. This cannot be undone.`,
+    )
+    if (!ok) return
+
+    setDeleting(prev => new Set(prev).add(id))
+    setErrors(prev => { const next = { ...prev }; delete next[id]; return next })
+
+    const result = await deleteGame(id)
+
+    setDeleting(prev => { const next = new Set(prev); next.delete(id); return next })
+
+    if (!result.success) {
+      setErrors(prev => ({ ...prev, [id]: result.error ?? 'Delete failed' }))
+      return
+    }
+    setRows(prev => prev.filter(r => r.id !== id))
+    setOriginal(prev => { const next = { ...prev }; delete next[id]; return next })
   }
 
   const dirtyIds = useMemo(
@@ -314,6 +341,12 @@ export default function GamesSetupTable({
                       <a href={`/games/${r.id}`} style={{ fontSize: 10, color: TEAL, textDecoration: 'none', fontWeight: 600 }}>
                         Debrief →
                       </a>
+                      {r.video_urls && r.video_urls.length > 0 && (
+                        <a href={`/games/${r.id}/enter`} title="Open the video scoring screen"
+                          style={{ fontSize: 10, color: TEAL, textDecoration: 'none', fontWeight: 600 }}>
+                          {r.team_score == null ? 'Score →' : 'Edit →'}
+                        </a>
+                      )}
                       {isDirty && !isSaving && (
                         <>
                           <button
@@ -335,6 +368,18 @@ export default function GamesSetupTable({
                       {isSaving && <span style={{ fontSize: 10, color: MUTED }}>Saving…</span>}
                       {isSaved && !isDirty && <span style={{ fontSize: 10, color: GREEN, fontWeight: 700 }}>✓ Saved</span>}
                       {error && <span style={{ fontSize: 10, color: RED, fontWeight: 600 }} title={error}>Error</span>}
+                      {deleting.has(r.id) ? (
+                        <span style={{ fontSize: 10, color: MUTED }}>Deleting…</span>
+                      ) : (
+                        <button
+                          onClick={() => deleteRow(r.id)}
+                          title="Delete this game permanently"
+                          style={{
+                            fontSize: 10, fontWeight: 700, color: RED, background: 'transparent',
+                            border: 'none', cursor: 'pointer', marginLeft: 2,
+                          }}
+                        >Delete</button>
+                      )}
                     </div>
                   </td>
                 </tr>

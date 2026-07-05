@@ -38,6 +38,7 @@ export default async function GamesSetupPage() {
     team_score:      g.team_score ?? null,
     opponent_score:  g.opponent_score ?? null,
     result:          g.result ?? null,
+    video_urls:      Array.isArray(g.video_urls) ? g.video_urls : null,
   }))
 
   const unassignedCount = rows.filter(r => r.game_type === 'regular_season').length
@@ -56,7 +57,13 @@ export default async function GamesSetupPage() {
             <span style={{ margin: '0 6px' }}>›</span>
             <span style={{ color: '#307b92' }}>Game Config</span>
           </div>
-          <div style={{ fontSize: 22, fontWeight: 800, color: '#1a1f2e' }}>Game Config</div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+            <div style={{ fontSize: 22, fontWeight: 800, color: '#1a1f2e' }}>Game Config</div>
+            <a href="/games/new" style={{
+              fontSize: 12, fontWeight: 700, color: '#ffffff', background: '#307b92',
+              border: 'none', borderRadius: 8, padding: '8px 16px', textDecoration: 'none', whiteSpace: 'nowrap',
+            }}>+ New Game</a>
+          </div>
           <div style={{ fontSize: 13, color: MUTED, marginTop: 4 }}>
             Configure game type (regular season, finals, tournament, grading, practice) and details for every game.
             {unassignedCount > 0 && (
