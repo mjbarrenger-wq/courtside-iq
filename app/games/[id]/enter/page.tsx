@@ -39,7 +39,14 @@ function reconstructState(
       clock_sec: r.clock_time != null && r.clock_time !== '' ? parseFloat(r.clock_time) : null,
       team_score: r.team_score ?? 0,
       opp_score: r.opp_score ?? 0,
+      shot_x: r.shot_x ?? null,
+      shot_y: r.shot_y ?? null,
     }))
+
+  // Opponent jersey numbers seen in the log, so the per-opponent chips reappear.
+  const opponentJerseys = [...new Set(
+    events.filter(e => e.team_side === 'opponent' && e.jersey_number != null).map(e => e.jersey_number as number),
+  )].sort((a, b) => a - b)
 
   const p1 = (Array.isArray(stints) ? stints : []).filter(s => s.period === 1)
   const first = p1.find(s => s.start_clock === '10:00') ?? p1[0]
@@ -60,6 +67,7 @@ function reconstructState(
     starters,
     period: events.length ? events[events.length - 1].period : 1,
     events,
+    opponentJerseys,
     updatedAt: Date.now(),
   }
 }
@@ -69,7 +77,7 @@ export default async function EnterPage({ params }: { params: Promise<{ id: stri
   const [gamesRaw, playersRaw, pbpRaw, stintsRaw] = await Promise.all([
     fetchJson(`games?id=eq.${id}&select=id,game_date,opponent_id,video_urls`),
     fetchJson('players?select=id,jersey_number,first_name,last_name&order=jersey_number.asc'),
-    fetchJson(`play_by_play?game_id=eq.${id}&select=event_order,period,clock_time,video_time,player_id,jersey_number,event_type,team_side,points,team_score,opp_score&order=event_order.asc`),
+    fetchJson(`play_by_play?game_id=eq.${id}&select=event_order,period,clock_time,video_time,player_id,jersey_number,event_type,team_side,points,team_score,opp_score,shot_x,shot_y&order=event_order.asc`),
     fetchJson(`lineup_stints?game_id=eq.${id}&select=period,start_clock,player_ids`),
   ])
   const game = Array.isArray(gamesRaw) ? gamesRaw[0] : null

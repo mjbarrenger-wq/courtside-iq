@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { loadEntryState, type EntryState } from '@/lib/entryState'
 import { aggregateBox, reconstructStints, rollupPlayerOnCourt } from '@/lib/pbpAggregate'
 import { finalizeNativeGame } from '../actions'
+import HalfCourt, { type Shot } from '../HalfCourt'
 
 const BORDER = '#e2e5eb'
 const CARD   = '#ffffff'
@@ -71,7 +72,14 @@ export default function FinalizeReview({
       const c = box.players.get(pid)!
       return { pid, c, pm: oc.get(pid)?.plus_minus ?? 0 }
     }).sort((a, b) => b.c.pts - a.c.pts)
-    return { rows, stints: stints.length, opp: box.opponent }
+    // Our shots that have a recorded location, for the shot chart.
+    const shots: Shot[] = state.events
+      .filter(e => e.team_side === 'team' && e.shot_x != null && e.shot_y != null)
+      .map(e => ({
+        x: e.shot_x as number, y: e.shot_y as number,
+        made: e.event_type === 'made_2pt' || e.event_type === 'made_3pt', pts: e.points,
+      }))
+    return { rows, stints: stints.length, opp: box.opponent, shots }
   }, [state])
 
   const teamN = parseInt(teamFinal || '', 10)
@@ -201,6 +209,21 @@ export default function FinalizeReview({
                 </tr>
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+
+      {/* Shot chart */}
+      {preview && preview.shots.length > 0 && (
+        <div style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: 12, padding: 16 }}>
+          <div style={{ fontSize: 10, fontWeight: 800, color: TEAL, letterSpacing: '0.06em', marginBottom: 4 }}>
+            SHOT CHART · {preview.shots.filter(s => s.made).length}/{preview.shots.length} made
+          </div>
+          <div style={{ fontSize: 11, color: MUTED, marginBottom: 10 }}>
+            <span style={{ color: GREEN, fontWeight: 700 }}>● made</span> · <span style={{ color: RED, fontWeight: 700 }}>✕ missed</span> (located shots only)
+          </div>
+          <div style={{ maxWidth: 380 }}>
+            <HalfCourt shots={preview.shots} />
           </div>
         </div>
       )}

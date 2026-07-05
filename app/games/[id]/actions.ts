@@ -107,10 +107,10 @@ export async function finalizeNativeGame(
   }))
 
   const box = aggregateBox(aggEvents)
-  // Native games carry video_time (counts up); a game reconstructed from an
-  // imported/clock-based log carries only clock_sec (counts down). Pick the source
-  // the data actually has so re-finalizing either kind reproduces its stints.
-  const timeSource = aggEvents.some(e => e.video_time != null) ? 'video' : 'clock'
+  // The game clock, when the coach ran it, is the authority for game time (it's the
+  // one they control and correct); prefer clock_sec over the YouTube timer for stint
+  // durations. Fall back to video_time when the clock wasn't used.
+  const timeSource = aggEvents.some(e => e.clock_sec != null) ? 'clock' : 'video'
   const stints = reconstructStints(aggEvents, starters, { timeSource })
   const onCourt = rollupPlayerOnCourt(stints)
 
@@ -155,6 +155,8 @@ export async function finalizeNativeGame(
     points: e.points,
     team_score: events[i].team_score,
     opp_score: events[i].opp_score,
+    shot_x: events[i].shot_x ?? null,
+    shot_y: events[i].shot_y ?? null,
   }))
 
   const stintRows = stints.map(s => stintToRow(s, gameId, TEAM_ID))

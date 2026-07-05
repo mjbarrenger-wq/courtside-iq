@@ -19,9 +19,13 @@ export interface LocalEvent {
   player_id: string | null
   jersey_number: number | null
   video_time: number | null // YouTube playback position at the tap (seconds)
-  clock_sec: number | null   // optional manual game clock; unused in v1
+  clock_sec: number | null   // game clock (seconds remaining) if the clock was used
   team_score: number         // running score AFTER this event
   opp_score: number
+  // Normalized half-court shot location [0,1] on made/missed FG events (see the
+  // add_play_by_play_shot_location migration). Null when not recorded.
+  shot_x?: number | null
+  shot_y?: number | null
 }
 
 export interface EntryState {
@@ -30,6 +34,10 @@ export interface EntryState {
   starters: string[]  // the five player_ids on court at tip-off
   period: number      // quarter currently being entered (1-4)
   events: LocalEvent[]
+  // Opponent jersey numbers added on the fly, for optional per-opponent-player
+  // logging. The opponent box aggregate stays team-level; these give play-by-play
+  // detail (jersey stored on the event) without an opponent roster.
+  opponentJerseys?: number[]
   updatedAt: number
 }
 
