@@ -48,6 +48,22 @@ function reconstructState(
     events.filter(e => e.team_side === 'opponent' && e.jersey_number != null).map(e => e.jersey_number as number),
   )].sort((a, b) => a - b)
 
+  // Best-effort recovery of the opponent starting five (localStorage is gone on a
+  // fresh reopen). A jersey was on court at tip if its FIRST period-1 appearance is a
+  // stat or a sub_out (you can't be subbed off unless you were on) rather than its own
+  // sub_in. Mirrors the team-starters fallback; only matters for re-finalize minutes.
+  const opponentStarters: number[] = []
+  const oppSubbedIn = new Set<number>()
+  for (const e of events) {
+    if (e.period !== 1) break
+    if (e.team_side !== 'opponent' || e.jersey_number == null) continue
+    const j = e.jersey_number
+    if (e.event_type === 'sub_in') { oppSubbedIn.add(j); continue }
+    if (!oppSubbedIn.has(j) && !opponentStarters.includes(j) && opponentStarters.length < 5) {
+      opponentStarters.push(j)
+    }
+  }
+
   const p1 = (Array.isArray(stints) ? stints : []).filter(s => s.period === 1)
   const first = p1.find(s => s.start_clock === '10:00') ?? p1[0]
   let starters: string[] = Array.isArray(first?.player_ids) ? first.player_ids : []
@@ -68,6 +84,7 @@ function reconstructState(
     period: events.length ? events[events.length - 1].period : 1,
     events,
     opponentJerseys,
+    opponentStarters,
     updatedAt: Date.now(),
   }
 }

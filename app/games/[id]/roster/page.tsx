@@ -60,7 +60,7 @@ export default async function RosterPage({ params }: { params: Promise<{ id: str
 
       <div className="px-4 md:px-8 pt-6" style={{ maxWidth: 920, margin: '0 auto' }}>
         {game ? (
-          <RosterPicker gameId={id} players={players} />
+          <RosterPicker gameId={id} players={players} opponentName={opponentName} />
         ) : (
           <div style={{ fontSize: 13, color: MUTED }}>
             That game doesn&rsquo;t exist. <a href="/games/new" style={{ color: '#307b92' }}>Create one</a>.

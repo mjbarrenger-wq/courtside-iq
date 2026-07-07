@@ -3,9 +3,10 @@
 import { generateAndStoreDebrief, type DebriefResult } from '@/lib/generateDebrief'
 import { supabase } from '@/lib/supabase'
 import {
-  reconstructStints, stintToRow, aggregateBox, sidePossessions, rollupPlayerOnCourt,
-  type AggEvent,
+  reconstructStints, stintToRow, aggregateBox, sidePossessions, aggregateOpponentByJersey,
+  opponentSecondsByJersey, type AggEvent,
 } from '@/lib/pbpAggregate'
+import { computePlayerAdvanced, playerSecondsFromStints } from '@/lib/advancedStats'
 import type { LocalEvent } from '@/lib/entryState'
 
 // Called by the Regenerate button. Generates a fresh debrief and writes it to
@@ -20,13 +21,15 @@ const TEAM_ID = 'b1000000-0000-0000-0000-000000000001'
 
 const r1 = (n: number) => Math.round(n * 10) / 10
 const r3 = (n: number) => Math.round(n * 1000) / 1000
-const pct1 = (made: number, att: number): number | null => (att > 0 ? r1((made / att) * 100) : null)
 
 export interface FinalizeInput {
   starters: string[]
   events: LocalEvent[]
   finalTeamScore: number
   finalOppScore: number
+  // Opponent jerseys on court at tip, for opponent minutes. Optional — when absent,
+  // opponent minutes fall back to whatever the sub events alone imply (often none).
+  opponentStarters?: number[]
 }
 
 export interface FinalizeResult {
@@ -73,7 +76,7 @@ async function replaceRows(
 export async function finalizeNativeGame(
   gameId: string, input: FinalizeInput,
 ): Promise<FinalizeResult> {
-  const { starters, events, finalTeamScore, finalOppScore } = input
+  const { starters, events, finalTeamScore, finalOppScore, opponentStarters = [] } = input
 
   if (!Array.isArray(events) || events.length === 0) {
     return { success: false, error: 'No events to finalize — score the game first.' }
@@ -104,6 +107,7 @@ export async function finalizeNativeGame(
     player_id: e.player_id,
     clock_sec: e.clock_sec,
     video_time: e.video_time,
+    jersey_number: e.jersey_number,
   }))
 
   const box = aggregateBox(aggEvents)
@@ -112,7 +116,10 @@ export async function finalizeNativeGame(
   // durations. Fall back to video_time when the clock wasn't used.
   const timeSource = aggEvents.some(e => e.clock_sec != null) ? 'clock' : 'video'
   const stints = reconstructStints(aggEvents, starters, { timeSource })
-  const onCourt = rollupPlayerOnCourt(stints)
+  // Full Hoopsalytics-parity advanced line per player (box-derived exact +
+  // pbp-inferred + on-court our-method). See lib/advancedStats.ts for the parity
+  // note; this is the same module scripts/validate_advanced.mjs checks vs games 29-32.
+  const advanced = computePlayerAdvanced(aggEvents, starters, box, { timeSource })
 
   // Per-player arithmetic guard (§4): points and rebounds must reconcile to the
   // component counts. By construction they will unless the event stream is corrupt,
@@ -134,10 +141,7 @@ export async function finalizeNativeGame(
   const teamDefPpp = oppPoss > 0 ? r3(box.opponent.pts / oppPoss) : 0
 
   // Minutes on court per player, summed from the stints they appeared in.
-  const playerSeconds = new Map<string, number>()
-  for (const s of stints) {
-    for (const pid of s.player_ids) playerSeconds.set(pid, (playerSeconds.get(pid) ?? 0) + s.seconds)
-  }
+  const playerSeconds = playerSecondsFromStints(stints)
 
   // play_by_play rows. Native games always log video_time; clock_time is filled
   // only when the coach ran the optional game clock (stored as seconds-remaining,
@@ -162,48 +166,66 @@ export async function finalizeNativeGame(
   const stintRows = stints.map(s => stintToRow(s, gameId, TEAM_ID))
 
   // player_game_stats — every player who took the floor or recorded a stat. Raw
-  // counts + the on-court rate stats that actually get read (off/def/net_ppp,
-  // plus_minus) + the cheap shooting rates; the Hoopsalytics-only advanced columns
-  // (usage_pct, rtg, VPS, …) stay null with no product impact.
-  const playerIds = new Set<string>([...box.players.keys(), ...onCourt.keys()])
+  // counts + the full advanced line from lib/advancedStats. The box-derived family
+  // (shooting %s, eFG/TS/TO%, a/to, ftf, per-foul) is Hoopsalytics-exact; the
+  // on-court family (usage/rtg/reb%/def%s/pace, off/def/net_ppp, plus_minus) is our
+  // method — exact for native games, close on imported ones. VPS stays null
+  // (Hoopsalytics-proprietary); mpg is a season figure, left to the season rollup.
+  const playerIds = new Set<string>([...box.players.keys(), ...advanced.keys()])
   const playerRows = [...playerIds].map(pid => {
     const c = box.players.get(pid)
-    const oc = onCourt.get(pid)
+    const a = advanced.get(pid)!
     const twopt_made = c?.twopt_made ?? 0, twopt_att = c?.twopt_att ?? 0
     const threept_made = c?.threept_made ?? 0, threept_att = c?.threept_att ?? 0
     const ft_made = c?.ft_made ?? 0, ft_att = c?.ft_att ?? 0
-    const pts = c?.pts ?? 0
-    const fga = twopt_att + threept_att
     return {
       game_id: gameId,
       player_id: pid,
       time_played_seconds: playerSeconds.get(pid) ?? 0,
-      points: pts,
+      points: c?.pts ?? 0,
       reb: c?.reb ?? 0,
       oreb: c?.oreb ?? 0,
       dreb: c?.dreb ?? 0,
       fouls: c?.fouls ?? 0,
       off_fouls: c?.off_fouls ?? 0,
       def_fouls: c?.def_fouls ?? 0,
+      ns_fouls: a.ns_fouls,
       ast: c?.ast ?? 0,
       stl: c?.stl ?? 0,
       blk: c?.blk ?? 0,
       turnovers: c?.turnovers ?? 0,
-      twopt_made, twopt_att, twopt_miss: c?.twopt_miss ?? 0,
-      threept_made, threept_att, threept_miss: c?.threept_miss ?? 0,
-      ft_made, ft_att, ft_miss: c?.ft_miss ?? 0,
-      twopt_pct: pct1(twopt_made, twopt_att),
-      threept_pct: pct1(threept_made, threept_att),
-      ft_pct: pct1(ft_made, ft_att),
-      efg_pct: fga > 0 ? r1(((twopt_made + 1.5 * threept_made) / fga) * 100) : null,
-      ts_pct: (fga + 0.44 * ft_att) > 0 ? r1((pts / (2 * (fga + 0.44 * ft_att))) * 100) : null,
-      to_pct: (fga + 0.44 * ft_att + (c?.turnovers ?? 0)) > 0
-        ? r1(((c?.turnovers ?? 0) / (fga + 0.44 * ft_att + (c?.turnovers ?? 0))) * 100) : null,
-      a_to_ratio: (c?.turnovers ?? 0) > 0 ? r1((c?.ast ?? 0) / (c!.turnovers)) : null,
-      off_ppp: oc?.off_ppp ?? 0,
-      def_ppp: oc?.def_ppp ?? 0,
-      net_ppp: oc?.net_ppp ?? 0,
-      plus_minus: oc?.plus_minus ?? 0,
+      twopt_made, twopt_att, twopt_miss: c?.twopt_miss ?? 0, twopt_fouled: a.twopt_fouled,
+      threept_made, threept_att, threept_miss: c?.threept_miss ?? 0, threept_fouled: a.threept_fouled,
+      ft_made, ft_att, ft_miss: c?.ft_miss ?? 0, ft_trips: a.ft_trips, and1: a.and1,
+      // box-derived (exact)
+      twopt_pct: a.twopt_pct,
+      threept_pct: a.threept_pct,
+      ft_pct: a.ft_pct,
+      efg_pct: a.efg_pct,
+      ts_pct: a.ts_pct,
+      to_pct: a.to_pct,
+      a_to_ratio: a.a_to_ratio,
+      ftf: a.ftf,
+      stl_per_foul: a.stl_per_foul,
+      blk_per_foul: a.blk_per_foul,
+      // on-court (our method)
+      off_ppp: a.off_ppp ?? 0,
+      def_ppp: a.def_ppp ?? 0,
+      net_ppp: a.net_ppp ?? 0,
+      plus_minus: a.plus_minus,
+      off_rtg: a.off_rtg,
+      def_rtg: a.def_rtg,
+      usage_pct: a.usage_pct,
+      reb_pct: a.reb_pct,
+      ast_pct: a.ast_pct,
+      stl_pct: a.stl_pct,
+      blk_pct: a.blk_pct,
+      def_2pt_pct: a.def_2pt_pct,
+      def_3pt_pct: a.def_3pt_pct,
+      def_to_pct: a.def_to_pct,
+      pace: a.pace,
+      off_pace: a.off_pace,
+      ciq_rating: a.ciq_rating, // Courtside IQ value metric, replaces VPS
       vps: null, // Hoopsalytics-proprietary — not reproducible (§2)
     }
   })
@@ -243,6 +265,32 @@ export async function finalizeNativeGame(
     opp_def_ppp: teamPoss > 0 ? r3(t.pts / teamPoss) : 0,
   }
 
+  // Per-opponent-player box score, by jersey (null = the team-level "Other" bucket).
+  // Empty for games with no opponent jerseys entered; the team-level oppRow above
+  // still carries the aggregate either way. Minutes come from the same time base as
+  // our stints; the "Other" bucket and any jersey never placed on court get null.
+  // Rows are the UNION of jerseys with box stats and jerseys with tracked minutes, so
+  // an opponent who played but recorded nothing still gets a row (with their minutes).
+  const oppBox = aggregateOpponentByJersey(aggEvents)
+  const oppSeconds = opponentSecondsByJersey(aggEvents, opponentStarters, { timeSource })
+  const oppJerseyKeys = new Set<number | null>([...oppBox.keys()])
+  for (const j of oppSeconds.keys()) oppJerseyKeys.add(j)
+  const oppPlayerRows = [...oppJerseyKeys].map(jersey => {
+    const c = oppBox.get(jersey)
+    return {
+      game_id: gameId,
+      jersey_number: jersey,
+      time_played_seconds: jersey != null ? (oppSeconds.get(jersey) ?? null) : null,
+      points: c?.pts ?? 0,
+      twopt_made: c?.twopt_made ?? 0, twopt_att: c?.twopt_att ?? 0,
+      threept_made: c?.threept_made ?? 0, threept_att: c?.threept_att ?? 0,
+      ft_made: c?.ft_made ?? 0, ft_att: c?.ft_att ?? 0,
+      oreb: c?.oreb ?? 0, dreb: c?.dreb ?? 0, reb: c?.reb ?? 0,
+      ast: c?.ast ?? 0, stl: c?.stl ?? 0, blk: c?.blk ?? 0,
+      turnovers: c?.turnovers ?? 0, fouls: c?.fouls ?? 0,
+    }
+  })
+
   // ── Write everything (delete-then-reinsert, each verified) ────────────────
   for (const [table, rows] of [
     ['play_by_play', pbpRows],
@@ -250,6 +298,7 @@ export async function finalizeNativeGame(
     ['player_game_stats', playerRows],
     ['team_game_stats', [teamRow]],
     ['opponent_game_stats', [oppRow]],
+    ['opponent_player_game_stats', oppPlayerRows],
   ] as const) {
     const err = await replaceRows(table, gameId, rows as Record<string, unknown>[])
     if (err) return { success: false, error: err }

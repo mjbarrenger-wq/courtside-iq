@@ -1,6 +1,9 @@
-import { getSeasonAggregates } from '@/lib/getSeasonAggregates'
+import { getSeasonAggregates, aggregateSeason } from '@/lib/getSeasonAggregates'
 import { computeDriverTree } from '@/lib/driverTree'
 import GameDebrief from './GameDebrief'
+import ShotChart from './ShotChart'
+import { type Shot } from './HalfCourt'
+import OpponentBox, { type OppRow } from './OpponentBox'
 
 export const dynamic = 'force-dynamic'
 
@@ -73,17 +76,38 @@ export default async function BoxScorePage({
 }) {
   const { id } = await params
 
-  const [gameRaw, playerStatsRaw, playersRaw, gameAggs, seasonAggs] = await Promise.all([
+  const [gameRaw, playerStatsRaw, oppStatsRaw, playersRaw, shotsRaw, oppPlayerRaw, seasonAggs] = await Promise.all([
     fetchJson(`games?id=eq.${id}&select=*,opponents(full_name)&limit=1`),
     fetchJson(`player_game_stats?game_id=eq.${id}&select=*`),
+    fetchJson(`opponent_game_stats?game_id=eq.${id}&select=*`),
     fetchJson(`players?select=id,first_name,last_name,jersey_number&order=jersey_number.asc`),
-    getSeasonAggregates(TEAM_ID, [id]),
+    fetchJson(`play_by_play?game_id=eq.${id}&shot_x=not.is.null&select=shot_x,shot_y,event_type,team_side`),
+    fetchJson(`opponent_player_game_stats?game_id=eq.${id}&select=*`),
     getSeasonAggregates(TEAM_ID),
   ])
 
   const game   = Array.isArray(gameRaw) && gameRaw.length > 0 ? gameRaw[0] : null
   const pStats = Array.isArray(playerStatsRaw) ? playerStatsRaw : []
   const players: any[] = Array.isArray(playersRaw) ? playersRaw : []
+
+  // This game's driver tree, aggregated from the rows already fetched above — no
+  // extra round-trip (previously a second getSeasonAggregates([id]) re-fetched this
+  // game's player + opponent stats that the page had already loaded).
+  const gameAggs = aggregateSeason(
+    game ? [game] : [], pStats, Array.isArray(oppStatsRaw) ? oppStatsRaw : [],
+  )
+
+  // Located shots for the shot chart (native games only carry shot_x/shot_y; imported
+  // games have none, so the chart section renders only when there is real data).
+  const toShot = (r: any): Shot => ({
+    x: Number(r.shot_x), y: Number(r.shot_y),
+    made: r.event_type === 'made_2pt' || r.event_type === 'made_3pt',
+    pts: r.event_type === 'made_3pt' || r.event_type === 'missed_3pt' ? 3 : 2,
+  })
+  const shotRows: any[] = Array.isArray(shotsRaw) ? shotsRaw : []
+  const ourShots: Shot[] = shotRows.filter(r => r.team_side === 'team').map(toShot)
+  const oppShots: Shot[] = shotRows.filter(r => r.team_side === 'opponent').map(toShot)
+  const oppPlayerRows: OppRow[] = Array.isArray(oppPlayerRaw) ? oppPlayerRaw : []
 
   if (!game) {
     return (
@@ -121,7 +145,7 @@ export default async function BoxScorePage({
   interface ContribRow {
     id: string; name: string; jersey: number
     pts: number; ast: number; stl: number; blk: number; to: number
-    impact: number
+    ciq: number | null; impact: number
   }
   const contributors: ContribRow[] = (players as any[])
     .map((p: any): ContribRow | null => {
@@ -137,11 +161,14 @@ export default async function BoxScorePage({
         name: `${p.first_name} ${p.last_name}`,
         jersey: p.jersey_number,
         pts, ast, stl, blk, to,
+        ciq: s.ciq_rating == null ? null : Number(s.ciq_rating),
+        // CIQ Rating is the value metric; fall back to a simple impact score only
+        // if a row somehow has no rating (e.g. a player with no possessions).
         impact: pts + (ast + stl + blk) * 0.5 - to * 0.75,
       }
     })
     .filter((r): r is ContribRow => r !== null)
-    .sort((a, b) => b.impact - a.impact)
+    .sort((a, b) => (b.ciq ?? b.impact) - (a.ciq ?? a.impact))
     .slice(0, 3)
 
   // ── Box score data ───────────────────────────────────────────────────────────
@@ -228,11 +255,19 @@ export default async function BoxScorePage({
       <div className="px-4 md:px-8" style={{ background: HEADER, borderBottom: `1px solid ${BORDER}`, padding: '16px 0' }}>
         <div style={{ maxWidth: 1060, margin: '0 auto' }}>
 
-          {/* Breadcrumb */}
-          <div style={{ fontSize: 11, color: MUTED, marginBottom: 10 }}>
-            <a href="/" style={{ color: MUTED, textDecoration: 'none' }}>Overview</a>
-            <span style={{ margin: '0 6px' }}>›</span>
-            <span style={{ color: TEAL }}>Game Debrief</span>
+          {/* Breadcrumb + Watch/Review entry (native games with video only) */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 10 }}>
+            <div style={{ fontSize: 11, color: MUTED }}>
+              <a href="/" style={{ color: MUTED, textDecoration: 'none' }}>Overview</a>
+              <span style={{ margin: '0 6px' }}>›</span>
+              <span style={{ color: TEAL }}>Game Debrief</span>
+            </div>
+            {Array.isArray(game.video_urls) && game.video_urls.length > 0 && (
+              <a href={`/games/${id}/watch`} style={{
+                fontSize: 12, fontWeight: 800, color: '#fff', background: TEAL, textDecoration: 'none',
+                borderRadius: 8, padding: '7px 14px',
+              }}>▶ Watch / Review</a>
+            )}
           </div>
 
           {/* Game headline */}
@@ -482,10 +517,16 @@ export default async function BoxScorePage({
                     }}>
                       #{c.jersey}
                     </div>
-                    <div>
+                    <div style={{ minWidth: 0 }}>
                       <div style={{ fontSize: 13, fontWeight: 700, color: '#1a1f2e' }}>{c.name}</div>
                       {i === 0 && <div style={{ fontSize: 9, fontWeight: 700, color: TEAL, letterSpacing: '0.08em' }}>GAME LEADER</div>}
                     </div>
+                    {c.ciq != null && (
+                      <div style={{ marginLeft: 'auto', textAlign: 'right', flexShrink: 0 }}>
+                        <div style={{ fontSize: 18, fontWeight: 900, color: TEAL, lineHeight: 1 }}>{c.ciq.toFixed(1)}</div>
+                        <div style={{ fontSize: 9, color: MUTED, fontWeight: 700, letterSpacing: '0.06em', marginTop: 2 }}>CIQ</div>
+                      </div>
+                    )}
                   </div>
                   <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
                     {[
@@ -505,6 +546,14 @@ export default async function BoxScorePage({
             </div>
           </div>
         )}
+
+        {/* ── Shot chart + zone stats (native games only — renders when shots are located) ── */}
+        {ourShots.length + oppShots.length > 0 && (
+          <ShotChart ourShots={ourShots} oppShots={oppShots} teamLabel="WGT 12.2" oppLabel={opponentName} />
+        )}
+
+        {/* Opponent per-player box score (native games with opponent jerseys) */}
+        <OpponentBox rows={oppPlayerRows} oppName={opponentName} />
 
         {/* ── AI Coaching Debrief (DB-first, regenerate on demand) ── */}
         <GameDebrief gameId={id} />

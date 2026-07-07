@@ -97,6 +97,7 @@ export default function FinalizeReview({
       events: state.events,
       finalTeamScore: teamN,
       finalOppScore: oppN,
+      opponentStarters: state.opponentStarters ?? [],
     })
     if (!res.success) {
       setSaving(false)

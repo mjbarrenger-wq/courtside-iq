@@ -39,3 +39,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# claude code — local machine settings (keep launch.json, which is shared tooling config)
+.claude/settings.local.json

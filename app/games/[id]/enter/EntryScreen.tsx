@@ -117,29 +117,47 @@ export default function EntryScreen({
   const [shotPrompt, setShotPrompt] = useState<null | { isMiss: boolean; shooterSide: TeamSide }>(null)
   const [chartMode, setChartMode] = useState(true)
   const [newOppJersey, setNewOppJersey] = useState('')
-  const [subOpen, setSubOpen] = useState(false)
+  // Substitution modal — shared by our team and the opponent. subTeam selects which
+  // side is subbing; subOut holds the player_id (us) or jersey-as-string (opp) going
+  // off; subNewOpp is the "bring on a new #" input in the opponent modal.
+  const [subTeam, setSubTeam] = useState<'us' | 'opp' | null>(null)
   const [subOut, setSubOut] = useState<string | null>(null)
-  const [reminderDismissed, setReminderDismissed] = useState(false)
+  const [subNewOpp, setSubNewOpp] = useState('')
   const [toast, setToast] = useState<{ pid: string; n: number } | null>(null)
 
   const [clockSec, setClockSec] = useState(PERIOD_SEC)
-  const [clockArmed, setClockArmed] = useState(false)
+  // clockArmed = "the clock is following the video". Default ON — for a running-clock
+  // league the clock tracks the video from the start; the coach hits Stop only to
+  // freeze it during a stop-clock window (e.g. last minute of Q2 / last 3 of Q4).
+  const [clockArmed, setClockArmed] = useState(true)
   const [videoPlaying, setVideoPlaying] = useState(false)
-  const [clockUsed, setClockUsed] = useState(false)
+  const [clockUsed, setClockUsed] = useState(true)
+  // Manual clock anchors: each pins a video position → a game-clock value for a
+  // period. The tip-off "Start clock" adds one at 10:00; a re-align (when our clock
+  // has drifted from the real scoreboard, e.g. dead-ball stoppages) adds one at the
+  // value the coach reads off the stadium clock. clockForVideoTime picks the nearest
+  // anchor at/before the video position, so a later re-align corrects everything after
+  // it. Plays anchor too, so this mainly matters before/around clock corrections.
+  const [manualAnchors, setManualAnchors] = useState<{ period: number; videoTime: number; clockSec: number }[]>([])
+  const [adjusting, setAdjusting] = useState(false)
+  const [adjustVal, setAdjustVal] = useState('')
   const clockSecRef = useRef(PERIOD_SEC)
   const clockUsedRef = useRef(false)
+  const clockSetRef = useRef(false) // whether the clock has been anchored (see clockSet)
+  const clockArmedRef = useRef(true)
+  const syncRef = useRef<() => void>(() => {}) // always the latest clock+score sync (set below)
   useEffect(() => { clockSecRef.current = clockSec }, [clockSec])
   useEffect(() => { clockUsedRef.current = clockUsed }, [clockUsed])
+  useEffect(() => { clockArmedRef.current = clockArmed }, [clockArmed])
 
   useEffect(() => {
     const src = loadEntryState(gameId) ?? resumeState
     if (src) {
       if (!loadEntryState(gameId) && resumeState) saveEntryState(resumeState)
       setState(src)
-      // Resume the game clock at the last logged event's game time (matches the
-      // video position we seek to), instead of resetting to 10:00.
-      const last = src.events[src.events.length - 1]
-      if (last && last.clock_sec != null) { setClockSec(Math.round(last.clock_sec)); setClockUsed(true) }
+      // Don't set the clock here — it's now derived from the video position (see
+      // clockForVideoTime); the sync loop sets it once the player is ready and seeked,
+      // so the clock and video can't open out of sync.
     }
     setLoaded(true)
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -166,6 +184,27 @@ export default function EntryScreen({
   const bench = useMemo(
     () => (state ? state.dressed.filter(id => !onCourt.includes(id)) : []),
     [state, onCourt],
+  )
+
+  // Opponent on-court five — the mirror of `onCourt`: seeded with the opponent
+  // starters and mutated by opponent sub_in / sub_out events. Drives opponent
+  // minutes at finalize and the OPP ON COURT panel.
+  const oppOnCourt = useMemo(() => {
+    if (!state) return [] as number[]
+    const set = [...(state.opponentStarters ?? [])]
+    for (const e of state.events) {
+      if (e.team_side !== 'opponent') continue
+      if (e.event_type === 'sub_in' && e.jersey_number != null && !set.includes(e.jersey_number)) set.push(e.jersey_number)
+      else if (e.event_type === 'sub_out' && e.jersey_number != null) {
+        const i = set.indexOf(e.jersey_number)
+        if (i >= 0) set.splice(i, 1)
+      }
+    }
+    return set
+  }, [state])
+  const oppBench = useMemo(
+    () => opponentJerseys.filter(j => !oppOnCourt.includes(j)),
+    [opponentJerseys, oppOnCourt],
   )
 
   const teamScore = events.length ? events[events.length - 1].team_score : 0
@@ -224,16 +263,97 @@ export default function EntryScreen({
       return typeof t === 'number' && !Number.isNaN(t) ? Math.round(t) : null
     } catch { return null }
   }, [])
+  // After any programmatic seek, nudge the clock+score to the new position. YouTube's
+  // seekTo is async, so re-read a couple of times rather than trusting getCurrentTime
+  // immediately (this is why the 10s skip buttons appeared not to move the clock).
+  const syncAfterSeek = useCallback(() => {
+    setTimeout(() => syncRef.current(), 80)
+    setTimeout(() => syncRef.current(), 300)
+  }, [])
   const seekBack = useCallback((sec: number | null) => {
     if (sec == null) return
     try { ytRef.current?.seekTo?.(Math.max(0, sec - SEEK_LEAD), true) } catch { /* noop */ }
-  }, [])
+    syncAfterSeek()
+  }, [syncAfterSeek])
   const skip = useCallback((delta: number) => {
     try {
       const t = ytRef.current?.getCurrentTime?.()
       if (typeof t === 'number') ytRef.current?.seekTo?.(Math.max(0, t + delta), true)
     } catch { /* noop */ }
-  }, [])
+    syncAfterSeek()
+  }, [syncAfterSeek])
+
+  // Anchors that pin video position → game clock for the current period: the manual
+  // tip-off anchor (video pos → 10:00) plus every logged play (its video_time → its
+  // clock_sec). "Set" means at least one exists — until then the clock isn't started.
+  const clockAnchors = useMemo(() => {
+    const list: { vt: number; cs: number }[] = []
+    for (const a of manualAnchors) if (a.period === period) list.push({ vt: a.videoTime, cs: a.clockSec })
+    for (const e of events) {
+      if (e.period === period && e.video_time != null && e.clock_sec != null) {
+        list.push({ vt: e.video_time, cs: e.clock_sec })
+      }
+    }
+    return list.sort((a, b) => a.vt - b.vt)
+  }, [events, period, manualAnchors])
+
+  const clockSet = clockAnchors.length > 0
+  useEffect(() => { clockSetRef.current = clockSet }, [clockSet])
+
+  // Game clock as a readout of the video position, anchored by the tip-off + logged
+  // plays. Between anchors the clock counts down 1:1 with the video and snaps to each
+  // anchor's exact time, so the clock and video are an extension of each other and
+  // can't drift apart on open/seek/scrub.
+  const clockForVideoTime = useCallback((vt: number | null): number => {
+    if (vt == null || !clockAnchors.length) return PERIOD_SEC
+    const clamp = (n: number) => Math.max(0, Math.min(PERIOD_SEC, n))
+    let before: { vt: number; cs: number } | null = null
+    for (const a of clockAnchors) { if (a.vt <= vt) before = a; else break }
+    const a = before ?? clockAnchors[0]
+    return clamp(a.cs - (vt - a.vt))
+  }, [clockAnchors])
+
+  // Running score AT the current video position — the last play at or before that
+  // point in the footage. Scrub back and the scoreboard shows the score as it stood
+  // then, matching the clock (an extension of the video, same as the clock).
+  const scoreForVideoTime = useCallback((vt: number | null): { us: number; them: number } => {
+    if (vt == null) return { us: teamScore, them: oppScore }
+    let us = 0, them = 0
+    for (const e of events) {
+      if (e.video_time != null && e.video_time <= vt) { us = e.team_score; them = e.opp_score }
+    }
+    return { us, them }
+  }, [events, teamScore, oppScore])
+  const [videoScore, setVideoScore] = useState<{ us: number; them: number }>({ us: 0, them: 0 })
+
+  // Single point that re-reads the video position and updates BOTH the score (always)
+  // and the clock (when set + following). Held in a ref so seek helpers can nudge it.
+  const syncToVideo = useCallback(() => {
+    const vt = videoTime()
+    setVideoScore(scoreForVideoTime(vt))
+    if (clockArmedRef.current && clockSetRef.current) setClockSec(clockForVideoTime(vt))
+  }, [videoTime, scoreForVideoTime, clockForVideoTime])
+  syncRef.current = syncToVideo
+
+  // Add a manual anchor at the current video position for a given clock value, and
+  // resume following. Used by the tip-off Start (10:00) and by re-align (any value).
+  function anchorClockAt(clockSec: number) {
+    const vt = videoTime() ?? 0
+    setManualAnchors(prev => [...prev.filter(a => !(a.period === period && a.videoTime === vt)), { period, videoTime: vt, clockSec }])
+    setClockArmed(true)
+    setTimeout(() => syncRef.current(), 0)
+  }
+  function startClock() { anchorClockAt(PERIOD_SEC) }
+
+  // Re-align our clock to the real scoreboard: parse "M:SS" and anchor it to the
+  // current video frame. Everything after this point counts down from there.
+  function applyAdjust() {
+    const m = adjustVal.trim().match(/^(\d{1,2}):(\d{1,2})$/)
+    if (!m) return
+    const sec = Math.max(0, Math.min(PERIOD_SEC, parseInt(m[1], 10) * 60 + parseInt(m[2], 10)))
+    anchorClockAt(sec)
+    setAdjusting(false)
+  }
 
   const didSeekRef = useRef(false)
   useEffect(() => {
@@ -243,20 +363,18 @@ export default function EntryScreen({
     didSeekRef.current = true
   }, [ytReady, state, seekBack])
 
-  // ── Game clock (wall-time accurate; the UI clock is the authority) ─────────
-  const clockTicking = clockArmed && (activeVideoId ? videoPlaying : true)
-  const anchorRef = useRef({ sec: PERIOD_SEC, at: 0 })
+  // ── Clock + score follow the video ─────────────────────────────────────────
+  // One 250ms poll while a video is attached: the SCORE always tracks the video
+  // position (scrub back → see the score as it stood then); the CLOCK tracks it only
+  // once set (tip-off anchored) and while following (Stop freezes it for a stop-clock
+  // window while the video rolls). Gates read via refs so the loop isn't re-created.
   useEffect(() => {
-    if (!clockTicking) return
-    anchorRef.current = { sec: clockSecRef.current, at: Date.now() }
-    const id = setInterval(() => {
-      const { sec, at } = anchorRef.current
-      const remaining = Math.max(0, sec - (Date.now() - at) / 1000)
-      setClockSec(Math.round(remaining))
-      if (remaining <= 0) setClockArmed(false)
-    }, 250)
+    if (!activeVideoId) return
+    const tick = () => syncRef.current()
+    tick()
+    const id = setInterval(tick, 250)
     return () => clearInterval(id)
-  }, [clockTicking])
+  }, [activeVideoId])
 
   const togglePause = useCallback(() => {
     const p = ytRef.current
@@ -268,6 +386,7 @@ export default function EntryScreen({
   }, [])
 
   // Pause the video during any selection, resume when done.
+  const subOpen = subTeam !== null
   const interacting = armed != null || prompt != null || shotPrompt != null || subOpen
   const pausedByUsRef = useRef(false)
   useEffect(() => {
@@ -295,7 +414,9 @@ export default function EntryScreen({
     setState(prev => {
       if (!prev) return prev
       const vt = videoTime()
-      const cs = clockUsedRef.current ? Math.round(clockSecRef.current) : null
+      // Stamp the derived game clock only once it's been started (anchored); a play
+      // logged before tip-off shouldn't become a bogus 10:00 anchor.
+      const cs = clockUsedRef.current && clockSetRef.current ? Math.round(clockSecRef.current) : null
       let order = prev.events.length
       let team = prev.events.length ? prev.events[prev.events.length - 1].team_score : 0
       let opp  = prev.events.length ? prev.events[prev.events.length - 1].opp_score : 0
@@ -340,7 +461,11 @@ export default function EntryScreen({
       if (isFG(btn.et)) {
         const isMiss = btn.et === 'missed_2pt' || btn.et === 'missed_3pt'
         if (chartMode) { setArmed(null); setShotPrompt({ isMiss, shooterSide: t.team_side }); return }
-        if (isMiss) { setArmed(null); setPrompt({ kind: 'rebound', shooterSide: t.team_side }); return }
+        if (isMiss) { setArmed(null); scheduleRebound(t.team_side); return }
+      } else if (btn.et === 'missed_ft') {
+        // A missed free throw is live — prompt for the rebound too (no shot location
+        // for FTs, so skip the chart and go straight to the rebound prompt).
+        setArmed(null); scheduleRebound(t.team_side); return
       } else if (btn.et === 'steal') {
         setArmed(null); setPrompt({ kind: 'turnover', toSide: t.team_side === 'team' ? 'opponent' : 'team' }); return
       }
@@ -351,15 +476,58 @@ export default function EntryScreen({
   const tapStat = (btn: EventBtn) => setArmed({ kind: 'ev', btn })
   const tapReb  = () => setArmed({ kind: 'reb' })
 
-  function openSub() { setClockArmed(false); setArmed(null); setSubOut(null); setSubOpen(true) }
-  function subPickOff(id: string) { setSubOut(cur => (cur === id ? null : id)) }
-  function subPickOn(id: string) {
-    if (!subOut) return
-    append([
-      { event_type: 'sub_out', team_side: 'team', points: 0, player_id: subOut },
-      { event_type: 'sub_in',  team_side: 'team', points: 0, player_id: id },
-    ])
+  function openSub(team: 'us' | 'opp') { setClockArmed(false); setArmed(null); setSubOut(null); setSubNewOpp(''); setSubTeam(team) }
+  function closeSub() { setSubTeam(null); setSubOut(null); setSubNewOpp('') }
+  function subPickOff(key: string) { setSubOut(cur => (cur === key ? null : key)) }
+  // Bring `key` on. With a `subOut` selected it's a swap (off ↔ on); with an open slot
+  // (fewer than five on court) and nobody selected off, it's a straight add — this is
+  // how you establish an opponent five mid-game or at the start of a period when the
+  // floor is empty. For us, key is a player_id; for the opponent, jersey strings.
+  function subPickOn(key: string) {
+    const isOpp = subTeam === 'opp'
+    const openSlot = (isOpp ? oppOnCourt.length : onCourt.length) < 5
+    if (subOut == null && !openSlot) return
+    if (isOpp) {
+      const on = parseInt(key, 10)
+      ensureOppJersey(on)
+      append(subOut != null
+        ? [
+            { event_type: 'sub_out', team_side: 'opponent', points: 0, player_id: null, jersey_number: parseInt(subOut, 10) },
+            { event_type: 'sub_in',  team_side: 'opponent', points: 0, player_id: null, jersey_number: on },
+          ]
+        : [{ event_type: 'sub_in', team_side: 'opponent', points: 0, player_id: null, jersey_number: on }])
+    } else {
+      append(subOut != null
+        ? [
+            { event_type: 'sub_out', team_side: 'team', points: 0, player_id: subOut },
+            { event_type: 'sub_in',  team_side: 'team', points: 0, player_id: key },
+          ]
+        : [{ event_type: 'sub_in', team_side: 'team', points: 0, player_id: key }])
+    }
     setSubOut(null)
+  }
+  // Add an opponent jersey to the known list (so it shows in pickers) if it's new.
+  function ensureOppJersey(n: number) {
+    setState(prev => {
+      if (!prev) return prev
+      const list = prev.opponentJerseys ?? []
+      if (list.includes(n)) return prev
+      return { ...prev, opponentJerseys: [...list, n].sort((a, b) => a - b), updatedAt: Date.now() }
+    })
+  }
+  // Opponent modal: bring a brand-new jersey on — either swapping for the selected
+  // player going off, or straight onto an open slot when the floor isn't full.
+  function subOnNewOpp() {
+    const n = parseInt(subNewOpp, 10)
+    if (!Number.isFinite(n) || (subOut == null && oppOnCourt.length >= 5)) { setSubNewOpp(''); return }
+    subPickOn(String(n))
+    setSubNewOpp('')
+  }
+
+  // Open the rebound prompt ~1s later so the video plays on and the coach can see who
+  // grabbed the board before the prompt pauses it. (Missed FTs never prompt.)
+  function scheduleRebound(shooterSide: TeamSide) {
+    setTimeout(() => setPrompt({ kind: 'rebound', shooterSide }), 1000)
   }
 
   function resolveShot(x: number | null, y: number | null) {
@@ -373,7 +541,7 @@ export default function EntryScreen({
       })
     }
     setShotPrompt(null)
-    if (sp?.isMiss) setPrompt({ kind: 'rebound', shooterSide: sp.shooterSide })
+    if (sp?.isMiss) scheduleRebound(sp.shooterSide)
   }
 
   // rebound/turnover option lists (used for both rendering and 1–9 keys)
@@ -458,15 +626,19 @@ export default function EntryScreen({
 
   function setPeriod(p: number) {
     setState(prev => (prev ? { ...prev, period: p, updatedAt: Date.now() } : prev))
-    setClockSec(PERIOD_SEC); setClockArmed(false); setReminderDismissed(false)
+    // New quarter → per-quarter footage restarts at 10:00; the sync loop re-locks to
+    // the new video once it loads. Resume following.
+    setClockSec(PERIOD_SEC); setClockArmed(true)
   }
   function endQuarter() { if (period < 4) setPeriod(period + 1) }
-  function toggleClock() { setClockUsed(true); setClockArmed(a => !a) }
-  function resetClock() { setClockSec(PERIOD_SEC); setClockArmed(false) }
-  // Jump the video to a play AND set the clock to that play's game time (connected).
+  // Stop/Start: freeze the clock (stop-clock window) or resume following the video.
+  function toggleClock() { setClockArmed(a => !a) }
+  // Re-lock the clock to the current video position (after a Stop, or if it drifted).
+  function resetClock() { setClockArmed(true); syncToVideo() }
+  // Jump the video to a play; the clock follows to that play's spot in the footage.
   function jumpToEvent(e: LocalEvent) {
     seekBack(e.video_time)
-    if (e.clock_sec != null) { setClockSec(Math.round(e.clock_sec)); setClockUsed(true); setClockArmed(false) }
+    setClockSec(clockForVideoTime(e.video_time == null ? null : e.video_time - SEEK_LEAD))
   }
 
   // Popup actor list (for 1–9 keys + digit badges)
@@ -484,7 +656,12 @@ export default function EntryScreen({
     if (tgt && (tgt.tagName === 'INPUT' || tgt.tagName === 'TEXTAREA' || tgt.isContentEditable)) return
     const k = e.key
     if (k === ' ' || e.code === 'Space') { e.preventDefault(); togglePause(); return }
+    // Arrow keys scrub the video ±10s (always available, even with a popup open).
+    if (k === 'ArrowRight') { e.preventDefault(); skip(10); return }
+    if (k === 'ArrowLeft') { e.preventDefault(); skip(-10); return }
     if (k === 'Escape') { setArmed(null); setPrompt(null); setShotPrompt(null); return }
+    // Start the game clock at tip-off (only while it's unset, so it can't re-anchor by accident).
+    if ((k === 'g' || k === 'G') && !clockSet) { e.preventDefault(); startClock(); return }
     const d = /^[1-9]$/.test(k) ? parseInt(k, 10) : 0
     if (armed) { if (d && d <= popupActors.length) { e.preventDefault(); assign(popupActors[d - 1].actor) } return }
     if (prompt?.kind === 'rebound') { if (d && d <= reboundOptions.length) { e.preventDefault(); resolveRebound(reboundOptions[d - 1].target) } return }
@@ -521,7 +698,6 @@ export default function EntryScreen({
   const eventName = (e: LocalEvent) => e.team_side === 'opponent'
     ? (e.jersey_number != null ? `${oppShort} #${e.jersey_number}` : oppShort)
     : (e.player_id ? chipName(e.player_id) : 'Team')
-  const showReminder = !!activeVideoId && videoPlaying && !clockArmed && !reminderDismissed && !interacting
   const sectionLabel: React.CSSProperties = { fontSize: 10, fontWeight: 800, letterSpacing: '0.06em', marginBottom: 5 }
   const hdrBtn: React.CSSProperties = {
     fontSize: 12, fontWeight: 700, padding: '6px 10px', borderRadius: 7, cursor: 'pointer',
@@ -553,7 +729,7 @@ export default function EntryScreen({
           {period < 4 && (
             <button onClick={endQuarter} style={{ ...hdrBtn, fontWeight: 800, color: TEAL, borderColor: TEAL }}>End Q{period} →</button>
           )}
-          <button onClick={openSub} style={{ ...hdrBtn, fontWeight: 800 }}>⇄ Sub</button>
+          <button onClick={() => openSub('us')} style={{ ...hdrBtn, fontWeight: 800 }}>⇄ Sub</button>
           <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 7 }}>
             <button onClick={() => setChartMode(m => !m)} title="Capture shot locations" style={{
               ...hdrBtn, border: `1px solid ${chartMode ? TEAL : BORDER}`, color: chartMode ? TEAL : MUTED,
@@ -581,59 +757,89 @@ export default function EntryScreen({
             {activeVideoId && (
               <div onClick={togglePause} title="Click to play / pause" style={{ position: 'absolute', inset: 0, zIndex: 1, cursor: 'pointer' }} />
             )}
+            {/* Top row: scoreboard bug + (when a stat is logged) the confirm toast beside it */}
+            <div style={{ position: 'absolute', top: 10, left: 10, zIndex: 2, display: 'flex', alignItems: 'flex-start', gap: 10 }}>
             <div style={{
-              position: 'absolute', top: 10, left: 10, zIndex: 2, display: 'flex', alignItems: 'center', gap: 10,
+              display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0,
               background: 'rgba(15,23,42,0.82)', color: '#fff', borderRadius: 10, padding: '6px 10px',
             }}>
               <span style={{ fontSize: 11, fontWeight: 800, background: TEAL, borderRadius: 6, padding: '2px 7px' }}>Q{period}</span>
-              <span title="Game clock" style={{
-                fontSize: 24, fontWeight: 900, fontVariantNumeric: 'tabular-nums',
-                color: clockTicking ? '#fff' : '#fbbf24', minWidth: 66, textAlign: 'center', lineHeight: 1,
-              }}>{fmtVt(clockSec)}</span>
-              <button onClick={toggleClock} title="Start / stop the game clock" style={{
-                fontSize: 11, fontWeight: 800, padding: '4px 9px', borderRadius: 6, cursor: 'pointer', border: 'none',
-                color: '#fff', background: clockArmed ? AMBER : GREEN,
-              }}>{clockArmed ? 'Stop' : 'Start'}</button>
-              <button onClick={resetClock} title="Reset clock to 10:00" style={{
-                fontSize: 11, fontWeight: 700, padding: '4px 7px', borderRadius: 6, cursor: 'pointer',
-                border: '1px solid rgba(255,255,255,0.3)', color: '#fff', background: 'transparent',
-              }}>⟲</button>
-              <span style={{ fontSize: 15, fontWeight: 900, marginLeft: 4, fontVariantNumeric: 'tabular-nums' }}>
-                {teamScore}<span style={{ color: '#94a3b8', margin: '0 5px', fontWeight: 700 }}>–</span>{oppScore}
+              {adjusting ? (
+                <>
+                  <input
+                    autoFocus value={adjustVal}
+                    onChange={e => setAdjustVal(e.target.value.replace(/[^\d:]/g, ''))}
+                    onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); applyAdjust() } else if (e.key === 'Escape') { e.preventDefault(); setAdjusting(false) } }}
+                    placeholder="M:SS"
+                    style={{ width: 66, fontSize: 20, fontWeight: 900, textAlign: 'center', fontVariantNumeric: 'tabular-nums', borderRadius: 6, border: '1px solid rgba(255,255,255,0.45)', background: 'rgba(0,0,0,0.35)', color: '#fff', padding: '2px 4px' }} />
+                  <button onClick={applyAdjust} title="Align our clock to this value at the current video frame" style={{ fontSize: 11, fontWeight: 800, padding: '4px 9px', borderRadius: 6, cursor: 'pointer', border: 'none', color: '#fff', background: GREEN }}>Align</button>
+                  <button onClick={() => setAdjusting(false)} title="Cancel" style={{ fontSize: 11, fontWeight: 700, padding: '4px 7px', borderRadius: 6, cursor: 'pointer', border: '1px solid rgba(255,255,255,0.3)', color: '#fff', background: 'transparent' }}>✕</button>
+                </>
+              ) : (
+                <>
+                  <span title="Game clock — follows the video" style={{
+                    fontSize: 24, fontWeight: 900, fontVariantNumeric: 'tabular-nums',
+                    color: clockSet && clockArmed ? '#fff' : '#fbbf24', minWidth: 66, textAlign: 'center', lineHeight: 1,
+                  }}>{fmtVt(clockSec)}</span>
+                  <button
+                    onClick={clockSet ? toggleClock : startClock}
+                    title={!clockSet ? 'Start the game clock at the tip-off' : clockArmed ? 'Stop the clock (stop-clock window)' : 'Resume following the video'}
+                    style={{
+                      fontSize: 11, fontWeight: 800, padding: '4px 9px', borderRadius: 6, cursor: 'pointer', border: 'none',
+                      color: '#fff', background: clockSet && clockArmed ? AMBER : GREEN,
+                    }}>{clockSet && clockArmed ? 'Stop' : 'Start'}</button>
+                  {clockSet && (
+                    <button onClick={resetClock} title="Re-lock the clock to the video" style={{
+                      fontSize: 11, fontWeight: 700, padding: '4px 7px', borderRadius: 6, cursor: 'pointer',
+                      border: '1px solid rgba(255,255,255,0.3)', color: '#fff', background: 'transparent',
+                    }}>⟲</button>
+                  )}
+                  {clockSet && (
+                    <button onClick={() => { setAdjustVal(fmtVt(clockSec)); setAdjusting(true) }} title="Adjust — align the clock to the real scoreboard" style={{
+                      fontSize: 11, fontWeight: 700, padding: '4px 7px', borderRadius: 6, cursor: 'pointer',
+                      border: '1px solid rgba(255,255,255,0.3)', color: '#fff', background: 'transparent',
+                    }}>✎</button>
+                  )}
+                </>
+              )}
+              <span title="Score at this point of the video" style={{ fontSize: 15, fontWeight: 900, marginLeft: 4, fontVariantNumeric: 'tabular-nums' }}>
+                {activeVideoId ? videoScore.us : teamScore}<span style={{ color: '#94a3b8', margin: '0 5px', fontWeight: 700 }}>–</span>{activeVideoId ? videoScore.them : oppScore}
               </span>
             </div>
-
-            {/* Confirm toast — the just-logged player's running line */}
+            {/* Confirm toast — the just-logged player's line, beside the clock (same top row) */}
             {toast && toastLine && (
               <div key={toast.n} style={{
-                position: 'absolute', top: 54, left: 10, zIndex: 2, display: 'flex', alignItems: 'center', gap: 8,
-                background: 'rgba(48,123,146,0.95)', color: '#fff', borderRadius: 9, padding: '5px 11px',
-                fontSize: 12.5, fontWeight: 700, boxShadow: '0 4px 16px rgba(0,0,0,0.25)', whiteSpace: 'nowrap',
+                display: 'flex', alignItems: 'center', gap: 9, flexShrink: 0,
+                background: 'rgba(48,123,146,0.96)', color: '#fff', borderRadius: 10, padding: '6px 12px',
+                boxShadow: '0 4px 16px rgba(0,0,0,0.28)', whiteSpace: 'nowrap',
               }}>
-                <span style={{ fontWeight: 900 }}>{chipName(toast.pid)}</span>
-                <span style={{ opacity: 0.85, fontWeight: 600 }}>
+                <span style={{ fontSize: 20, fontWeight: 900, lineHeight: 1 }}>{chipName(toast.pid)}</span>
+                <span style={{ fontSize: 13, opacity: 0.9, fontWeight: 600 }}>
                   {toastLine.pts} PTS · {toastLine.reb} REB · {toastLine.ast} AST
                   {toastLine.stl > 0 && ` · ${toastLine.stl} STL`}{toastLine.blk > 0 && ` · ${toastLine.blk} BLK`}
                   {toastLine.pf > 0 && ` · ${toastLine.pf} PF`} · {toastLine.fgm}/{toastLine.fga} FG
                 </span>
               </div>
             )}
+            </div>
 
-            {showReminder && (
+            {/* Tip-off callout — persists until the coach starts the clock. The video's
+                start isn't the quarter's start, so the clock is set manually at the tip. */}
+            {!clockSet && !!activeVideoId && (
               <div style={{
-                position: 'absolute', bottom: 12, left: '50%', transform: 'translateX(-50%)', zIndex: 3,
-                display: 'flex', alignItems: 'center', gap: 10, background: 'rgba(217,119,6,0.96)', color: '#fff',
-                borderRadius: 999, padding: '7px 8px 7px 14px', fontSize: 12, fontWeight: 700, boxShadow: '0 6px 20px rgba(0,0,0,0.3)',
+                position: 'absolute', bottom: 14, left: '50%', transform: 'translateX(-50%)', zIndex: 3,
+                display: 'flex', alignItems: 'center', gap: 12, background: 'rgba(217,119,6,0.97)', color: '#fff',
+                borderRadius: 999, padding: '9px 10px 9px 16px', fontSize: 13, fontWeight: 700,
+                boxShadow: '0 8px 24px rgba(0,0,0,0.35)', whiteSpace: 'nowrap',
               }}>
-                <span>▶ Tip-off? Start the game clock</span>
-                <button onClick={() => { setClockUsed(true); setClockArmed(true) }} style={{
-                  fontSize: 12, fontWeight: 800, padding: '5px 11px', borderRadius: 999, border: 'none', cursor: 'pointer', color: AMBER, background: '#fff',
-                }}>Start</button>
-                <button onClick={() => setReminderDismissed(true)} title="Dismiss" style={{
-                  fontSize: 12, fontWeight: 800, padding: '5px 9px', borderRadius: 999, border: '1px solid rgba(255,255,255,0.5)', cursor: 'pointer', color: '#fff', background: 'transparent',
-                }}>✕</button>
+                <span>▶ At tip-off, start the game clock</span>
+                <button onClick={startClock} style={{
+                  fontSize: 13, fontWeight: 800, padding: '6px 14px', borderRadius: 999, border: 'none',
+                  cursor: 'pointer', color: '#b45309', background: '#fff',
+                }}>Start clock <span style={{ opacity: 0.6, fontWeight: 700 }}>(G)</span></button>
               </div>
             )}
+
           </div>
         </div>
 
@@ -661,7 +867,7 @@ export default function EntryScreen({
           <div style={{ flexShrink: 0, background: CARD, border: `1px solid ${BORDER}`, borderRadius: 10, padding: 8 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 5 }}>
               <span style={{ ...sectionLabel, color: TEAL, marginBottom: 0 }}>ON COURT</span>
-              <button onClick={openSub} style={{ fontSize: 10, fontWeight: 700, color: TEAL, background: 'transparent', border: 'none', cursor: 'pointer' }}>⇄ Subs</button>
+              <button onClick={() => openSub('us')} style={{ fontSize: 10, fontWeight: 700, color: TEAL, background: 'transparent', border: 'none', cursor: 'pointer' }}>⇄ Subs</button>
             </div>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
               {onCourt.map((id, i) => (
@@ -670,6 +876,25 @@ export default function EntryScreen({
                 </span>
               ))}
               {onCourt.length !== 5 && <span style={{ fontSize: 10, color: RED, alignSelf: 'center' }}>{onCourt.length}/5 — use ⇄ Subs</span>}
+            </div>
+          </div>
+
+          {/* Opponent on-court reference — always available (opponent tracking is
+              opt-in, but the entry point must exist even before anyone is placed on
+              court). Its ⇄ Subs opens the opponent modal, where players can be added to
+              open slots or swapped, so opponent minutes stay accurate. */}
+          <div style={{ flexShrink: 0, background: CARD, border: `1px solid ${BORDER}`, borderRadius: 10, padding: 8 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 5 }}>
+              <span style={{ ...sectionLabel, color: AMBER, marginBottom: 0 }}>OPP ON COURT · {oppShort.toUpperCase()}</span>
+              <button onClick={() => openSub('opp')} style={{ fontSize: 10, fontWeight: 700, color: AMBER, background: 'transparent', border: 'none', cursor: 'pointer' }}>⇄ Subs</button>
+            </div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+              {oppOnCourt.map(j => (
+                <span key={j} style={{ padding: '5px 8px', borderRadius: 7, fontSize: 11.5, fontWeight: 700, border: `1px solid ${BORDER}`, color: SEC, background: '#fff' }}>#{j}</span>
+              ))}
+              {oppOnCourt.length === 0
+                ? <span style={{ fontSize: 10, color: MUTED, alignSelf: 'center' }}>None on court — ⇄ Subs to add</span>
+                : oppOnCourt.length !== 5 && <span style={{ fontSize: 10, color: MUTED, alignSelf: 'center' }}>{oppOnCourt.length}/5</span>}
             </div>
           </div>
 
@@ -704,8 +929,7 @@ export default function EntryScreen({
       {/* Player-assignment popup (right-docked; video stays visible) */}
       {armed && (
         <RightDock onClose={() => setArmed(null)}>
-          <div style={{ fontSize: 15, fontWeight: 800, color: SEC, marginBottom: 2 }}>{armedLabel} — who?</div>
-          <div style={{ fontSize: 11, color: MUTED, marginBottom: 12 }}>Press 1–9 or tap. Video paused.</div>
+          <PopupHead kicker="SELECT THE PLAYER" title={`${armedLabel} — who did it?`} hint="Press 1–9 or tap. Video paused." />
           <div style={{ ...sectionLabel, color: TEAL }}>OUR TEAM</div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7, marginBottom: 12 }}>
             {popupActors.slice(0, onCourt.length + 1).map((o, i) => (
@@ -729,52 +953,84 @@ export default function EntryScreen({
         </RightDock>
       )}
 
-      {/* Substitution modal (right-docked) */}
-      {subOpen && (
-        <RightDock onClose={() => { setSubOpen(false); setSubOut(null) }} width={440}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 4 }}>
-            <div style={{ fontSize: 15, fontWeight: 800, color: SEC }}>Substitutions</div>
-            <div style={{ fontSize: 11, color: GREEN, fontWeight: 700 }}>⏸ video &amp; clock stopped</div>
-          </div>
-          <div style={{ fontSize: 12, color: MUTED, marginBottom: 14 }}>
-            {subOut ? <>Tap who comes <strong style={{ color: GREEN }}>ON</strong> for {chipName(subOut)}.</> : 'Tap who comes OFF, then who comes ON.'}
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <div>
-              <div style={{ ...sectionLabel, color: RED }}>ON COURT → OFF</div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                {onCourt.map(id => (
-                  <button key={id} onClick={() => subPickOff(id)} style={{
-                    padding: '9px 10px', borderRadius: 8, fontSize: 13, fontWeight: 800, cursor: 'pointer', textAlign: 'left',
-                    border: `2px solid ${subOut === id ? RED : BORDER}`, color: subOut === id ? '#fff' : SEC, background: subOut === id ? RED : '#fff',
-                  }}>{chipName(id)}</button>
-                ))}
+      {/* Substitution modal (right-docked) — shared by our team and the opponent. */}
+      {subOpen && (() => {
+        const isOpp = subTeam === 'opp'
+        // Off = who's on court; On = the bench. Keys are player_ids (us) or jersey
+        // strings (opp) so subOut/subPickOn stay type-uniform across both sides.
+        const offItems = isOpp
+          ? oppOnCourt.map(j => ({ key: String(j), label: `#${j}` }))
+          : onCourt.map(id => ({ key: id, label: chipName(id) }))
+        const onItems = isOpp
+          ? oppBench.map(j => ({ key: String(j), label: `#${j}` }))
+          : bench.map(id => ({ key: id, label: chipName(id) }))
+        const offLabel = subOut == null ? '' : isOpp ? `#${subOut}` : chipName(subOut)
+        const onCount = isOpp ? oppOnCourt.length : onCourt.length
+        const openSlot = onCount < 5
+        // You can pick someone to come on when a player is selected to go off (a swap)
+        // OR when the floor isn't full (a straight add — establishing/topping-up the five).
+        const canPickOn = subOut != null || openSlot
+        const onAccent = isOpp ? AMBER : GREEN
+        return (
+          <RightDock onClose={closeSub} width={440}>
+            <PopupHead
+              kicker={isOpp ? `SUBSTITUTION · ${opponentName.toUpperCase()}` : 'SUBSTITUTION · OUR TEAM'} color={isOpp ? AMBER : GREEN}
+              title={subOut ? `Who comes ON for ${offLabel}?` : openSlot ? 'Add players on court' : 'Who is going off?'}
+              hint={subOut
+                ? 'Tap the bench player coming on. ⏸ video & clock stopped'
+                : openSlot
+                ? `${onCount}/5 on court — tap a name to add them, or tap someone off to swap. ⏸ video & clock stopped`
+                : 'Tap who comes OFF, then who comes ON. ⏸ video & clock stopped'}
+            />
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <div>
+                <div style={{ ...sectionLabel, color: RED }}>ON COURT → OFF</div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  {offItems.length === 0 && <div style={{ fontSize: 12, color: MUTED }}>Nobody on court{isOpp ? ' — add players →' : ''}.</div>}
+                  {offItems.map(it => (
+                    <button key={it.key} onClick={() => subPickOff(it.key)} style={{
+                      padding: '9px 10px', borderRadius: 8, fontSize: 13, fontWeight: 800, cursor: 'pointer', textAlign: 'left',
+                      border: `2px solid ${subOut === it.key ? RED : BORDER}`, color: subOut === it.key ? '#fff' : SEC, background: subOut === it.key ? RED : '#fff',
+                    }}>{it.label}</button>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <div style={{ ...sectionLabel, color: onAccent }}>{subOut ? 'BENCH → ON' : openSlot ? 'ADD ON COURT' : 'BENCH → ON'}</div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  {onItems.length === 0 && !isOpp && <div style={{ fontSize: 12, color: MUTED }}>No bench players.</div>}
+                  {onItems.map(it => (
+                    <button key={it.key} onClick={() => subPickOn(it.key)} disabled={!canPickOn} style={{
+                      padding: '9px 10px', borderRadius: 8, fontSize: 13, fontWeight: 800, cursor: canPickOn ? 'pointer' : 'default', textAlign: 'left',
+                      border: `2px solid ${BORDER}`, color: canPickOn ? onAccent : MUTED, background: '#fff', opacity: canPickOn ? 1 : 0.55,
+                    }}>{it.label}</button>
+                  ))}
+                  {isOpp && (
+                    <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginTop: 2 }}>
+                      <input inputMode="numeric" placeholder="+ #" value={subNewOpp}
+                        onChange={e => setSubNewOpp(e.target.value.replace(/\D/g, ''))}
+                        onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); subOnNewOpp() } }}
+                        disabled={!canPickOn}
+                        style={{ width: 56, fontSize: 13, border: `1px solid ${BORDER}`, borderRadius: 8, padding: '8px 9px', fontFamily: 'inherit', color: SEC, opacity: canPickOn ? 1 : 0.55 }} />
+                      {subNewOpp && canPickOn && (
+                        <button onClick={subOnNewOpp} style={promptBtn(AMBER)}>On #{subNewOpp}</button>
+                      )}
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
-            <div>
-              <div style={{ ...sectionLabel, color: GREEN }}>BENCH → ON</div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                {bench.length === 0 && <div style={{ fontSize: 12, color: MUTED }}>No bench players.</div>}
-                {bench.map(id => (
-                  <button key={id} onClick={() => subPickOn(id)} disabled={!subOut} style={{
-                    padding: '9px 10px', borderRadius: 8, fontSize: 13, fontWeight: 800, cursor: subOut ? 'pointer' : 'default', textAlign: 'left',
-                    border: `2px solid ${BORDER}`, color: subOut ? GREEN : MUTED, background: '#fff', opacity: subOut ? 1 : 0.55,
-                  }}>{chipName(id)}</button>
-                ))}
-              </div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 16 }}>
+              <button onClick={closeSub} style={promptBtn(TEAL)}>Done</button>
             </div>
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 16 }}>
-            <button onClick={() => { setSubOpen(false); setSubOut(null) }} style={promptBtn(TEAL)}>Done</button>
-          </div>
-        </RightDock>
-      )}
+          </RightDock>
+        )
+      })()}
 
       {/* Shot-location picker (right-docked) */}
       {shotPrompt && (
         <RightDock onClose={() => resolveShot(null, null)}>
-          <div style={{ fontSize: 14, fontWeight: 800, color: SEC, marginBottom: 2 }}>Where was the shot?</div>
-          <div style={{ fontSize: 11, color: MUTED, marginBottom: 10 }}>Tap the spot, or skip.</div>
+          <PopupHead kicker="SHOT LOCATION" title="Where was the shot?" hint="Tap the spot on the court, or skip." />
           <HalfCourt onPick={(x, y) => resolveShot(x, y)} maxHeight={360} />
           <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 10 }}>
             <button onClick={() => resolveShot(null, null)} style={promptBtn(MUTED, true)}>Skip location</button>
@@ -785,12 +1041,12 @@ export default function EntryScreen({
       {/* Rebound / turnover prompt (right-docked) */}
       {prompt && (
         <RightDock onClose={() => setPrompt(null)}>
-          <div style={{ fontSize: 15, fontWeight: 800, color: SEC, marginBottom: 4 }}>
-            {prompt.kind === 'rebound' ? 'Who rebounded?' : 'Turnover on…'}
-          </div>
-          <div style={{ fontSize: 12, color: MUTED, marginBottom: 14 }}>
-            {prompt.kind === 'rebound' ? 'Offence/defence auto. Press 1–9 or tap.' : 'Press 1–9 or tap.'}
-          </div>
+          <PopupHead
+            kicker={prompt.kind === 'rebound' ? 'REBOUND' : 'TURNOVER'}
+            color={prompt.kind === 'rebound' ? TEAL : AMBER}
+            title={prompt.kind === 'rebound' ? 'Who got the rebound?' : 'Turnover on whom?'}
+            hint={prompt.kind === 'rebound' ? 'Offence / defence auto. Press 1–9 or tap.' : 'Press 1–9 or tap.'}
+          />
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
             {prompt.kind === 'rebound' ? (
               <>
@@ -814,14 +1070,31 @@ export default function EntryScreen({
   )
 }
 
-// Right-docked popup panel — leaves the (paused) video visible on the left.
+// Right-docked popup panel — leaves the (paused) video visible on the left. Content
+// is vertically centred (via margin-auto) so the heading + options sit in the coach's
+// sightline rather than up in the top corner; it still scrolls from the top if a
+// popup is taller than the screen.
 function RightDock({ children, onClose, width = 380 }: { children: React.ReactNode; onClose: () => void; width?: number }) {
   return (
     <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 50, background: 'rgba(15,23,42,0.22)', display: 'flex', justifyContent: 'flex-end' }}>
       <div onClick={e => e.stopPropagation()} className="w-full" style={{
         maxWidth: width, height: '100%', overflowY: 'auto', background: CARD,
-        boxShadow: '-14px 0 44px rgba(0,0,0,0.22)', padding: 18,
-      }}>{children}</div>
+        boxShadow: '-14px 0 44px rgba(0,0,0,0.22)', display: 'flex', flexDirection: 'column',
+      }}>
+        <div style={{ margin: 'auto 0', padding: 18 }}>{children}</div>
+      </div>
+    </div>
+  )
+}
+
+// Consistent popup header: an uppercase kicker (what the popup is FOR) + a big title
+// (what to select), so the coach always knows what they're picking.
+function PopupHead({ kicker, title, hint, color = TEAL }: { kicker: string; title: string; hint?: string; color?: string }) {
+  return (
+    <div style={{ marginBottom: 14 }}>
+      <div style={{ fontSize: 11, fontWeight: 800, color, letterSpacing: '0.09em', marginBottom: 3 }}>{kicker}</div>
+      <div style={{ fontSize: 19, fontWeight: 900, color: SEC, lineHeight: 1.15 }}>{title}</div>
+      {hint && <div style={{ fontSize: 11.5, color: MUTED, marginTop: 4 }}>{hint}</div>}
     </div>
   )
 }

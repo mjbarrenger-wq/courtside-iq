@@ -34,10 +34,15 @@ export interface EntryState {
   starters: string[]  // the five player_ids on court at tip-off
   period: number      // quarter currently being entered (1-4)
   events: LocalEvent[]
-  // Opponent jersey numbers added on the fly, for optional per-opponent-player
-  // logging. The opponent box aggregate stays team-level; these give play-by-play
-  // detail (jersey stored on the event) without an opponent roster.
+  // Opponent jersey numbers added at roster time or on the fly, for optional
+  // per-opponent-player logging. These give play-by-play detail (jersey stored on
+  // the event) without an opponent roster table.
   opponentJerseys?: number[]
+  // The opponent jerseys on court at tip-off. Mirrors `starters` for our team: the
+  // opponent on-court five is this set mutated by opponent sub_in / sub_out events,
+  // which is what lets us track opponent minutes. Optional — when unset, opponent
+  // minutes simply aren't tracked (the box score is unaffected).
+  opponentStarters?: number[]
   updatedAt: number
 }
 

@@ -19,12 +19,18 @@ export interface RosterPlayer {
   last_name: string
 }
 
-export default function RosterPicker({ gameId, players }: { gameId: string; players: RosterPlayer[] }) {
+export default function RosterPicker({ gameId, players, opponentName }: { gameId: string; players: RosterPlayer[]; opponentName: string }) {
   const router = useRouter()
 
   const [dressed, setDressed] = useState<Set<string>>(() => new Set(players.map(p => p.id)))
   const [starters, setStarters] = useState<string[]>([])
   const [resumed, setResumed] = useState(false)
+  // Opponent roster (optional): jerseys known at tip + the five on court, so opponent
+  // minutes can be tracked from the start. Everything here is opt-in — leaving it
+  // empty scores exactly as before.
+  const [oppJerseys, setOppJerseys] = useState<number[]>([])
+  const [oppStarters, setOppStarters] = useState<number[]>([])
+  const [oppInput, setOppInput] = useState('')
 
   // Resume a game already in progress (or one whose roster was set earlier) so we
   // never clobber logged events by re-visiting this screen.
@@ -33,9 +39,29 @@ export default function RosterPicker({ gameId, players }: { gameId: string; play
     if (existing) {
       setDressed(new Set(existing.dressed))
       setStarters(existing.starters.slice(0, 5))
+      setOppJerseys(existing.opponentJerseys ?? [])
+      setOppStarters(existing.opponentStarters ?? [])
       setResumed(existing.events.length > 0)
     }
   }, [gameId])
+
+  function addOppJersey() {
+    const n = parseInt(oppInput, 10)
+    if (!Number.isFinite(n)) { setOppInput(''); return }
+    setOppJerseys(prev => (prev.includes(n) ? prev : [...prev, n].sort((a, b) => a - b)))
+    setOppInput('')
+  }
+  function removeOppJersey(n: number) {
+    setOppJerseys(prev => prev.filter(j => j !== n))
+    setOppStarters(prev => prev.filter(j => j !== n))
+  }
+  function toggleOppStarter(n: number) {
+    setOppStarters(prev => {
+      if (prev.includes(n)) return prev.filter(j => j !== n)
+      if (prev.length >= 5) return prev // five on court at a time
+      return [...prev, n]
+    })
+  }
 
   function toggleDressed(id: string) {
     setDressed(prev => {
@@ -65,9 +91,10 @@ export default function RosterPicker({ gameId, players }: { gameId: string; play
   function proceed() {
     if (!canStart) return
     const existing = loadEntryState(gameId)
-    const state = existing
+    const base = existing
       ? { ...existing, dressed: [...dressed], starters, updatedAt: Date.now() }
       : newEntryState(gameId, [...dressed], starters)
+    const state = { ...base, opponentJerseys: oppJerseys, opponentStarters: oppStarters }
     saveEntryState(state)
     router.push(`/games/${gameId}/enter`)
   }
@@ -125,6 +152,50 @@ export default function RosterPicker({ gameId, players }: { gameId: string; play
             </div>
           )
         })}
+      </div>
+
+      {/* Opponent roster (optional) — add jerseys and mark the five on court at tip
+          so opponent minutes can be tracked. Skippable; you can also add jerseys and
+          sub the opponent during scoring. */}
+      <div style={{ padding: '14px 18px', borderTop: `1px solid ${BORDER}`, background: '#fbfcfe' }}>
+        <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: AMBER }}>
+            OPPONENT — {opponentName.toUpperCase()} <span style={{ color: MUTED, fontWeight: 500 }}>· optional, for minutes</span>
+          </div>
+          <div style={{ fontSize: 11, color: MUTED }}>
+            <span style={{ color: oppStarters.length === 5 ? GREEN : MUTED, fontWeight: 700 }}>{oppStarters.length}/5 on court</span>
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7, alignItems: 'center', marginBottom: oppJerseys.length ? 10 : 0 }}>
+          {oppJerseys.map(n => {
+            const on = oppStarters.includes(n)
+            return (
+              <span key={n} style={{
+                display: 'inline-flex', alignItems: 'center', gap: 6, padding: '5px 6px 5px 10px', borderRadius: 8,
+                border: `1px solid ${on ? AMBER : BORDER}`, background: on ? '#fef6ec' : '#fff',
+              }}>
+                <button type="button" onClick={() => toggleOppStarter(n)} title={on ? 'On court at tip — tap to remove' : 'Tap to mark on court at tip'}
+                  style={{ fontSize: 12.5, fontWeight: 800, color: on ? AMBER : SEC, background: 'transparent', border: 'none', cursor: 'pointer', padding: 0 }}>
+                  {on ? '★ ' : ''}#{n}
+                </button>
+                <button type="button" onClick={() => removeOppJersey(n)} title="Remove jersey"
+                  style={{ fontSize: 12, fontWeight: 800, color: '#cbd5e1', background: 'transparent', border: 'none', cursor: 'pointer', padding: 0 }}>✕</button>
+              </span>
+            )
+          })}
+          <input inputMode="numeric" placeholder="+ #" value={oppInput}
+            onChange={e => setOppInput(e.target.value.replace(/\D/g, ''))}
+            onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addOppJersey() } }}
+            style={{ width: 56, fontSize: 13, border: `1px solid ${BORDER}`, borderRadius: 8, padding: '7px 9px', fontFamily: 'inherit', color: SEC }} />
+          {oppInput && (
+            <button type="button" onClick={addOppJersey}
+              style={{ fontSize: 12, fontWeight: 700, padding: '7px 11px', borderRadius: 8, cursor: 'pointer', border: `1px solid ${AMBER}`, color: AMBER, background: '#fff' }}>Add #{oppInput}</button>
+          )}
+        </div>
+        {oppJerseys.length > 0 && (
+          <div style={{ fontSize: 11, color: MUTED, marginTop: 4 }}>Tap a jersey to mark it on court at tip-off (★). Leave blank to skip opponent minutes.</div>
+        )}
       </div>
 
       <div style={{

@@ -1,3 +1,4 @@
+import { cache } from 'react'
 import { SeasonAggregates } from './driverTree'
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL!
@@ -11,6 +12,16 @@ async function fetchJson(path: string) {
   return res.json()
 }
 
+// Only the columns the aggregate actually reads — trimmed from `select=*` (which
+// pulled ~56 player columns / 295 KB for a season) down to ~80 KB.
+const PLAYER_COLS =
+  'player_id,points,twopt_made,twopt_att,threept_made,threept_att,ft_made,ft_att,' +
+  'turnovers,off_fouls,oreb,dreb,ast,stl,blk,def_fouls,plus_minus,vps'
+const OPP_COLS =
+  'opp_twopt_made,opp_twopt_att,opp_threept_made,opp_threept_att,opp_ft_made,opp_ft_att,' +
+  'opp_turnovers,opp_oreb,opp_dreb,opp_def_fouls,opp_possessions,opp_ast,opp_stl,opp_blk'
+const GAME_COLS = 'id,opponent_score'
+
 function emptyAggregates(): SeasonAggregates {
   return {
     pts: 0, possessions: 0, twopt_made: 0, twopt_att: 0, threept_made: 0, threept_att: 0,
@@ -23,124 +34,78 @@ function emptyAggregates(): SeasonAggregates {
   }
 }
 
-export async function getSeasonAggregates(
-  teamId: string,
-  gameIds?: string[]   // omit entirely for no filter; pass [] to mean "matched zero games"
-): Promise<SeasonAggregates> {
-
-  // IMPORTANT: `gameIds === undefined` means "no filter, fetch every team game" —
-  // that's the intentional shortcut callers use. `gameIds` as an explicit EMPTY
-  // ARRAY means "a filter was applied and it matched nothing", which must NOT
-  // fall back to fetching the whole team. These used to be conflated (both read
-  // as `hasFilter = false`), so a Type filter with zero matching games silently
-  // showed the full season instead of a blank/zero result.
-  const isFiltered = gameIds !== undefined
-  if (isFiltered && gameIds.length === 0) {
-    return emptyAggregates()
-  }
-
-  const idList = isFiltered ? `(${gameIds!.join(',')})` : null
-
-  // Fetch games first so we always have game IDs for the player/opp stat queries
-  const games = await fetchJson(
-    isFiltered
-      ? `games?id=in.${idList}&select=*`
-      : `games?team_id=eq.${teamId}&select=*`
-  )
-
-  const gameIdList = `(${(Array.isArray(games) ? games : []).map((g: any) => g.id).join(',')})`
-
-  const [playerStats, oppStats] = await Promise.all([
-    fetchJson(`player_game_stats?game_id=in.${gameIdList}&select=*`),
-    fetchJson(`opponent_game_stats?game_id=in.${gameIdList}&select=*`),
-  ])
-
+/**
+ * Pure aggregation over already-fetched rows — no I/O. Exported so a page that has
+ * already loaded `games` / `player_game_stats` / `opponent_game_stats` for a set of
+ * games can build its SeasonAggregates without a second round-trip to Supabase.
+ *
+ * Single pass over each array (was ~30 separate `.reduce()` passes). Numerics are
+ * identical to the previous implementation, including the unweighted-per-player VPS
+ * average and the hardcoded opponent estimate fallback.
+ */
+export function aggregateSeason(
+  games: any[], playerStats: any[], oppStats: any[],
+): SeasonAggregates {
   const g = games.length
 
-  // ── Our team offensive aggregates ──────────────────────────────────────────
-  const pts          = playerStats.reduce((s: number, r: any) => s + (r.points || 0), 0)
-  const twopt_made   = playerStats.reduce((s: number, r: any) => s + (r.twopt_made || 0), 0)
-  const twopt_att    = playerStats.reduce((s: number, r: any) => s + (r.twopt_att || 0), 0)
-  const threept_made = playerStats.reduce((s: number, r: any) => s + (r.threept_made || 0), 0)
-  const threept_att  = playerStats.reduce((s: number, r: any) => s + (r.threept_att || 0), 0)
-  const ft_made      = playerStats.reduce((s: number, r: any) => s + (r.ft_made || 0), 0)
-  const ft_att       = playerStats.reduce((s: number, r: any) => s + (r.ft_att || 0), 0)
-  const turnovers    = playerStats.reduce((s: number, r: any) => s + (r.turnovers || 0), 0)
-  const off_fouls    = playerStats.reduce((s: number, r: any) => s + (r.off_fouls || 0), 0)
-  const oreb         = playerStats.reduce((s: number, r: any) => s + (r.oreb || 0), 0)
-  const dreb         = playerStats.reduce((s: number, r: any) => s + (r.dreb || 0), 0)
-  const total_reb    = oreb + dreb
-  const ast          = playerStats.reduce((s: number, r: any) => s + (r.ast || 0), 0)
-  const stl          = playerStats.reduce((s: number, r: any) => s + (r.stl || 0), 0)
-  const blk          = playerStats.reduce((s: number, r: any) => s + (r.blk || 0), 0)
-  const def_fouls    = playerStats.reduce((s: number, r: any) => s + (r.def_fouls || 0), 0)
-  const plus_minus   = playerStats.reduce((s: number, r: any) => s + (r.plus_minus || 0), 0)
-
-  // VPS: use unweighted per-player average so each player counts equally
-  // (weighted sum / total rows would over-represent players with more games)
-  const playerVpsMap: Record<string, { sum: number; count: number }> = {}
+  // ── Our team, one pass (+ per-player VPS map built inline) ──
+  let pts = 0, twopt_made = 0, twopt_att = 0, threept_made = 0, threept_att = 0
+  let ft_made = 0, ft_att = 0, turnovers = 0, off_fouls = 0, oreb = 0, dreb = 0
+  let ast = 0, stl = 0, blk = 0, def_fouls = 0, plus_minus = 0
+  const vpsMap: Record<string, { sum: number; count: number }> = {}
   for (const r of playerStats) {
+    pts += r.points || 0
+    twopt_made += r.twopt_made || 0; twopt_att += r.twopt_att || 0
+    threept_made += r.threept_made || 0; threept_att += r.threept_att || 0
+    ft_made += r.ft_made || 0; ft_att += r.ft_att || 0
+    turnovers += r.turnovers || 0; off_fouls += r.off_fouls || 0
+    oreb += r.oreb || 0; dreb += r.dreb || 0
+    ast += r.ast || 0; stl += r.stl || 0; blk += r.blk || 0
+    def_fouls += r.def_fouls || 0; plus_minus += r.plus_minus || 0
     const pid = r.player_id
-    if (!pid) continue
-    if (!playerVpsMap[pid]) playerVpsMap[pid] = { sum: 0, count: 0 }
-    playerVpsMap[pid].sum += r.vps || 0
-    playerVpsMap[pid].count++
+    if (pid) {
+      const e = (vpsMap[pid] ??= { sum: 0, count: 0 })
+      e.sum += r.vps || 0; e.count++
+    }
   }
-  const playerVpsAvgs = Object.values(playerVpsMap)
-    .filter(p => p.count > 0)
-    .map(p => p.sum / p.count)
-  // Scale by total rows so tppg(vps) = unweighted_avg (tppg divides by total rows)
+  const total_reb = oreb + dreb
+
+  // VPS: unweighted per-player average, scaled by total rows so a downstream
+  // `sum / rows` yields the unweighted average (unchanged from before).
+  const playerVpsAvgs = Object.values(vpsMap).filter(p => p.count > 0).map(p => p.sum / p.count)
   const vps = playerVpsAvgs.length > 0
     ? (playerVpsAvgs.reduce((s, v) => s + v, 0) / playerVpsAvgs.length) * playerStats.length
     : playerStats.reduce((s: number, r: any) => s + (r.vps || 0), 0)
-  const ftf          = ft_att
+  const ftf = ft_att
 
-  const fga         = twopt_att + threept_att
+  const fga = twopt_att + threept_att
   const possessions = fga + 0.44 * ft_att - oreb + turnovers
 
-  const opp_pts = games.reduce((s: number, g: any) => s + (g.opponent_score || 0), 0)
+  const opp_pts = games.reduce((s: number, gm: any) => s + (gm.opponent_score || 0), 0)
 
-  // ── Opponent stats ─────────────────────────────────────────────────────────
-  const hasOppData = Array.isArray(oppStats) && oppStats.length > 0
+  // ── Opponent, one pass (or hardcoded estimate when no opponent rows) ──
+  let opp_twopt_made = 0, opp_twopt_att = 0, opp_threept_made = 0, opp_threept_att = 0
+  let opp_ft_made = 0, opp_ft_att = 0, opp_turnovers = 0, opp_oreb = 0, opp_dreb = 0
+  let opp_def_fouls = 0, opp_possessions = 0, opp_ast = 0, opp_stl = 0, opp_blk = 0
 
-  let opp_twopt_made: number, opp_twopt_att: number
-  let opp_threept_made: number, opp_threept_att: number
-  let opp_ft_made: number, opp_ft_att: number
-  let opp_turnovers: number, opp_oreb: number, opp_dreb: number
-  let opp_def_fouls: number, opp_possessions: number, opp_ast: number
-  let opp_stl: number, opp_blk: number
-
-  if (hasOppData) {
-    opp_twopt_made   = oppStats.reduce((s: number, r: any) => s + (r.opp_twopt_made || 0), 0)
-    opp_twopt_att    = oppStats.reduce((s: number, r: any) => s + (r.opp_twopt_att || 0), 0)
-    opp_threept_made = oppStats.reduce((s: number, r: any) => s + (r.opp_threept_made || 0), 0)
-    opp_threept_att  = oppStats.reduce((s: number, r: any) => s + (r.opp_threept_att || 0), 0)
-    opp_ft_made      = oppStats.reduce((s: number, r: any) => s + (r.opp_ft_made || 0), 0)
-    opp_ft_att       = oppStats.reduce((s: number, r: any) => s + (r.opp_ft_att || 0), 0)
-    opp_turnovers    = oppStats.reduce((s: number, r: any) => s + (r.opp_turnovers || 0), 0)
-    opp_oreb         = oppStats.reduce((s: number, r: any) => s + (r.opp_oreb || 0), 0)
-    opp_dreb         = oppStats.reduce((s: number, r: any) => s + (r.opp_dreb || 0), 0)
-    opp_def_fouls    = oppStats.reduce((s: number, r: any) => s + (r.opp_def_fouls || 0), 0)
-    opp_possessions  = oppStats.reduce((s: number, r: any) => s + (r.opp_possessions || 0), 0)
-    opp_ast          = oppStats.reduce((s: number, r: any) => s + (r.opp_ast || 0), 0)
-    opp_stl          = oppStats.reduce((s: number, r: any) => s + (r.opp_stl || 0), 0)
-    opp_blk          = oppStats.reduce((s: number, r: any) => s + (r.opp_blk || 0), 0)
+  if (Array.isArray(oppStats) && oppStats.length > 0) {
+    for (const r of oppStats) {
+      opp_twopt_made += r.opp_twopt_made || 0; opp_twopt_att += r.opp_twopt_att || 0
+      opp_threept_made += r.opp_threept_made || 0; opp_threept_att += r.opp_threept_att || 0
+      opp_ft_made += r.opp_ft_made || 0; opp_ft_att += r.opp_ft_att || 0
+      opp_turnovers += r.opp_turnovers || 0
+      opp_oreb += r.opp_oreb || 0; opp_dreb += r.opp_dreb || 0
+      opp_def_fouls += r.opp_def_fouls || 0; opp_possessions += r.opp_possessions || 0
+      opp_ast += r.opp_ast || 0; opp_stl += r.opp_stl || 0; opp_blk += r.opp_blk || 0
+    }
   } else {
     console.log('⚠️  Using hardcoded opponent estimates')
-    opp_twopt_made   = g * 31.9
-    opp_twopt_att    = g * 42.2
-    opp_threept_made = g * 0.3
-    opp_threept_att  = g * 1.5
-    opp_ft_made      = g * 12.2
-    opp_ft_att       = g * 16.7
-    opp_turnovers    = g * 16.2
-    opp_oreb         = g * 10.6
-    opp_dreb         = g * 12.4
-    opp_def_fouls    = g * 12.6
-    opp_possessions  = possessions
-    opp_ast          = 0
-    opp_stl          = 0
-    opp_blk          = 0
+    opp_twopt_made = g * 31.9; opp_twopt_att = g * 42.2
+    opp_threept_made = g * 0.3; opp_threept_att = g * 1.5
+    opp_ft_made = g * 12.2; opp_ft_att = g * 16.7
+    opp_turnovers = g * 16.2; opp_oreb = g * 10.6; opp_dreb = g * 12.4
+    opp_def_fouls = g * 12.6; opp_possessions = possessions
+    opp_ast = 0; opp_stl = 0; opp_blk = 0
   }
 
   return {
@@ -153,3 +118,49 @@ export async function getSeasonAggregates(
     stl, blk, def_fouls, plus_minus, vps, opp_ast, opp_stl, opp_blk,
   }
 }
+
+/**
+ * Fetch + aggregate season totals for a team, optionally restricted to `gameIds`.
+ *
+ * `gameIds === undefined` → no filter, aggregate every team game. `gameIds === []`
+ * → a filter matched zero games (returns zeroes, must NOT fall back to the whole
+ * season — the bug this guard exists for).
+ *
+ * Wrapped in React `cache()` so repeated identical calls within one server request
+ * are de-duplicated. When filtered (the common case for game/player pages), the
+ * game IDs are already known, so the games/player/opponent fetches run together
+ * instead of waterfalling through a games round-trip first.
+ */
+export const getSeasonAggregates = cache(async (
+  teamId: string,
+  gameIds?: string[],
+): Promise<SeasonAggregates> => {
+  const isFiltered = gameIds !== undefined
+  if (isFiltered && gameIds.length === 0) return emptyAggregates()
+
+  let games: any[], playerStats: any[], oppStats: any[]
+
+  if (isFiltered) {
+    const idList = `(${gameIds!.join(',')})`
+    ;[games, playerStats, oppStats] = await Promise.all([
+      fetchJson(`games?id=in.${idList}&select=${GAME_COLS}`),
+      fetchJson(`player_game_stats?game_id=in.${idList}&select=${PLAYER_COLS}`),
+      fetchJson(`opponent_game_stats?game_id=in.${idList}&select=${OPP_COLS}`),
+    ])
+  } else {
+    // Unfiltered: we need the team's game IDs before the stat queries can filter,
+    // so this one case still fetches games first.
+    games = await fetchJson(`games?team_id=eq.${teamId}&select=${GAME_COLS}`)
+    const idList = `(${(Array.isArray(games) ? games : []).map((gm: any) => gm.id).join(',')})`
+    ;[playerStats, oppStats] = await Promise.all([
+      fetchJson(`player_game_stats?game_id=in.${idList}&select=${PLAYER_COLS}`),
+      fetchJson(`opponent_game_stats?game_id=in.${idList}&select=${OPP_COLS}`),
+    ])
+  }
+
+  return aggregateSeason(
+    Array.isArray(games) ? games : [],
+    Array.isArray(playerStats) ? playerStats : [],
+    Array.isArray(oppStats) ? oppStats : [],
+  )
+})

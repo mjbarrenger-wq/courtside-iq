@@ -38,6 +38,9 @@ export interface AggEvent {
   // YouTube playback position in seconds at the moment of the tap. Used for stint
   // durations when timeSource is 'video' (native games). Null when no video.
   video_time?: number | null
+  // Opponent jersey (opponent events only; player_id stays null for the opponent).
+  // Used to build the per-opponent-player box score. Null = unnumbered "Other".
+  jersey_number?: number | null
 }
 
 // One contiguous 5-player on-court window with its possession accounting.
@@ -366,9 +369,96 @@ export function aggregateBox(events: AggEvent[]): BoxAggregate {
   return { team, opponent, players }
 }
 
+// Per-opponent-player box score, aggregated from the opponent side of the event log
+// by jersey_number. jersey null = the team-level / unnumbered ("Other") bucket. Only
+// meaningful for natively-scored games where opponent jerseys were entered.
+export function aggregateOpponentByJersey(events: AggEvent[]): Map<number | null, PlayerCounts> {
+  const out = new Map<number | null, PlayerCounts>()
+  for (const e of events) {
+    if (e.team_side !== 'opponent') continue
+    const jn = e.jersey_number ?? null
+    let pc = out.get(jn)
+    if (!pc) { pc = emptyPlayerCounts(); out.set(jn, pc) }
+    foldPlayerEvent(pc, e.event_type, e.points)
+  }
+  return out
+}
+
 // Canonical possession count for a side's totals (FGA = 2PA + 3PA).
 export function sidePossessions(t: SideTotals): number {
   return poss2(t.twopt_att + t.threept_att, t.ft_att, t.oreb, t.turnovers)
+}
+
+/**
+ * Opponent minutes-on-court, per jersey, in seconds.
+ *
+ * The opponent has no player_id and no lineup_stints table, so this is a lighter
+ * cousin of reconstructStints: it tracks each jersey's on-court intervals (seeded
+ * with `starters`, mutated by opponent sub_in / sub_out events) and sums their
+ * time on the floor. Unlike the team stints it does NOT require the on-court set to
+ * be exactly five — opponent tracking is best-effort, so whatever jerseys the coach
+ * placed on court accrue minutes and any jersey never placed on court simply gets
+ * none. Time base matches reconstructStints: 'clock' counts down 10:00→0:00 per
+ * period, 'video' counts up from each event's video_time.
+ *
+ * Only opponent sub_in / sub_out events (team_side === 'opponent') move the on-court
+ * set; every other event just advances the clock reference.
+ */
+export function opponentSecondsByJersey(
+  events: AggEvent[],
+  starters: number[],
+  opts: { timeSource?: TimeSource } = {},
+): Map<number, number> {
+  const source: TimeSource = opts.timeSource ?? 'clock'
+  const isVideo = source === 'video'
+  const getT = (e: AggEvent): number | null =>
+    isVideo ? (e.video_time ?? null) : clkToSec(e.clock_sec ?? null)
+
+  const ordered = [...events].sort((a, b) => a.event_order - b.event_order)
+  const seconds = new Map<number, number>()
+  const add = (j: number, s: number) => { if (s > 0) seconds.set(j, (seconds.get(j) ?? 0) + s) }
+  const elapsed = (from: number, to: number) =>
+    isVideo ? Math.max(0, to - from) : Math.max(0, from - to)
+
+  const periodOpen = isVideo ? 0 : PERIOD_START_SEC
+  let curPeriod = ordered.length ? ordered[0].period : 1
+  let curTime = periodOpen
+  // jersey → the time it last came on court (in the current period's time base).
+  const onSince = new Map<number, number>()
+  for (const j of starters) onSince.set(j, periodOpen)
+
+  const closeAll = (endT: number) => {
+    for (const [j, since] of onSince) add(j, elapsed(since, endT))
+  }
+
+  for (const e of ordered) {
+    if (e.period !== curPeriod) {
+      // Close everyone at the period boundary, then carry them into the new period:
+      // players don't leave the floor at a quarter break, but the clock resets.
+      closeAll(isVideo ? curTime : 0)
+      curPeriod = e.period
+      const openT = isVideo ? (getT(e) ?? curTime) : PERIOD_START_SEC
+      curTime = openT
+      for (const j of [...onSince.keys()]) onSince.set(j, openT)
+    }
+    const t = getT(e)
+    if (t != null) curTime = t
+
+    if (e.team_side !== 'opponent') continue
+    if (e.event_type === 'sub_out') {
+      const j = e.jersey_number
+      if (j == null) continue
+      const since = onSince.get(j)
+      if (since != null) { add(j, elapsed(since, curTime)); onSince.delete(j) }
+    } else if (e.event_type === 'sub_in') {
+      const j = e.jersey_number
+      if (j == null) continue
+      if (!onSince.has(j)) onSince.set(j, curTime)
+    }
+  }
+
+  closeAll(isVideo ? curTime : 0)
+  return seconds
 }
 
 /**

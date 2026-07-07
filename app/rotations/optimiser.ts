@@ -51,8 +51,21 @@ function eligiblePositions(p: RotationPlayer | undefined): boolean[] {
   return ALL_POS_LIST.map(pos => set.has(pos))
 }
 
+// Position-matching memo. `posValid`/`maxMatchingSize` are the most-called predicate
+// in the solver (every candidate swap re-validates a lineup), and a given 5-player
+// set recurs constantly. The matching is a pure function of the id-SET (position
+// eligibility is fixed per player and `byId` is constant within one solve), so we
+// cache by a sorted-id key. Cleared at the top of every `solve()` in case the roster
+// or positions changed between runs. Solve is synchronous, so a module-level cache is
+// safe (no concurrent solves interleaving).
+let _matchCache = new Map<string, number>()
+export function clearMatchCache() { _matchCache = new Map() }
+
 // Size of the maximum player→position matching (Kuhn's augmenting paths).
 function maxMatchingSize(ids: string[], byId: Map<string, RotationPlayer>): number {
+  const key = [...ids].sort().join(',')
+  const hit = _matchCache.get(key)
+  if (hit !== undefined) return hit
   const elig = ids.map(id => eligiblePositions(byId.get(id)))
   const matchPos = new Array<number>(ALL_POS_LIST.length).fill(-1)  // position → player index
   const augment = (pi: number, seen: boolean[]): boolean => {
@@ -71,6 +84,7 @@ function maxMatchingSize(ids: string[], byId: Map<string, RotationPlayer>): numb
   for (let pi = 0; pi < elig.length; pi++) {
     if (augment(pi, new Array<boolean>(ALL_POS_LIST.length).fill(false))) matched++
   }
+  _matchCache.set(key, matched)
   return matched
 }
 
@@ -1106,6 +1120,7 @@ export function solve(
 
   const TOTAL_SLOTS = numPeriods * periodDuration
   const LAST        = TOTAL_SLOTS - 1
+  clearMatchCache() // fresh position-matching memo per solve (roster/positions may have changed)
   const byId   = new Map(players.map(p => [p.id, p]))
   const cMap   = new Map(constraints.map(c => [c.playerId, c]))
   const available = players.filter(p => !(cMap.get(p.id)?.unavailable ?? false))
@@ -1201,6 +1216,16 @@ export function solve(
   let bestScore = -Infinity
   let bestWarnings: string[] = []
 
+  // Wall-clock backstop. The multi-start search has no natural early exit, so an
+  // over-constrained (infeasible) config used to grind all 150 starts × the repair
+  // loops for 25–45s of dead UI. Cap the search and return best-so-far; a floor of
+  // MIN_STARTS guarantees a real search even on a slow machine. Feasible configs
+  // finish well under the cap (especially with the matching memo), so their result
+  // is unchanged — only the pathological long tail is bounded.
+  const TIME_CAP_MS = 3000
+  const MIN_STARTS  = 15
+  const solveStart  = Date.now()
+
   for (let iter = 0; iter < NUM_STARTS; iter++) {
     // First iteration: deterministic (jitter=0). Rest: randomised.
     // When balanceByPeriod is on, use lower jitter so the period urgency signal
@@ -1245,6 +1270,8 @@ export function solve(
       bestFrozen      = frozenSlots
       bestWarnings    = [...warnings, ...postRepairWarnings]
     }
+
+    if (iter + 1 >= MIN_STARTS && Date.now() - solveStart > TIME_CAP_MS) break
   }
 
   const assignments = bestAssignments!
