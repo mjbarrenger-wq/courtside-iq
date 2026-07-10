@@ -87,7 +87,9 @@ function statLine(pid: string, events: LocalEvent[]) {
 type Actor = { t: 'us'; id: string } | { t: 'us-team' } | { t: 'opp'; jersey: number | null }
 type Armed = { kind: 'ev'; btn: EventBtn } | { kind: 'reb' } | null
 type Prompt =
-  | { kind: 'rebound'; shooterSide: TeamSide }
+  // shotMissOrder is set for a rebound that follows a missed FG with the shot chart on:
+  // the combined popup also captures the shot location, attached to that miss event.
+  | { kind: 'rebound'; shooterSide: TeamSide; shotMissOrder?: number }
   | { kind: 'turnover'; toSide: TeamSide }
 
 interface Part {
@@ -115,6 +117,8 @@ export default function EntryScreen({
   const [armed, setArmed] = useState<Armed>(null)
   const [prompt, setPrompt] = useState<Prompt | null>(null)
   const [shotPrompt, setShotPrompt] = useState<null | { isMiss: boolean; shooterSide: TeamSide }>(null)
+  // Shot location tapped inside the combined miss→rebound popup, applied to the miss on resolve.
+  const [pendingLoc, setPendingLoc] = useState<{ x: number; y: number } | null>(null)
   const [chartMode, setChartMode] = useState(true)
   const [newOppJersey, setNewOppJersey] = useState('')
   // Substitution modal — shared by our team and the opponent. subTeam selects which
@@ -460,8 +464,15 @@ export default function EntryScreen({
       append([{ event_type: btn.et, ...t, points: btn.pts }])
       if (isFG(btn.et)) {
         const isMiss = btn.et === 'missed_2pt' || btn.et === 'missed_3pt'
-        if (chartMode) { setArmed(null); setShotPrompt({ isMiss, shooterSide: t.team_side }); return }
-        if (isMiss) { setArmed(null); scheduleRebound(t.team_side); return }
+        if (isMiss) {
+          // Missed FG → after a beat (video plays on so the board battle is visible) ONE
+          // popup captures the shot location + the rebounder. Capture this miss's order
+          // now so the location lands on the right event. Chart off → rebound only.
+          const missOrder = events.length + 1
+          setArmed(null); scheduleRebound(t.team_side, chartMode ? missOrder : undefined); return
+        }
+        // Made FG → location popup only (no rebound), immediately.
+        if (chartMode) { setArmed(null); setShotPrompt({ isMiss: false, shooterSide: t.team_side }); return }
       } else if (btn.et === 'missed_ft') {
         // A missed free throw is live — prompt for the rebound too (no shot location
         // for FTs, so skip the chart and go straight to the rebound prompt).
@@ -525,13 +536,17 @@ export default function EntryScreen({
   }
 
   // Open the rebound prompt ~1s later so the video plays on and the coach can see who
-  // grabbed the board before the prompt pauses it. (Missed FTs never prompt.)
-  function scheduleRebound(shooterSide: TeamSide) {
-    setTimeout(() => setPrompt({ kind: 'rebound', shooterSide }), 1000)
+  // grabbed the board before the prompt pauses it. Only ever called for a MISS (missed
+  // 2PT/3PT/FT) — a made basket ends the possession, so it never prompts for a rebound.
+  // shotMissOrder (set for a missed FG with the chart on) makes the popup also capture
+  // the shot location, attached to that miss event.
+  function scheduleRebound(shooterSide: TeamSide, shotMissOrder?: number) {
+    setTimeout(() => { setPendingLoc(null); setPrompt({ kind: 'rebound', shooterSide, shotMissOrder }) }, 1000)
   }
 
+  // Shot-location picker for a MADE field goal (a missed FG captures its location inside
+  // the combined rebound popup instead). Stores the coords on the just-logged shot event.
   function resolveShot(x: number | null, y: number | null) {
-    const sp = shotPrompt
     if (x != null && y != null) {
       setState(prev => {
         if (!prev || !prev.events.length) return prev
@@ -541,7 +556,6 @@ export default function EntryScreen({
       })
     }
     setShotPrompt(null)
-    if (sp?.isMiss) scheduleRebound(sp.shooterSide)
   }
 
   // rebound/turnover option lists (used for both rendering and 1–9 keys)
@@ -563,6 +577,14 @@ export default function EntryScreen({
 
   function resolveRebound(target: string) {
     const p = prompt as Extract<Prompt, { kind: 'rebound' }>
+    // Attach the shot location (if the coach tapped one in the combined popup) to the
+    // missed-FG event this rebound followed.
+    if (p.shotMissOrder != null && pendingLoc) {
+      const { x, y } = pendingLoc
+      setState(prev => (prev
+        ? { ...prev, events: prev.events.map(e => e.event_order === p.shotMissOrder ? { ...e, shot_x: x, shot_y: y } : e), updatedAt: Date.now() }
+        : prev))
+    }
     if (target !== 'SKIP') {
       if (!target.startsWith('OPP') && target !== 'TEAM') showToast(target)
       if (target === 'TEAM') {
@@ -575,6 +597,7 @@ export default function EntryScreen({
       }
     }
     setPrompt(null)
+    setPendingLoc(null)
   }
 
   function resolveTurnover(target: string) {
@@ -1038,15 +1061,30 @@ export default function EntryScreen({
         </RightDock>
       )}
 
-      {/* Rebound / turnover prompt (right-docked) */}
+      {/* Rebound / turnover prompt (right-docked). For a missed FG (chart on) this same
+          popup also carries the shot-location picker, so the two are captured together. */}
       {prompt && (
-        <RightDock onClose={() => setPrompt(null)}>
+        <RightDock onClose={() => { setPrompt(null); setPendingLoc(null) }} width={prompt.kind === 'rebound' && prompt.shotMissOrder != null ? 420 : 380}>
           <PopupHead
             kicker={prompt.kind === 'rebound' ? 'REBOUND' : 'TURNOVER'}
             color={prompt.kind === 'rebound' ? TEAL : AMBER}
             title={prompt.kind === 'rebound' ? 'Who got the rebound?' : 'Turnover on whom?'}
-            hint={prompt.kind === 'rebound' ? 'Offence / defence auto. Press 1–9 or tap.' : 'Press 1–9 or tap.'}
+            hint={prompt.kind === 'rebound'
+              ? (prompt.shotMissOrder != null
+                  ? 'Tap where the shot came from (optional), then the rebounder. 1–9 or tap.'
+                  : 'Offence / defence auto. Press 1–9 or tap.')
+              : 'Press 1–9 or tap.'}
           />
+          {prompt.kind === 'rebound' && prompt.shotMissOrder != null && (
+            <div style={{ marginBottom: 12 }}>
+              <div style={{ ...sectionLabel, color: MUTED }}>SHOT LOCATION <span style={{ fontWeight: 500, textTransform: 'none', letterSpacing: 0 }}>· optional</span></div>
+              <HalfCourt
+                onPick={(x, y) => setPendingLoc({ x, y })}
+                shots={pendingLoc ? [{ x: pendingLoc.x, y: pendingLoc.y, made: false, pts: 0 }] : []}
+                maxHeight={230}
+              />
+            </div>
+          )}
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
             {prompt.kind === 'rebound' ? (
               <>
