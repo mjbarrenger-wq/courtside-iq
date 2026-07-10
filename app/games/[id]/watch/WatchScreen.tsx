@@ -252,7 +252,7 @@ export default function WatchScreen({
       </div>
 
       {/* Body */}
-      <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_360px] lg:flex-1 lg:min-h-0" style={{ gap: 10, marginTop: 10 }}>
+      <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_360px] lg:grid-rows-[minmax(0,1fr)] lg:flex-1 lg:min-h-0" style={{ gap: 10, marginTop: 10 }}>
         {/* Video + scoreboard bug + current-play card */}
         <div className="lg:h-full" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 0 }}>
           <div style={{ position: 'relative', height: '100%', aspectRatio: '16 / 9', maxWidth: '100%', background: '#000', borderRadius: 12, overflow: 'hidden', border: `1px solid ${BORDER}` }}>
@@ -344,7 +344,7 @@ export default function WatchScreen({
           </div>
 
           {/* Play-by-play — click to jump the video there. Highlights the current play. */}
-          <div className="lg:min-h-0 lg:flex-1" style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: 10, padding: 8, display: 'flex', flexDirection: 'column', minHeight: 100 }}>
+          <div className="lg:min-h-0 lg:flex-1" style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: 10, padding: 8, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
             <div style={{ fontSize: 10, fontWeight: 800, color: TEAL, letterSpacing: '0.06em', marginBottom: 3 }}>
               PLAY-BY-PLAY {perQuarter && <span style={{ color: MUTED }}>· Q{period}</span>} <span style={{ fontWeight: 500, color: MUTED, textTransform: 'none', letterSpacing: 0 }}>· tap to jump</span>
             </div>
