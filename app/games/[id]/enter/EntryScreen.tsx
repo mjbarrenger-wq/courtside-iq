@@ -729,8 +729,11 @@ export default function EntryScreen({
   const toastLine = toast ? statLine(toast.pid, events) : null
 
   return (
-    <main className="lg:h-screen lg:overflow-hidden" style={{
-      background: BG, minHeight: '100vh', color: '#1a1f2e',
+    <main className="lg:h-[calc(100vh_-_2.75rem)] lg:overflow-hidden" style={{
+      // 2.75rem = the 44px global NavBar (sticky, h-11). Subtracting it keeps this
+      // full-screen tool exactly in the space below the nav so it neither overflows
+      // nor gets its top row overlapped by the sticky nav.
+      background: BG, minHeight: 'calc(100vh - 2.75rem)', color: '#1a1f2e',
       fontFamily: "'Inter', system-ui, sans-serif", WebkitFontSmoothing: 'antialiased',
       display: 'flex', flexDirection: 'column', padding: '0 10px 10px',
     }}>
@@ -771,7 +774,10 @@ export default function EntryScreen({
       <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_340px] lg:grid-rows-[minmax(0,1fr)] lg:flex-1 lg:min-h-0" style={{ gap: 10, marginTop: 10 }}>
         {/* Video + scoreboard bug + toast */}
         <div className="lg:h-full" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 0 }}>
-          <div style={{ position: 'relative', height: '100%', aspectRatio: '16 / 9', maxWidth: '100%', background: '#000', borderRadius: 12, overflow: 'hidden', border: `1px solid ${BORDER}` }}>
+          {/* Mobile: width-driven (w-full → height from the 16:9 aspect). Desktop: height
+              fills the row (lg:h-full), width follows the aspect (capped at 100%). Without
+              the responsive split the inline height:100% collapsed to 0 on mobile. */}
+          <div className="w-full lg:h-full lg:w-auto" style={{ position: 'relative', aspectRatio: '16 / 9', maxWidth: '100%', maxHeight: '100%', background: '#000', borderRadius: 12, overflow: 'hidden', border: `1px solid ${BORDER}` }}>
             {activeVideoId
               ? <div id={`yt-${gameId}`} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }} />
               : <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', color: '#9aa4b2', fontSize: 12 }}>No video attached — you can still score.</div>}
