@@ -259,6 +259,18 @@ export default function EntryScreen({
   useEffect(() => {
     if (!perQuarter || !ytReady || !activeVideoId) return
     try { ytRef.current?.loadVideoById?.(activeVideoId) } catch { /* noop */ }
+    // If a cross-quarter jump asked to land on a specific play, seek there once the new
+    // quarter's video is up. loadVideoById is async, so retry, then re-sync clock+score.
+    const target = pendingSeekRef.current
+    if (target != null) {
+      pendingSeekRef.current = null
+      const doSeek = () => {
+        try { ytRef.current?.seekTo?.(Math.max(0, target - SEEK_LEAD), true) } catch { /* noop */ }
+        setTimeout(() => syncRef.current(), 120)
+      }
+      setTimeout(doSeek, 500)
+      setTimeout(doSeek, 1100)
+    }
   }, [activeVideoId, perQuarter, ytReady])
 
   const videoTime = useCallback((): number | null => {
@@ -360,6 +372,9 @@ export default function EntryScreen({
   }
 
   const didSeekRef = useRef(false)
+  // A cross-quarter jump sets this to the target video_time; the loader effect applies
+  // the seek once the newly-selected quarter's video has loaded (loadVideoById is async).
+  const pendingSeekRef = useRef<number | null>(null)
   useEffect(() => {
     if (!ytReady || didSeekRef.current || !state?.events.length) return
     const last = state.events[state.events.length - 1]
@@ -659,7 +674,15 @@ export default function EntryScreen({
   // Re-lock the clock to the current video position (after a Stop, or if it drifted).
   function resetClock() { setClockArmed(true); syncToVideo() }
   // Jump the video to a play; the clock follows to that play's spot in the footage.
+  // For a play in a DIFFERENT quarter (per-quarter footage), switch to that quarter
+  // first and defer the seek until its video loads — otherwise we'd seek the current
+  // quarter's video to the wrong play at the same offset.
   function jumpToEvent(e: LocalEvent) {
+    if (perQuarter && e.period !== period) {
+      pendingSeekRef.current = e.video_time ?? null
+      setPeriod(e.period)
+      return
+    }
     seekBack(e.video_time)
     setClockSec(clockForVideoTime(e.video_time == null ? null : e.video_time - SEEK_LEAD))
   }
@@ -786,13 +809,15 @@ export default function EntryScreen({
             {activeVideoId && (
               <div onClick={togglePause} title="Click to play / pause" style={{ position: 'absolute', inset: 0, zIndex: 1, cursor: 'pointer' }} />
             )}
-            {/* Top row: scoreboard bug + (when a stat is logged) the confirm toast beside it */}
-            <div style={{ position: 'absolute', top: 10, left: 10, zIndex: 2, display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+            {/* Top row: scoreboard bug + (when a stat is logged) the confirm toast. Bounded
+                to the video width (right:8) and allowed to wrap so the toast drops under the
+                bug rather than spilling off a narrow (mobile) video; sizes scale via clamp(). */}
+            <div style={{ position: 'absolute', top: 8, left: 8, right: 8, zIndex: 2, display: 'flex', alignItems: 'flex-start', flexWrap: 'wrap', gap: 8 }}>
             <div style={{
-              display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0,
-              background: 'rgba(15,23,42,0.82)', color: '#fff', borderRadius: 10, padding: '6px 10px',
+              display: 'flex', alignItems: 'center', gap: 'clamp(4px, 1.5vw, 10px)', flexShrink: 0,
+              background: 'rgba(15,23,42,0.82)', color: '#fff', borderRadius: 10, padding: 'clamp(3px,0.9vw,6px) clamp(6px,1.8vw,10px)',
             }}>
-              <span style={{ fontSize: 11, fontWeight: 800, background: TEAL, borderRadius: 6, padding: '2px 7px' }}>Q{period}</span>
+              <span style={{ fontSize: 'clamp(9px,2.4vw,11px)', fontWeight: 800, background: TEAL, borderRadius: 6, padding: '2px 7px' }}>Q{period}</span>
               {adjusting ? (
                 <>
                   <input
@@ -800,50 +825,50 @@ export default function EntryScreen({
                     onChange={e => setAdjustVal(e.target.value.replace(/[^\d:]/g, ''))}
                     onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); applyAdjust() } else if (e.key === 'Escape') { e.preventDefault(); setAdjusting(false) } }}
                     placeholder="M:SS"
-                    style={{ width: 66, fontSize: 20, fontWeight: 900, textAlign: 'center', fontVariantNumeric: 'tabular-nums', borderRadius: 6, border: '1px solid rgba(255,255,255,0.45)', background: 'rgba(0,0,0,0.35)', color: '#fff', padding: '2px 4px' }} />
-                  <button onClick={applyAdjust} title="Align our clock to this value at the current video frame" style={{ fontSize: 11, fontWeight: 800, padding: '4px 9px', borderRadius: 6, cursor: 'pointer', border: 'none', color: '#fff', background: GREEN }}>Align</button>
-                  <button onClick={() => setAdjusting(false)} title="Cancel" style={{ fontSize: 11, fontWeight: 700, padding: '4px 7px', borderRadius: 6, cursor: 'pointer', border: '1px solid rgba(255,255,255,0.3)', color: '#fff', background: 'transparent' }}>✕</button>
+                    style={{ width: 'clamp(48px,13vw,66px)', fontSize: 'clamp(14px,4vw,20px)', fontWeight: 900, textAlign: 'center', fontVariantNumeric: 'tabular-nums', borderRadius: 6, border: '1px solid rgba(255,255,255,0.45)', background: 'rgba(0,0,0,0.35)', color: '#fff', padding: '2px 4px' }} />
+                  <button onClick={applyAdjust} title="Align our clock to this value at the current video frame" style={{ fontSize: 'clamp(9px,2.4vw,11px)', fontWeight: 800, padding: '4px 9px', borderRadius: 6, cursor: 'pointer', border: 'none', color: '#fff', background: GREEN }}>Align</button>
+                  <button onClick={() => setAdjusting(false)} title="Cancel" style={{ fontSize: 'clamp(9px,2.4vw,11px)', fontWeight: 700, padding: '4px 7px', borderRadius: 6, cursor: 'pointer', border: '1px solid rgba(255,255,255,0.3)', color: '#fff', background: 'transparent' }}>✕</button>
                 </>
               ) : (
                 <>
                   <span title="Game clock — follows the video" style={{
-                    fontSize: 24, fontWeight: 900, fontVariantNumeric: 'tabular-nums',
-                    color: clockSet && clockArmed ? '#fff' : '#fbbf24', minWidth: 66, textAlign: 'center', lineHeight: 1,
+                    fontSize: 'clamp(15px,4.6vw,24px)', fontWeight: 900, fontVariantNumeric: 'tabular-nums',
+                    color: clockSet && clockArmed ? '#fff' : '#fbbf24', minWidth: 'clamp(40px,12vw,66px)', textAlign: 'center', lineHeight: 1,
                   }}>{fmtVt(clockSec)}</span>
                   <button
                     onClick={clockSet ? toggleClock : startClock}
                     title={!clockSet ? 'Start the game clock at the tip-off' : clockArmed ? 'Stop the clock (stop-clock window)' : 'Resume following the video'}
                     style={{
-                      fontSize: 11, fontWeight: 800, padding: '4px 9px', borderRadius: 6, cursor: 'pointer', border: 'none',
+                      fontSize: 'clamp(9px,2.4vw,11px)', fontWeight: 800, padding: '4px 9px', borderRadius: 6, cursor: 'pointer', border: 'none',
                       color: '#fff', background: clockSet && clockArmed ? AMBER : GREEN,
                     }}>{clockSet && clockArmed ? 'Stop' : 'Start'}</button>
                   {clockSet && (
                     <button onClick={resetClock} title="Re-lock the clock to the video" style={{
-                      fontSize: 11, fontWeight: 700, padding: '4px 7px', borderRadius: 6, cursor: 'pointer',
+                      fontSize: 'clamp(9px,2.4vw,11px)', fontWeight: 700, padding: '4px 7px', borderRadius: 6, cursor: 'pointer',
                       border: '1px solid rgba(255,255,255,0.3)', color: '#fff', background: 'transparent',
                     }}>⟲</button>
                   )}
                   {clockSet && (
                     <button onClick={() => { setAdjustVal(fmtVt(clockSec)); setAdjusting(true) }} title="Adjust — align the clock to the real scoreboard" style={{
-                      fontSize: 11, fontWeight: 700, padding: '4px 7px', borderRadius: 6, cursor: 'pointer',
+                      fontSize: 'clamp(9px,2.4vw,11px)', fontWeight: 700, padding: '4px 7px', borderRadius: 6, cursor: 'pointer',
                       border: '1px solid rgba(255,255,255,0.3)', color: '#fff', background: 'transparent',
                     }}>✎</button>
                   )}
                 </>
               )}
-              <span title="Score at this point of the video" style={{ fontSize: 15, fontWeight: 900, marginLeft: 4, fontVariantNumeric: 'tabular-nums' }}>
+              <span title="Score at this point of the video" style={{ fontSize: 'clamp(11px,3.2vw,15px)', fontWeight: 900, marginLeft: 4, fontVariantNumeric: 'tabular-nums' }}>
                 {activeVideoId ? videoScore.us : teamScore}<span style={{ color: '#94a3b8', margin: '0 5px', fontWeight: 700 }}>–</span>{activeVideoId ? videoScore.them : oppScore}
               </span>
             </div>
-            {/* Confirm toast — the just-logged player's line, beside the clock (same top row) */}
+            {/* Confirm toast — the just-logged player's line. Wraps under the bug on a narrow video. */}
             {toast && toastLine && (
               <div key={toast.n} style={{
-                display: 'flex', alignItems: 'center', gap: 9, flexShrink: 0,
-                background: 'rgba(48,123,146,0.96)', color: '#fff', borderRadius: 10, padding: '6px 12px',
-                boxShadow: '0 4px 16px rgba(0,0,0,0.28)', whiteSpace: 'nowrap',
+                display: 'flex', alignItems: 'center', gap: 8, flexShrink: 1, minWidth: 0,
+                background: 'rgba(48,123,146,0.96)', color: '#fff', borderRadius: 10, padding: 'clamp(3px,0.9vw,6px) clamp(7px,1.8vw,12px)',
+                boxShadow: '0 4px 16px rgba(0,0,0,0.28)',
               }}>
-                <span style={{ fontSize: 20, fontWeight: 900, lineHeight: 1 }}>{chipName(toast.pid)}</span>
-                <span style={{ fontSize: 13, opacity: 0.9, fontWeight: 600 }}>
+                <span style={{ fontSize: 'clamp(13px,3.6vw,20px)', fontWeight: 900, lineHeight: 1, whiteSpace: 'nowrap' }}>{chipName(toast.pid)}</span>
+                <span style={{ fontSize: 'clamp(10px,2.6vw,13px)', opacity: 0.9, fontWeight: 600 }}>
                   {toastLine.pts} PTS · {toastLine.reb} REB · {toastLine.ast} AST
                   {toastLine.stl > 0 && ` · ${toastLine.stl} STL`}{toastLine.blk > 0 && ` · ${toastLine.blk} BLK`}
                   {toastLine.pf > 0 && ` · ${toastLine.pf} PF`} · {toastLine.fgm}/{toastLine.fga} FG
