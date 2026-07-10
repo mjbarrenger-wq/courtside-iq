@@ -181,6 +181,41 @@ export default async function Home() {
             </div>
           </a>
 
+          {/* CIQ Leaderboard */}
+          <a href="/ciq" style={{ textDecoration: 'none', display: 'flex' }}>
+            <div style={{
+              background: CARD, border: `1px solid ${BORDER}`,
+              borderTop: '3px solid #307b92',
+              borderRadius: 14, padding: '28px 28px 24px',
+              cursor: 'pointer', flex: 1,
+              display: 'flex', flexDirection: 'column',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: '#307b92', letterSpacing: '0.08em' }}>
+                  PLAYER VALUE
+                </div>
+                <span style={{ fontSize: 18, color: '#307b92' }}>→</span>
+              </div>
+              <div style={{ fontSize: 22, fontWeight: 800, color: '#1a1f2e', marginBottom: 10, lineHeight: 1.2 }}>
+                CIQ Leaderboard
+              </div>
+              <div style={{ fontSize: 13, color: '#6b7280', lineHeight: 1.7, flex: 1 }}>
+                The roster ranked by Courtside IQ Rating — our single value metric, points of value
+                per 100 possessions blending box production with on-court impact. Best and worst games,
+                and each player&rsquo;s trend across the season.
+              </div>
+              <div style={{ marginTop: 18, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                {['Season CIQ', 'Value Rank', 'Trend'].map(tag => (
+                  <span key={tag} style={{
+                    background: '#eef1f6', border: `1px solid ${BORDER}`,
+                    borderRadius: 20, padding: '3px 10px', fontSize: 10,
+                    fontWeight: 600, color: '#307b92',
+                  }}>{tag}</span>
+                ))}
+              </div>
+            </div>
+          </a>
+
           {/* Profiles */}
           <a href="/profiles" style={{ textDecoration: 'none', display: 'flex' }}>
             <div style={{

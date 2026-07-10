@@ -1,0 +1,177 @@
+import Link from 'next/link'
+
+export const dynamic = 'force-dynamic'
+
+const SB_URL  = process.env.NEXT_PUBLIC_SUPABASE_URL!
+const SB_KEY  = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+const TEAM_ID = 'b1000000-0000-0000-0000-000000000001'
+
+const BG = '#f4f5f7', CARD = '#ffffff', BORDER = '#e2e5eb'
+const TEAL = '#307b92', SEC = '#374151', MUTED = '#6b7280'
+const GREEN = '#059669', RED = '#dc2626', AMBER = '#d97706'
+
+/* eslint-disable @typescript-eslint/no-explicit-any */
+async function fetchJson(path: string) {
+  const res = await fetch(`${SB_URL}/rest/v1/${path}`, {
+    headers: { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}` },
+    cache: 'no-store',
+  })
+  return res.json()
+}
+
+const arr = (x: any) => (Array.isArray(x) ? x : [])
+const shortOpp = (name?: string) => (name ? name.split(' ')[0] : 'Opp')
+const fmtDate = (d: string) => new Date(d).toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })
+const fmtCiq = (n: number) => (n >= 0 ? n.toFixed(1) : n.toFixed(1))
+
+interface GameLite { id: string; game_date: string; result?: string; opponents?: { full_name?: string } }
+interface PGame { ciq: number; points: number; secs: number; game: GameLite }
+interface Row {
+  id: string; name: string; first: string; jersey: number
+  seasonCiq: number; games: number; best: PGame; worst: PGame
+  series: number[]; avgPts: number; mpg: number
+}
+
+// A tiny 0-baseline sparkline of a player's per-game CIQ across the season.
+function Sparkline({ series }: { series: number[] }) {
+  const w = 132, h = 30, pad = 3
+  if (series.length < 2) {
+    return <div style={{ width: w, height: h, fontSize: 10, color: MUTED, display: 'flex', alignItems: 'center' }}>—</div>
+  }
+  const min = Math.min(0, ...series), max = Math.max(0, ...series)
+  const span = max - min || 1
+  const x = (i: number) => pad + (i / (series.length - 1)) * (w - 2 * pad)
+  const y = (v: number) => h - pad - ((v - min) / span) * (h - 2 * pad)
+  const zeroY = y(0)
+  const pts = series.map((v, i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ')
+  const last = series[series.length - 1]
+  return (
+    <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} style={{ display: 'block' }}>
+      <line x1={pad} y1={zeroY} x2={w - pad} y2={zeroY} stroke="#e2e5eb" strokeWidth="1" strokeDasharray="2 2" />
+      <polyline points={pts} fill="none" stroke={TEAL} strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round" />
+      <circle cx={x(series.length - 1)} cy={y(last)} r="2.4" fill={last >= 0 ? GREEN : RED} />
+    </svg>
+  )
+}
+
+export default async function CiqLeaderboardPage() {
+  const [playersRaw, statsRaw, gamesRaw] = await Promise.all([
+    fetchJson(`players?team_id=eq.${TEAM_ID}&select=id,first_name,last_name,jersey_number&order=jersey_number.asc`),
+    fetchJson('player_game_stats?select=player_id,game_id,ciq_rating,points,time_played_seconds'),
+    fetchJson(`games?team_id=eq.${TEAM_ID}&select=id,game_date,result,opponents(full_name)&order=game_date.asc`),
+  ])
+  const players = arr(playersRaw), stats = arr(statsRaw), games = arr(gamesRaw)
+  const gameById = new Map<string, GameLite>(games.map((g: any) => [g.id, g]))
+
+  const rows: Row[] = players.map((p: any): Row | null => {
+    const pg: PGame[] = stats
+      .filter((s: any) => s.player_id === p.id && s.ciq_rating != null)
+      .map((s: any) => ({ ciq: Number(s.ciq_rating), points: Number(s.points) || 0, secs: Number(s.time_played_seconds) || 0, game: gameById.get(s.game_id)! }))
+      .filter((s: PGame) => s.game)
+      .sort((a: PGame, b: PGame) => new Date(a.game.game_date).getTime() - new Date(b.game.game_date).getTime())
+    if (!pg.length) return null
+    const seasonCiq = pg.reduce((s, x) => s + x.ciq, 0) / pg.length
+    const best = pg.reduce((m, x) => (x.ciq > m.ciq ? x : m), pg[0])
+    const worst = pg.reduce((m, x) => (x.ciq < m.ciq ? x : m), pg[0])
+    return {
+      id: p.id, name: `${p.first_name} ${p.last_name}`, first: p.first_name, jersey: p.jersey_number,
+      seasonCiq: +seasonCiq.toFixed(1), games: pg.length, best, worst, series: pg.map(x => x.ciq),
+      avgPts: pg.reduce((s, x) => s + x.points, 0) / pg.length,
+      mpg: pg.reduce((s, x) => s + x.secs, 0) / pg.length / 60,
+    }
+  }).filter(Boolean) as Row[]
+
+  rows.sort((a, b) => b.seasonCiq - a.seasonCiq)
+  const maxAbs = Math.max(1, ...rows.map(r => Math.abs(r.seasonCiq)))
+
+  return (
+    <main style={{ background: BG, minHeight: '100vh', color: '#1a1f2e', fontFamily: "'Inter', system-ui, sans-serif", WebkitFontSmoothing: 'antialiased', paddingBottom: 60 }}>
+      {/* Header */}
+      <div style={{ background: '#fff', borderBottom: `1px solid ${BORDER}`, padding: '12px 28px' }}>
+        <div style={{ fontSize: 20, fontWeight: 800, letterSpacing: '0.05em' }}>CIQ LEADERBOARD</div>
+        <div style={{ fontSize: 12, color: MUTED, marginTop: 2 }}>
+          WGT 12.2 — season player value, ranked by Courtside IQ Rating &nbsp;·&nbsp;
+          <span style={{ color: TEAL, fontWeight: 700 }}>CMD Sports Analytics</span>
+        </div>
+      </div>
+
+      <div style={{ maxWidth: 1000, margin: '0 auto', padding: '22px 24px 0' }}>
+        {/* What CIQ is */}
+        <div style={{ background: CARD, border: `1px solid ${BORDER}`, borderLeft: `3px solid ${TEAL}`, borderRadius: 10, padding: '14px 18px', marginBottom: 20 }}>
+          <div style={{ fontSize: 13, fontWeight: 800, color: TEAL, marginBottom: 6 }}>What CIQ measures</div>
+          <p style={{ fontSize: 13, color: SEC, lineHeight: 1.6, margin: '0 0 8px' }}>
+            <strong>CIQ Rating</strong> is Courtside IQ&rsquo;s single value metric — <strong>points of value per 100 possessions</strong>.
+            It blends an individual box estimate (scoring above or below the level&rsquo;s break-even rate, plus credit for assists,
+            rebounds, steals and blocks, minus turnovers and fouls) with the team&rsquo;s net scoring while the player is on the floor.
+          </p>
+          <p style={{ fontSize: 12, color: MUTED, lineHeight: 1.6, margin: 0 }}>
+            Higher is better; around zero is replacement level. It&rsquo;s box-dominant right now — the on-court half earns weight as
+            more games get full play-by-play. <Link href="/glossary" style={{ color: TEAL, fontWeight: 700, textDecoration: 'none' }}>Full definition in the glossary →</Link>
+          </p>
+        </div>
+
+        {rows.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '60px 0', color: MUTED, fontSize: 13 }}>No CIQ data yet.</div>
+        ) : (
+          <div style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: 14, overflow: 'hidden' }}>
+            {/* Column header */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 18px', borderBottom: `1px solid ${BORDER}`, background: '#f0f2f7', fontSize: 10, fontWeight: 700, color: MUTED, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+              <span style={{ width: 26 }}>#</span>
+              <span style={{ flex: 1 }}>Player</span>
+              <span style={{ width: 92, textAlign: 'right' }}>Season CIQ</span>
+              <span className="hidden md:block" style={{ width: 140 }}>Per-game trend</span>
+              <span className="hidden md:block" style={{ width: 200 }}>Best / worst game</span>
+              <span style={{ width: 44, textAlign: 'right' }}>GP</span>
+            </div>
+
+            {rows.map((r, i) => {
+              const barPct = Math.round((Math.abs(r.seasonCiq) / maxAbs) * 100)
+              const pos = r.seasonCiq >= 0
+              return (
+                <div key={r.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 18px', borderBottom: i < rows.length - 1 ? `1px solid ${BORDER}` : 'none', background: i % 2 ? '#f8f9fb' : 'transparent' }}>
+                  {/* rank */}
+                  <span style={{ width: 26, fontSize: 14, fontWeight: 800, color: i === 0 ? AMBER : MUTED }}>{i + 1}</span>
+
+                  {/* player + bar */}
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'baseline', gap: 7 }}>
+                      <span style={{ fontSize: 14, fontWeight: 700, color: '#1a1f2e', whiteSpace: 'nowrap' }}>{r.name}</span>
+                      <span style={{ fontSize: 11, color: MUTED }}>#{r.jersey}</span>
+                      <span style={{ fontSize: 11, color: MUTED }}>· {r.avgPts.toFixed(1)} PPG · {Math.floor(r.mpg)} mpg</span>
+                    </div>
+                    <div style={{ marginTop: 5, height: 6, background: '#eef1f6', borderRadius: 3, overflow: 'hidden', maxWidth: 320 }}>
+                      <div style={{ width: `${barPct}%`, height: '100%', background: pos ? TEAL : RED, borderRadius: 3 }} />
+                    </div>
+                  </div>
+
+                  {/* season CIQ */}
+                  <span style={{ width: 92, textAlign: 'right', fontSize: 22, fontWeight: 900, color: pos ? TEAL : RED, fontVariantNumeric: 'tabular-nums' }}>
+                    {pos ? '' : '−'}{Math.abs(r.seasonCiq).toFixed(1)}
+                  </span>
+
+                  {/* sparkline */}
+                  <div className="hidden md:block" style={{ width: 140 }}>
+                    <Sparkline series={r.series} />
+                  </div>
+
+                  {/* best / worst */}
+                  <div className="hidden md:block" style={{ width: 200, fontSize: 11, color: MUTED, lineHeight: 1.5 }}>
+                    <div><span style={{ color: GREEN, fontWeight: 700 }}>{r.best.ciq.toFixed(1)}</span> vs {shortOpp(r.best.game.opponents?.full_name)} <span style={{ color: '#aeb4bf' }}>{fmtDate(r.best.game.game_date)}</span></div>
+                    <div><span style={{ color: RED, fontWeight: 700 }}>{r.worst.ciq.toFixed(1)}</span> vs {shortOpp(r.worst.game.opponents?.full_name)} <span style={{ color: '#aeb4bf' }}>{fmtDate(r.worst.game.game_date)}</span></div>
+                  </div>
+
+                  {/* games */}
+                  <span style={{ width: 44, textAlign: 'right', fontSize: 13, color: MUTED, fontWeight: 600 }}>{r.games}</span>
+                </div>
+              )
+            })}
+          </div>
+        )}
+
+        <div style={{ fontSize: 11, color: MUTED, marginTop: 12 }}>
+          Season CIQ is the average of a player&rsquo;s per-game ratings. GP = games with a rating.
+        </div>
+      </div>
+    </main>
+  )
+}

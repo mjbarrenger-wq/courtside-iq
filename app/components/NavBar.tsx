@@ -7,6 +7,7 @@ const NAV_ITEMS = [
   { label: 'Overview',    href: '/' },
   { label: 'Driver Tree', href: '/dashboard' },
   { label: 'Quadrants',   href: '/players' },
+  { label: 'CIQ',         href: '/ciq' },
   { label: 'Profiles',    href: '/profiles' },
   { label: 'Debriefs',    href: '/debriefs' },
   { label: 'Trends',      href: '/trends' },

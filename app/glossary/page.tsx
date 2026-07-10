@@ -28,6 +28,14 @@ type Category =
 const TERMS: Term[] = [
   // Core
   {
+    abbr: 'CIQ',
+    full: 'Courtside IQ Rating',
+    formula: 'blend(box value, on-court net) per 100 poss',
+    definition: 'Courtside IQ\'s own player value metric, in points of value per 100 possessions. It combines an individual box-score estimate — scoring relative to the level\'s break-even rate (~0.63 points per play), plus credit for assists, offensive/defensive rebounds, steals and blocks, minus turnovers and defensive fouls — with the team\'s net points per 100 while the player is on the floor. The on-court half is shrunk toward the box estimate and earns weight as play-by-play possessions accumulate (K=150). Replaces the imported VPS metric.',
+    basketball: 'One number to compare overall value across the roster. A higher CIQ means a player adds more per possession — through efficient scoring, playmaking, rebounding and winning defensive plays — than a replacement-level contributor; around zero is replacement level. It rewards two-way impact, not just points. It is box-dominant until more games carry full play-by-play, at which point a strong defender\'s on-court value surfaces more clearly.',
+    category: 'Core',
+  },
+  {
     abbr: 'Net PPP',
     full: 'Net Points Per Possession',
     formula: 'Off PPP − Def PPP',

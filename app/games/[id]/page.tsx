@@ -522,7 +522,8 @@ export default async function BoxScorePage({
                       {i === 0 && <div style={{ fontSize: 9, fontWeight: 700, color: TEAL, letterSpacing: '0.08em' }}>GAME LEADER</div>}
                     </div>
                     {c.ciq != null && (
-                      <div style={{ marginLeft: 'auto', textAlign: 'right', flexShrink: 0 }}>
+                      <div title="Courtside IQ Rating — points of value per 100 possessions, blending box value with on-court net impact. See the Glossary or the CIQ leaderboard."
+                        style={{ marginLeft: 'auto', textAlign: 'right', flexShrink: 0 }}>
                         <div style={{ fontSize: 18, fontWeight: 900, color: TEAL, lineHeight: 1 }}>{c.ciq.toFixed(1)}</div>
                         <div style={{ fontSize: 9, color: MUTED, fontWeight: 700, letterSpacing: '0.06em', marginTop: 2 }}>CIQ</div>
                       </div>
