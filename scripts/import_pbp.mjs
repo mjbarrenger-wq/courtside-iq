@@ -108,6 +108,13 @@ async function main() {
   // ── Parse ───────────────────────────────────────────────────────────────────
   const lineup = new Set()
   const starters = [] // jerseys named on the "Starter" lines — the tip-off five
+  // Some exports reuse the word "Starter" mid-game as shorthand for "stays in the
+  // lineup" during a multi-player substitution wave (seen 8 May vs Whittlesea, Q2
+  // 3:11 — "Starter Ethan Broadbent #55" among a batch of subs, not a real starter).
+  // Only the very first "New Lineup" checkpoint (the tip-off five) should feed
+  // `starters` (used to seed reconstructStints' period-1 lineup); once we've passed
+  // it, a later "Starter" line still updates on-court tracking but is not a starter.
+  let tipOffLocked = false
   let q = 0, curClock = 600, ord = 0, ourRun = 0, oppRun = 0
   const pbp = [], checkpoints = []
   const jerseysOf = (set) => [...set].map((s) => +s.match(/#(\d+)/)[1]).sort((a, b) => a - b)
@@ -130,11 +137,13 @@ async function main() {
     if (line.startsWith('New Lineup')) {
       const stated = (line.match(/#\d+/g) || []).map((s) => +s.slice(1)).sort((a, b) => a - b).join('-')
       checkpoints.push({ q, stated, tracked: jerseysOf(lineup).join('-') })
+      tipOffLocked = true
       continue
     }
     if (/Starter /.test(line)) {
       const nm = line.match(/Starter (.+?#\d+)/)[1].trim(); lineup.add(nm)
-      starters.push(+nm.match(/#(\d+)/)[1]); continue
+      if (!tipOffLocked) starters.push(+nm.match(/#(\d+)/)[1])
+      continue
     }
     if (/Sub IN /.test(line) || /Sub OUT /.test(line)) {
       for (const m of line.matchAll(/Sub IN (.+?#\d+)/g)) { ev('sub_in', +m[1].match(/#(\d+)/)[1], 'team'); lineup.add(m[1].trim()) }
