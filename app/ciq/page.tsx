@@ -199,7 +199,7 @@ export default async function CiqLeaderboardPage({
             rebounds, steals and blocks, minus turnovers and fouls) with the team&rsquo;s net scoring while the player is on the floor.
           </p>
           <p className="no-print" style={{ fontSize: 12, color: MUTED, lineHeight: 1.6, margin: 0 }}>
-            Higher is better; around zero is replacement level. It&rsquo;s box-dominant right now — the on-court half earns weight as
+            Higher is better; around zero is break-even (neutral value). It&rsquo;s box-dominant right now — the on-court half earns weight as
             more games get full play-by-play. <Link href="/glossary" style={{ color: TEAL, fontWeight: 700, textDecoration: 'none' }}>Full definition in the glossary →</Link>
           </p>
         </div>

@@ -32,7 +32,14 @@ const TERMS: Term[] = [
     full: 'Courtside IQ Rating',
     formula: 'blend(box value, on-court net) per 100 poss',
     definition: 'Courtside IQ\'s own player value metric, in points of value per 100 possessions. It combines an individual box-score estimate — scoring relative to the level\'s break-even rate (~0.63 points per play), plus credit for assists, offensive/defensive rebounds, steals and blocks, minus turnovers and defensive fouls — with the team\'s net points per 100 while the player is on the floor. The on-court half is shrunk toward the box estimate and earns weight as play-by-play possessions accumulate (K=150). Replaces the imported VPS metric.',
-    basketball: 'One number to compare overall value across the roster. A higher CIQ means a player adds more per possession — through efficient scoring, playmaking, rebounding and winning defensive plays — than a replacement-level contributor; around zero is replacement level. It rewards two-way impact, not just points. It is box-dominant until more games carry full play-by-play, at which point a strong defender\'s on-court value surfaces more clearly.',
+    basketball: 'One number to compare overall value across the roster. A higher CIQ means a player adds more per possession — through efficient scoring, playmaking, rebounding and winning defensive plays — than a break-even contributor; around zero is break-even (neutral value). It rewards two-way impact, not just points. It is box-dominant until more games carry full play-by-play, at which point a strong defender\'s on-court value surfaces more clearly.',
+    category: 'Core',
+  },
+  {
+    abbr: 'Break-even',
+    full: 'Break-even Level',
+    definition: 'The neutral anchor point (zero) of a value metric like CIQ — the output of a player who neither adds nor loses value per possession. They score at about the level\'s break-even scoring rate (~0.63 points per play) and their assists, rebounds, steals and blocks roughly cancel their turnovers and fouls, so their net value lands near zero. Borrowed from the "replacement level" idea in sports analytics (the value of a freely-available fill-in), but calibrated here to break-even rather than below-average.',
+    basketball: 'A player around break-even is not bad — they did the expected things at the expected rate. Value is built by the players climbing well clear of it; players below zero are where inefficient shooting, turnovers or fouls are costing the team. Read CIQ against this zero line: how far above or below break-even is each player?',
     category: 'Core',
   },
   {
