@@ -63,10 +63,13 @@ interface Row {
 }
 
 // A tiny 0-baseline sparkline of a player's per-game CIQ across the filtered games.
-function Sparkline({ series }: { series: number[] }) {
-  const w = 132, h = 30, pad = 3
+// Renders at 100% of its container width (viewBox math stays in fixed logical units)
+// so the same component works in a narrow fixed-width desktop cell or a full-width
+// mobile card without separate mobile/desktop implementations.
+function Sparkline({ series, height = 30 }: { series: number[]; height?: number }) {
+  const w = 200, h = height, pad = 3
   if (series.length < 2) {
-    return <div style={{ width: w, height: h, fontSize: 10, color: MUTED, display: 'flex', alignItems: 'center' }}>—</div>
+    return <div style={{ width: '100%', height: h, fontSize: 10, color: MUTED, display: 'flex', alignItems: 'center' }}>—</div>
   }
   const min = Math.min(0, ...series), max = Math.max(0, ...series)
   const span = max - min || 1
@@ -76,9 +79,9 @@ function Sparkline({ series }: { series: number[] }) {
   const pts = series.map((v, i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ')
   const last = series[series.length - 1]
   return (
-    <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} style={{ display: 'block' }}>
+    <svg width="100%" height={h} viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" style={{ display: 'block' }}>
       <line x1={pad} y1={zeroY} x2={w - pad} y2={zeroY} stroke="#e2e5eb" strokeWidth="1" strokeDasharray="2 2" />
-      <polyline points={pts} fill="none" stroke={TEAL} strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round" />
+      <polyline points={pts} fill="none" stroke={TEAL} strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
       <circle cx={x(series.length - 1)} cy={y(last)} r="2.4" fill={last >= 0 ? GREEN : RED} />
     </svg>
   )
@@ -158,6 +161,12 @@ export default async function CiqLeaderboardPage({
           main { background: #fff !important; padding: 0 !important; min-height: 0 !important; }
           .ciq-content { max-width: 100% !important; padding: 0 !important; }
           .ciq-row { break-inside: avoid; }
+          /* Print always uses the desktop table layout, regardless of the viewport
+             width the page happened to render at (responsive classes alone can't be
+             trusted for print, so force it explicitly). */
+          .ciq-mobile-row { display: none !important; }
+          .ciq-desktop-row { display: flex !important; }
+          .ciq-desktop-header { display: flex !important; }
           * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
         }
       `}</style>
@@ -208,42 +217,76 @@ export default async function CiqLeaderboardPage({
           <div style={{ textAlign: 'center', padding: '60px 0', color: MUTED, fontSize: 13 }}>No CIQ data for the selected games.</div>
         ) : (
           <div style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: 14, overflow: 'hidden' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 18px', borderBottom: `1px solid ${BORDER}`, background: '#f0f2f7', fontSize: 10, fontWeight: 700, color: MUTED, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+            {/* Column header — desktop table only; the mobile card layout below labels
+                itself inline (PPG · mpg · GP), so a matching header row isn't needed. */}
+            <div className="ciq-desktop-header hidden md:flex" style={{ alignItems: 'center', gap: 12, padding: '10px 18px', borderBottom: `1px solid ${BORDER}`, background: '#f0f2f7', fontSize: 10, fontWeight: 700, color: MUTED, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
               <span style={{ width: 26 }}>#</span>
               <span style={{ flex: 1 }}>Player</span>
               <span style={{ width: 92, textAlign: 'right' }}>Season CIQ</span>
-              <span className="hidden md:block" style={{ width: 140 }}>Per-game trend</span>
-              <span className="hidden md:block" style={{ width: 200 }}>Best / worst game</span>
+              <span style={{ width: 140 }}>Per-game trend</span>
+              <span style={{ width: 200 }}>Best / worst game</span>
               <span style={{ width: 44, textAlign: 'right' }}>GP</span>
             </div>
 
             {rows.map((r, i) => {
               const barPct = Math.round((Math.abs(r.seasonCiq) / maxAbs) * 100)
               const pos = r.seasonCiq >= 0
+              const color = pos ? TEAL : RED
               return (
-                <div key={r.id} className="ciq-row" style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 18px', borderBottom: i < rows.length - 1 ? `1px solid ${BORDER}` : 'none', background: i % 2 ? '#f8f9fb' : 'transparent' }}>
-                  <span style={{ width: 26, fontSize: 14, fontWeight: 800, color: i === 0 ? AMBER : MUTED }}>{i + 1}</span>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ display: 'flex', alignItems: 'baseline', gap: 7 }}>
-                      <span style={{ fontSize: 14, fontWeight: 700, color: '#1a1f2e', whiteSpace: 'nowrap' }}>{r.name}</span>
-                      <span style={{ fontSize: 11, color: MUTED }}>#{r.jersey}</span>
-                      <span style={{ fontSize: 11, color: MUTED }}>· {r.avgPts.toFixed(1)} PPG · {Math.floor(r.mpg)} mpg</span>
+                <div key={r.id} className="ciq-row" style={{ borderBottom: i < rows.length - 1 ? `1px solid ${BORDER}` : 'none', background: i % 2 ? '#f8f9fb' : 'transparent' }}>
+
+                  {/* ── Mobile: stacked card ── */}
+                  <div className="ciq-mobile-row flex md:hidden" style={{ flexDirection: 'column', gap: 8, padding: '14px 16px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <span style={{ width: 20, flexShrink: 0, fontSize: 13, fontWeight: 800, color: i === 0 ? AMBER : MUTED }}>{i + 1}</span>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 14, fontWeight: 700, color: '#1a1f2e', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {r.name} <span style={{ color: MUTED, fontWeight: 600, fontSize: 11 }}>#{r.jersey}</span>
+                        </div>
+                        <div style={{ fontSize: 10.5, color: MUTED, marginTop: 1 }}>{r.avgPts.toFixed(1)} PPG · {Math.floor(r.mpg)} mpg · {r.games} GP</div>
+                      </div>
+                      <span style={{ flexShrink: 0, fontSize: 22, fontWeight: 900, color, fontVariantNumeric: 'tabular-nums' }}>
+                        {pos ? '' : '−'}{Math.abs(r.seasonCiq).toFixed(1)}
+                      </span>
                     </div>
-                    <div style={{ marginTop: 5, height: 6, background: '#eef1f6', borderRadius: 3, overflow: 'hidden', maxWidth: 320 }}>
-                      <div style={{ width: `${barPct}%`, height: '100%', background: pos ? TEAL : RED, borderRadius: 3 }} />
+                    <div style={{ height: 6, background: '#eef1f6', borderRadius: 3, overflow: 'hidden' }}>
+                      <div style={{ width: `${barPct}%`, height: '100%', background: color, borderRadius: 3 }} />
+                    </div>
+                    <div style={{ height: 26 }}>
+                      <Sparkline series={r.series} height={26} />
+                    </div>
+                    <div style={{ fontSize: 10.5, color: MUTED, lineHeight: 1.6 }}>
+                      <div><span style={{ color: GREEN, fontWeight: 700 }}>{r.best.ciq.toFixed(1)}</span> vs {shortOpp(r.best.game.opponents?.full_name)} <span style={{ color: '#aeb4bf' }}>{fmtDate(r.best.game.game_date)}</span></div>
+                      <div><span style={{ color: RED, fontWeight: 700 }}>{r.worst.ciq.toFixed(1)}</span> vs {shortOpp(r.worst.game.opponents?.full_name)} <span style={{ color: '#aeb4bf' }}>{fmtDate(r.worst.game.game_date)}</span></div>
                     </div>
                   </div>
-                  <span style={{ width: 92, textAlign: 'right', fontSize: 22, fontWeight: 900, color: pos ? TEAL : RED, fontVariantNumeric: 'tabular-nums' }}>
-                    {pos ? '' : '−'}{Math.abs(r.seasonCiq).toFixed(1)}
-                  </span>
-                  <div className="hidden md:block" style={{ width: 140 }}>
-                    <Sparkline series={r.series} />
+
+                  {/* ── Desktop: single-line table row ── */}
+                  <div className="ciq-desktop-row hidden md:flex" style={{ alignItems: 'center', gap: 12, padding: '12px 18px' }}>
+                    <span style={{ width: 26, fontSize: 14, fontWeight: 800, color: i === 0 ? AMBER : MUTED }}>{i + 1}</span>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: 'flex', alignItems: 'baseline', gap: 7 }}>
+                        <span style={{ fontSize: 14, fontWeight: 700, color: '#1a1f2e', whiteSpace: 'nowrap' }}>{r.name}</span>
+                        <span style={{ fontSize: 11, color: MUTED }}>#{r.jersey}</span>
+                        <span style={{ fontSize: 11, color: MUTED }}>· {r.avgPts.toFixed(1)} PPG · {Math.floor(r.mpg)} mpg</span>
+                      </div>
+                      <div style={{ marginTop: 5, height: 6, background: '#eef1f6', borderRadius: 3, overflow: 'hidden', maxWidth: 320 }}>
+                        <div style={{ width: `${barPct}%`, height: '100%', background: color, borderRadius: 3 }} />
+                      </div>
+                    </div>
+                    <span style={{ width: 92, textAlign: 'right', fontSize: 22, fontWeight: 900, color, fontVariantNumeric: 'tabular-nums' }}>
+                      {pos ? '' : '−'}{Math.abs(r.seasonCiq).toFixed(1)}
+                    </span>
+                    <div style={{ width: 140 }}>
+                      <Sparkline series={r.series} />
+                    </div>
+                    <div style={{ width: 200, fontSize: 11, color: MUTED, lineHeight: 1.5 }}>
+                      <div><span style={{ color: GREEN, fontWeight: 700 }}>{r.best.ciq.toFixed(1)}</span> vs {shortOpp(r.best.game.opponents?.full_name)} <span style={{ color: '#aeb4bf' }}>{fmtDate(r.best.game.game_date)}</span></div>
+                      <div><span style={{ color: RED, fontWeight: 700 }}>{r.worst.ciq.toFixed(1)}</span> vs {shortOpp(r.worst.game.opponents?.full_name)} <span style={{ color: '#aeb4bf' }}>{fmtDate(r.worst.game.game_date)}</span></div>
+                    </div>
+                    <span style={{ width: 44, textAlign: 'right', fontSize: 13, color: MUTED, fontWeight: 600 }}>{r.games}</span>
                   </div>
-                  <div className="hidden md:block" style={{ width: 200, fontSize: 11, color: MUTED, lineHeight: 1.5 }}>
-                    <div><span style={{ color: GREEN, fontWeight: 700 }}>{r.best.ciq.toFixed(1)}</span> vs {shortOpp(r.best.game.opponents?.full_name)} <span style={{ color: '#aeb4bf' }}>{fmtDate(r.best.game.game_date)}</span></div>
-                    <div><span style={{ color: RED, fontWeight: 700 }}>{r.worst.ciq.toFixed(1)}</span> vs {shortOpp(r.worst.game.opponents?.full_name)} <span style={{ color: '#aeb4bf' }}>{fmtDate(r.worst.game.game_date)}</span></div>
-                  </div>
-                  <span style={{ width: 44, textAlign: 'right', fontSize: 13, color: MUTED, fontWeight: 600 }}>{r.games}</span>
+
                 </div>
               )
             })}
