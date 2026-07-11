@@ -62,9 +62,14 @@ export async function createGame(
 export async function deleteGame(
   gameId: string,
 ): Promise<{ success: boolean; error?: string }> {
+  // Every table with a game_id FK that is NOT ON DELETE CASCADE must be cleared
+  // first, or Postgres blocks the games delete with a foreign-key violation.
+  // (opponent_player_game_stats was added later and its omission here silently broke
+  // delete for natively-scored games — team/opponent_game_stats cascade, so listing
+  // them is harmless belt-and-braces.)
   const children = [
     'play_by_play', 'lineup_stints', 'player_game_stats',
-    'team_game_stats', 'opponent_game_stats',
+    'team_game_stats', 'opponent_game_stats', 'opponent_player_game_stats',
   ]
   for (const table of children) {
     const { error } = await supabase.from(table).delete().eq('game_id', gameId)
