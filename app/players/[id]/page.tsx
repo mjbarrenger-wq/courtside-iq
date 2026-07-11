@@ -377,7 +377,7 @@ export default async function PlayerProfilePage({
   const [playerRaw, allPlayers, aggregates, drillsRaw, allStatsRaw] = await Promise.all([
     // Player stats for the FILTERED games only (include game_id for sparkline ordering)
     fetchJson(
-      `player_game_stats?player_id=eq.${id}&game_id=in.${filteredIdList}&select=game_id,points,twopt_made,twopt_att,threept_made,threept_att,ft_made,ft_att,turnovers,ast,oreb,dreb,stl,blk,def_fouls,off_fouls,plus_minus,vps,off_ppp,def_ppp,net_ppp`
+      `player_game_stats?player_id=eq.${id}&game_id=in.${filteredIdList}&select=game_id,points,twopt_made,twopt_att,threept_made,threept_att,ft_made,ft_att,turnovers,ast,oreb,dreb,stl,blk,def_fouls,off_fouls,plus_minus,vps,off_ppp,def_ppp,net_ppp,ciq_rating`
     ),
     fetchJson(`players?team_id=eq.${TEAM_ID}&select=id,first_name,last_name,jersey_number&order=jersey_number.asc`),
     // Aggregates scoped to filtered games
@@ -385,7 +385,7 @@ export default async function PlayerProfilePage({
     fetchJson(`drills?select=*`),
     // All-season stats for season-wide ranking (not filtered)
     fetchJson(
-      `player_game_stats?select=player_id,points,twopt_made,twopt_att,threept_made,threept_att,ft_made,ft_att,turnovers,oreb,dreb,stl,blk,def_fouls,off_fouls&game_id=in.${allIdList}`
+      `player_game_stats?select=player_id,points,twopt_made,twopt_att,threept_made,threept_att,ft_made,ft_att,turnovers,oreb,dreb,stl,blk,def_fouls,off_fouls,ciq_rating&game_id=in.${allIdList}`
     ),
   ])
 
@@ -434,6 +434,8 @@ export default async function PlayerProfilePage({
     const vals = rows.map(fn).filter((v: number) => isFinite(v))
     if (vals.length >= 2) sparklines[key] = vals
   }
+  // CIQ Rating — season value metric (points of value per 100 possessions)
+  addSeries('CIQ', r => r.ciq_rating != null ? Math.round(Number(r.ciq_rating) * 10) / 10 : NaN)
   // Offensive metrics
   addSeries('TS%',       r => { const fga = (r.twopt_att||0)+(r.threept_att||0); const d = 2*(fga+0.44*(r.ft_att||0)); return d > 0 ? Math.round((((r.points||0)/d)*100)*10)/10 : 0 })
   addSeries('eFG%',      r => { const fga = (r.twopt_att||0)+(r.threept_att||0); return fga > 0 ? Math.round((((r.twopt_made||0)+1.5*(r.threept_made||0))/fga*100)*10)/10 : 0 })
@@ -462,11 +464,11 @@ export default async function PlayerProfilePage({
   const tppg   = (n: number) => Math.round((n / aggregates.games / numActivePlayers) * 10) / 10
 
   // ── Per-player aggregates for ranking ──────────────────────────────────────
-  const perAgg: Record<string, { games: number; twopt_made: number; twopt_att: number; threept_made: number; threept_att: number; ft_made: number; ft_att: number; turnovers: number; oreb: number; dreb: number; stl: number; blk: number; def_fouls: number; pts: number }> = {}
+  const perAgg: Record<string, { games: number; twopt_made: number; twopt_att: number; threept_made: number; threept_att: number; ft_made: number; ft_att: number; turnovers: number; oreb: number; dreb: number; stl: number; blk: number; def_fouls: number; pts: number; ciq_sum: number; ciq_games: number }> = {}
   for (const r of allStats) {
     const pid = r.player_id
     if (!pid) continue
-    if (!perAgg[pid]) perAgg[pid] = { games: 0, twopt_made: 0, twopt_att: 0, threept_made: 0, threept_att: 0, ft_made: 0, ft_att: 0, turnovers: 0, oreb: 0, dreb: 0, stl: 0, blk: 0, def_fouls: 0, pts: 0 }
+    if (!perAgg[pid]) perAgg[pid] = { games: 0, twopt_made: 0, twopt_att: 0, threept_made: 0, threept_att: 0, ft_made: 0, ft_att: 0, turnovers: 0, oreb: 0, dreb: 0, stl: 0, blk: 0, def_fouls: 0, pts: 0, ciq_sum: 0, ciq_games: 0 }
     const a = perAgg[pid]
     a.games++;         a.pts         += (Number(r.points)       || 0)
     a.twopt_made  += (Number(r.twopt_made)   || 0); a.twopt_att  += (Number(r.twopt_att)   || 0)
@@ -475,6 +477,9 @@ export default async function PlayerProfilePage({
     a.turnovers   += (Number(r.turnovers)    || 0); a.oreb       += (Number(r.oreb)        || 0)
     a.dreb        += (Number(r.dreb)         || 0); a.stl        += (Number(r.stl)         || 0)
     a.blk         += (Number(r.blk)          || 0); a.def_fouls  += (Number(r.def_fouls)   || 0)
+    // CIQ can be null for a game with no recorded possessions — average over the
+    // games that have a rating, not over every game, so a few nulls don't drag it down.
+    if (r.ciq_rating != null) { a.ciq_sum += Number(r.ciq_rating); a.ciq_games++ }
   }
 
   // Players whose ranking metric is within TIE_TOL (relative) of each other are
@@ -524,10 +529,20 @@ export default async function PlayerProfilePage({
   const ppgRank   = rankStat(p => p.games > 0 ? p.pts / p.games : 0, true)
   const ftaRank   = rankStat(p => p.games > 0 ? p.ft_att / p.games : 0, true)
   const ftPctRank = rankStat(p => p.ft_att > 0 ? p.ft_made / p.ft_att : 0, true)
+  // Season CIQ = average of per-game ratings (same definition as the /ciq leaderboard);
+  // a very low sentinel for players with no rated games keeps them out of the top spots.
+  const ciqRank   = rankStat(p => p.ciq_games > 0 ? p.ciq_sum / p.ciq_games : -999, true)
 
   const fullName = `${player.first_name} ${player.last_name}`
   const netPPP   = Math.round((ps.off_ppp - ps.def_ppp) * 1000) / 1000
   const netPos   = netPPP >= 0
+
+  // CIQ for the current filter window — average of the games in `rows` that carry
+  // a rating (a game with no recorded possessions has ciq_rating null).
+  const ciqValues = rows.map((r: any) => r.ciq_rating).filter((v: any) => v != null).map(Number)
+  const avgCiq = ciqValues.length
+    ? Math.round((ciqValues.reduce((s: number, v: number) => s + v, 0) / ciqValues.length) * 10) / 10
+    : null
 
   // Stats for AI prompt
   const fga     = ps.twopt_att + ps.threept_att
@@ -741,6 +756,7 @@ export default async function PlayerProfilePage({
           ))}
           <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, paddingLeft: 16 }}>
             <a href={`/dashboard?player=${id}`} style={{ color: '#374151', fontSize: 11, textDecoration: 'none', background: '#eef1f6', border: `1px solid #c5d5e8`, borderRadius: 20, padding: '4px 11px', whiteSpace: 'nowrap' }}>Driver Tree View</a>
+            <a href="/ciq" style={{ color: '#307b92', fontSize: 11, fontWeight: 700, textDecoration: 'none', background: '#eaf3f6', border: `1px solid #307b92`, borderRadius: 20, padding: '4px 11px', whiteSpace: 'nowrap' }}>CIQ Leaderboard →</a>
           </div>
         </div>
       </div>
@@ -803,8 +819,32 @@ export default async function PlayerProfilePage({
       <div className="px-4 md:px-7 py-6" style={{ maxWidth: 1400, margin: '0 auto' }}>
 
         {/* ── KPI strip ── */}
-        {/* Phone: 3 cols. Desktop (md+): original 6 across. */}
-        <div className="grid grid-cols-3 md:grid-cols-6 gap-2.5 mb-6">
+        {/* Phone: 3 cols. Desktop (md+): 7 across (CIQ leads, then the original 6). */}
+        <div className="grid grid-cols-3 md:grid-cols-7 gap-2.5 mb-6">
+          {/* CIQ — the headline value metric: rating, squad rank, and per-game trend. */}
+          <div style={{ background: CARD, border: `2px solid #307b92`, borderRadius: 10, padding: '14px 16px', textAlign: 'center' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4, marginBottom: 6 }}>
+              <span style={{ fontSize: 10, fontWeight: 700, color: '#307b92', textTransform: 'uppercase', letterSpacing: '0.08em' }}>CIQ</span>
+              <div className="pillar-info">
+                <span className="pillar-info-icon">i</span>
+                <div className="pillar-info-tooltip">
+                  Courtside IQ Rating — points of value per 100 possessions, blending box production with on-court impact. Around zero is break-even. See the Glossary or the CIQ Leaderboard for the full picture.
+                </div>
+              </div>
+            </div>
+            <div style={{ fontSize: 24, fontWeight: 800, color: '#307b92' }}>{avgCiq != null ? avgCiq.toFixed(1) : '—'}</div>
+            {avgCiq != null && ciqRank.total > 0 && (
+              <div style={{
+                fontSize: 10, fontWeight: 700, marginTop: 2,
+                color: ciqRank.rank === 1 ? '#fbbf24' : '#6b7280',
+              }}>{ciqRank.tie ? 'T-' : '#'}{ciqRank.rank} of {ciqRank.total}</div>
+            )}
+            {sparklines['CIQ'] && sparklines['CIQ'].length >= 2 && (
+              <div style={{ display: 'flex', justifyContent: 'center', marginTop: 6 }}>
+                <Sparkline values={sparklines['CIQ']} color="#307b92" width={56} height={20} />
+              </div>
+            )}
+          </div>
           {[
             { label: 'PPG',         value: pg(ps.pts),                        color: '#fbbf24' },
             { label: 'TS%',         value: `${ts_pct}%`,                      color: '#307b92' },
