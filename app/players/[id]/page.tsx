@@ -371,10 +371,9 @@ export default async function PlayerProfilePage({
   }
   const filteredGameIds = filteredGames.map(g => g.id)
   const filteredIdList  = `(${filteredGameIds.join(',') || 'null'})`
-  const allIdList       = `(${allGames.map(g => g.id).join(',') || 'null'})`
 
   // ── Phase 2: parallel fetch using filtered game IDs ───────────────────────
-  const [playerRaw, allPlayers, aggregates, drillsRaw, allStatsRaw] = await Promise.all([
+  const [playerRaw, allPlayers, aggregates, drillsRaw, peerStatsRaw] = await Promise.all([
     // Player stats for the FILTERED games only (include game_id for sparkline ordering)
     fetchJson(
       `player_game_stats?player_id=eq.${id}&game_id=in.${filteredIdList}&select=game_id,points,twopt_made,twopt_att,threept_made,threept_att,ft_made,ft_att,turnovers,ast,oreb,dreb,stl,blk,def_fouls,off_fouls,plus_minus,vps,off_ppp,def_ppp,net_ppp,ciq_rating`
@@ -383,15 +382,19 @@ export default async function PlayerProfilePage({
     // Aggregates scoped to filtered games
     getSeasonAggregates(TEAM_ID, filteredGameIds),
     fetchJson(`drills?select=*`),
-    // All-season stats for season-wide ranking (not filtered)
+    // Squad stats for peer ranking — scoped to the SAME filtered games as everything
+    // else on the page, so a rank badge ("#1 of 10") reflects the active filter
+    // (e.g. Last 5) rather than always ranking against the full season.
     fetchJson(
-      `player_game_stats?select=player_id,points,twopt_made,twopt_att,threept_made,threept_att,ft_made,ft_att,turnovers,oreb,dreb,stl,blk,def_fouls,off_fouls,ciq_rating&game_id=in.${allIdList}`
+      `player_game_stats?select=player_id,points,twopt_made,twopt_att,threept_made,threept_att,ft_made,ft_att,turnovers,oreb,dreb,stl,blk,def_fouls,off_fouls,ciq_rating&game_id=in.${filteredIdList}`
     ),
   ])
 
   const players  = Array.isArray(allPlayers) ? allPlayers : []
   const player   = players.find((p: any) => p.id === id)
-  const allStats = Array.isArray(allStatsRaw) ? allStatsRaw : []
+  // Named for what it now is: squad stats scoped to the active filter, used only
+  // for peer ranking — not a season-wide fetch (see the query comment above).
+  const peerStats = Array.isArray(peerStatsRaw) ? peerStatsRaw : []
 
   // Sort player rows chronologically using filteredGames date order
   const gameOrder = new Map(filteredGames.map((g: any, i: number) => [g.id, i]))
@@ -465,7 +468,7 @@ export default async function PlayerProfilePage({
 
   // ── Per-player aggregates for ranking ──────────────────────────────────────
   const perAgg: Record<string, { games: number; twopt_made: number; twopt_att: number; threept_made: number; threept_att: number; ft_made: number; ft_att: number; turnovers: number; oreb: number; dreb: number; stl: number; blk: number; def_fouls: number; pts: number; ciq_sum: number; ciq_games: number }> = {}
-  for (const r of allStats) {
+  for (const r of peerStats) {
     const pid = r.player_id
     if (!pid) continue
     if (!perAgg[pid]) perAgg[pid] = { games: 0, twopt_made: 0, twopt_att: 0, threept_made: 0, threept_att: 0, ft_made: 0, ft_att: 0, turnovers: 0, oreb: 0, dreb: 0, stl: 0, blk: 0, def_fouls: 0, pts: 0, ciq_sum: 0, ciq_games: 0 }
