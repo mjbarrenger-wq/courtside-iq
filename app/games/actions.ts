@@ -55,27 +55,15 @@ export async function createGame(
   return { success: true, id: data[0].id }
 }
 
-// Permanently deletes a game and every row that hangs off it. Child rows are
-// removed first (no ON DELETE CASCADE on these FKs), then the game itself, whose
-// deletion is confirmed via affected-row count — same silent-RLS-gap discipline
-// as every other write path here.
+// Permanently deletes a game. Its stat/pbp child rows are removed automatically by
+// ON DELETE CASCADE on their game_id FKs (migrations/add_game_delete_cascade.sql) —
+// cascades run at the DB level, so no per-table delete list to keep in sync. Only
+// ai_content needs an explicit clear: it keys on a generic entity_id, not an FK.
+// The game delete is confirmed via affected-row count (same RLS-gap discipline as
+// every other write path here).
 export async function deleteGame(
   gameId: string,
 ): Promise<{ success: boolean; error?: string }> {
-  // Every table with a game_id FK that is NOT ON DELETE CASCADE must be cleared
-  // first, or Postgres blocks the games delete with a foreign-key violation.
-  // (opponent_player_game_stats was added later and its omission here silently broke
-  // delete for natively-scored games — team/opponent_game_stats cascade, so listing
-  // them is harmless belt-and-braces.)
-  const children = [
-    'play_by_play', 'lineup_stints', 'player_game_stats',
-    'team_game_stats', 'opponent_game_stats', 'opponent_player_game_stats',
-  ]
-  for (const table of children) {
-    const { error } = await supabase.from(table).delete().eq('game_id', gameId)
-    if (error) return { success: false, error: `delete ${table}: ${error.message}` }
-  }
-  // Stored AI debrief for this game (ai_content keys on entity_id).
   const { error: aiErr } = await supabase.from('ai_content').delete().eq('entity_id', gameId)
   if (aiErr) return { success: false, error: `delete ai_content: ${aiErr.message}` }
 
