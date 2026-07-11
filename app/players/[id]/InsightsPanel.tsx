@@ -61,6 +61,8 @@ export interface InsightsPanelProps {
   ppgRank:        StatRank
   ftaRank:        StatRank
   ftPctRank:      StatRank
+  avgCiq:         number | null
+  ciqRank:        StatRank
   winLoss:        WinLossSplit
   outlierSummary: string
   biggestWlSplit: { label: string; w: number | null; l: number | null; lowerBetter?: boolean } | null
@@ -79,11 +81,16 @@ async function getDevelopmentContent(
   ppgRank: StatRank,
   ftaRank: StatRank,
   ftPctRank: StatRank,
+  avgCiq: number | null,
+  ciqRank: StatRank,
   winLoss: WinLossSplit,
   outlierSummary: string,
   biggestWlSplit: InsightsPanelProps['biggestWlSplit'],
 ): Promise<DevelopmentContent> {
   const first = playerName.split(' ')[0]
+  const ciqLine = avgCiq != null && ciqRank.total > 0
+    ? `${avgCiq >= 0 ? '+' : ''}${avgCiq} — ranked ${ciqRank.tie ? 'tied ' : ''}#${ciqRank.rank} of ${ciqRank.total} (min 5 games)`
+    : 'not yet rated (insufficient possession data this window)'
 
   const comparisonRows = [
     { stat: 'PPG',    player: stats.ppg,     team: teamAvgs.ppg,     unit: '',  lowerBetter: false, rank: ppgRank },
@@ -135,6 +142,7 @@ async function getDevelopmentContent(
 
 Player: #${jersey} ${playerName}
 Net PPP on-court: ${tree.net_ppp >= 0 ? '+' : ''}${tree.net_ppp}
+CIQ Rating (our blended value metric, points of value per 100 possessions; ~0 = break-even, box production blended with on-court impact): ${ciqLine}
 Driver tree pillars (ranked): ${rankSummary}
 Top performing pillars: ${tops || 'none identified'}
 Development pillars: ${leakages || 'none identified'}
@@ -164,7 +172,7 @@ INSIGHT RULES:
 Each player's insights must be driven by their actual outliers vs team average, not a generic template.
 Write 3 insights: at least one covers a genuine strength, at least one covers a real development need.
 Every insight: specific numbers, peer rank, 2–4 sentences, direct, no filler. Address ${first} by first name.
-ACCURACY: Use only the peer ranks given above — never infer standing from the team-average comparison. The team average is points/players, so most contributors sit above it; being above average does NOT make a player the leader. Do not use superlatives ("top", "best", "leading", "most", "number one") for any stat unless that stat's peer rank is exactly #1 of ${ranks[0].total}. A #2 rank is "second-highest", a #3 is "third", and so on. If a rank is shown as "tied", say "tied for Nth", not a clean rank.
+ACCURACY: Use only the peer ranks given above — never infer standing from the team-average comparison. The team average is points/players, so most contributors sit above it; being above average does NOT make a player the leader. Do not use superlatives ("top", "best", "leading", "most", "number one") for any stat unless that stat's peer rank is exactly #1 of ${ranks[0].total}. A #2 rank is "second-highest", a #3 is "third", and so on. If a rank is shown as "tied", say "tied for Nth", not a clean rank. The same rule applies to CIQ Rating — ground any CIQ claim in its peer rank (given above), never in the raw number alone, and only if CIQ is rated at all this window.
 WORKONS: 3 concrete training priorities from the development areas. Imperative voice. Name the habit, not the category. Address ${first} by first name.`,
         }],
       }),
@@ -179,7 +187,9 @@ WORKONS: 3 concrete training priorities from the development areas. Imperative v
     console.error('[InsightsPanel] Claude call failed:', err)
     return {
       insights: [
-        `${first} scores ${stats.ppg} points per game at a TS% of ${stats.ts}% — ${stats.ts >= 52 ? 'above the U12 efficiency benchmark' : stats.ts >= 42 ? 'in the developing range for U12 (42–52%)' : 'below the U12 average threshold of 42%'}. True Shooting captures scoring efficiency across all shot types.`,
+        avgCiq != null && ciqRank.total > 0
+          ? `${first}'s CIQ Rating — our blended value metric — is ${avgCiq >= 0 ? '+' : ''}${avgCiq}, ranked ${ciqRank.tie ? 'tied ' : ''}#${ciqRank.rank} of ${ciqRank.total}. Combined with ${stats.ppg} PPG at a TS% of ${stats.ts}%, that reflects ${stats.ts >= 52 ? 'efficient scoring by U12 standards' : stats.ts >= 42 ? 'developing shooting efficiency (42–52% is the U12 range)' : 'shooting efficiency below the U12 average threshold of 42%'}.`
+          : `${first} scores ${stats.ppg} points per game at a TS% of ${stats.ts}% — ${stats.ts >= 52 ? 'above the U12 efficiency benchmark' : stats.ts >= 42 ? 'in the developing range for U12 (42–52%)' : 'below the U12 average threshold of 42%'}. True Shooting captures scoring efficiency across all shot types.`,
         `Turnover rate is ${stats.to_pct}% — ${stats.to_pct < 20 ? 'strong ball security by U12 standards' : stats.to_pct < 28 ? 'in the manageable range with room to improve' : 'above the high-risk threshold (28%+)'}. Every turnover surrenders a possession without a shot attempt.`,
         `${first} averages ${stats.dreb_pg} defensive rebounds and ${stats.stl_pg} steals per game. These two stats reflect how much this player contributes to possession control on defence.`,
       ],
@@ -255,6 +265,8 @@ export default async function InsightsPanel({
   ppgRank,
   ftaRank,
   ftPctRank,
+  avgCiq,
+  ciqRank,
   winLoss,
   outlierSummary,
   biggestWlSplit,
@@ -262,7 +274,7 @@ export default async function InsightsPanel({
 }: InsightsPanelProps) {
   const devContent = await getDevelopmentContent(
     playerName, jersey, tree, aiStats, teamAvgs,
-    rankSummaryArr, ppgRank, ftaRank, ftPctRank, winLoss, outlierSummary, biggestWlSplit,
+    rankSummaryArr, ppgRank, ftaRank, ftPctRank, avgCiq, ciqRank, winLoss, outlierSummary, biggestWlSplit,
   )
 
   const CARD   = '#ffffff'

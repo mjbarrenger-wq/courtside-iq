@@ -678,6 +678,8 @@ export default async function PlayerProfilePage({
     ppgRank,
     ftaRank,
     ftPctRank,
+    avgCiq,
+    ciqRank,
     winLoss,
     outlierSummary,
     biggestWlSplit,
