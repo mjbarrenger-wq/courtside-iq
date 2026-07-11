@@ -833,7 +833,7 @@ export default async function PlayerProfilePage({
               <div className="pillar-info">
                 <span className="pillar-info-icon">i</span>
                 <div className="pillar-info-tooltip">
-                  Courtside IQ Rating — points of value per 100 possessions, blending box production with on-court impact. Around zero is break-even. See the Glossary or the CIQ Leaderboard for the full picture.
+                  CIQ sums up how much a player helped the team, compared to what you&rsquo;d expect from an average player. Zero means about as expected; positive is added value, negative means the team likely would&rsquo;ve done better with someone else out there. It&rsquo;s not just points — it rewards efficient scoring, assists, rebounds and defence together, not a big stat line built on missed shots.
                 </div>
               </div>
             </div>
