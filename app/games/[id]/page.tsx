@@ -4,6 +4,7 @@ import GameDebrief from './GameDebrief'
 import ShotChart from './ShotChart'
 import { type Shot } from './HalfCourt'
 import OpponentBox, { type OppRow } from './OpponentBox'
+import AttachVideoForm from './AttachVideoForm'
 
 export const dynamic = 'force-dynamic'
 
@@ -76,7 +77,7 @@ export default async function BoxScorePage({
 }) {
   const { id } = await params
 
-  const [gameRaw, playerStatsRaw, oppStatsRaw, playersRaw, shotsRaw, oppPlayerRaw, seasonAggs] = await Promise.all([
+  const [gameRaw, playerStatsRaw, oppStatsRaw, playersRaw, shotsRaw, oppPlayerRaw, seasonAggs, syncedRaw] = await Promise.all([
     fetchJson(`games?id=eq.${id}&select=*,opponents(full_name)&limit=1`),
     fetchJson(`player_game_stats?game_id=eq.${id}&select=*`),
     fetchJson(`opponent_game_stats?game_id=eq.${id}&select=*`),
@@ -84,7 +85,9 @@ export default async function BoxScorePage({
     fetchJson(`play_by_play?game_id=eq.${id}&shot_x=not.is.null&select=shot_x,shot_y,event_type,team_side`),
     fetchJson(`opponent_player_game_stats?game_id=eq.${id}&select=*`),
     getSeasonAggregates(TEAM_ID),
+    fetchJson(`play_by_play?game_id=eq.${id}&video_time=not.is.null&select=event_order&limit=1`),
   ])
+  const hasSyncedTiming = Array.isArray(syncedRaw) && syncedRaw.length > 0
 
   const game   = Array.isArray(gameRaw) && gameRaw.length > 0 ? gameRaw[0] : null
   const pStats = Array.isArray(playerStatsRaw) ? playerStatsRaw : []
@@ -262,11 +265,19 @@ export default async function BoxScorePage({
               <span style={{ margin: '0 6px' }}>›</span>
               <span style={{ color: TEAL }}>Game Debrief</span>
             </div>
-            {Array.isArray(game.video_urls) && game.video_urls.length > 0 && (
-              <a href={`/games/${id}/watch`} style={{
-                fontSize: 12, fontWeight: 800, color: '#fff', background: TEAL, textDecoration: 'none',
-                borderRadius: 8, padding: '7px 14px',
-              }}>▶ Watch / Review</a>
+            {Array.isArray(game.video_urls) && game.video_urls.length > 0 ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <a href={`/games/${id}/align`} style={{
+                  fontSize: 12, fontWeight: 700, color: TEAL, background: '#eaf3f6', textDecoration: 'none',
+                  border: `1px solid ${TEAL}`, borderRadius: 8, padding: '7px 14px',
+                }}>{hasSyncedTiming ? 'Re-align Timing' : 'Align Timing →'}</a>
+                <a href={`/games/${id}/watch`} style={{
+                  fontSize: 12, fontWeight: 800, color: '#fff', background: TEAL, textDecoration: 'none',
+                  borderRadius: 8, padding: '7px 14px',
+                }}>▶ Watch / Review</a>
+              </div>
+            ) : (
+              <AttachVideoForm gameId={id} />
             )}
           </div>
 

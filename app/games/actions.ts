@@ -13,6 +13,7 @@ export interface GameEditableFields {
   round?: string | null
   venue?: string | null
   game_type?: GameTypeKey
+  video_urls?: string[] | null // 1 (whole game) or 4 (per quarter) YouTube links
 }
 
 export interface NewGameFields {
@@ -94,7 +95,9 @@ export async function createOpponent(
   return { success: true, id: data[0].id, full_name: data[0].full_name }
 }
 
-// Updates one game's setup fields (date, opponent, home/away, round, venue, type).
+// Updates one game's setup fields (date, opponent, home/away, round, venue, type,
+// video_urls — the last also used to attach video after the fact to an already
+// box-scored/imported game, ahead of clock-timing alignment).
 // Deliberately does NOT touch team_score / opponent_score / result — those are
 // set by the box-score import and stay read-only here to avoid desyncing from
 // player_game_stats / team_game_stats / opponent_game_stats.

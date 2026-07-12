@@ -204,7 +204,7 @@ export default async function CiqLeaderboardPage({
           <div style={{ fontSize: 13, fontWeight: 800, color: TEAL, marginBottom: 6 }}>What CIQ measures</div>
           <p style={{ fontSize: 13, color: SEC, lineHeight: 1.6, margin: '0 0 8px' }}>
             <strong>CIQ Rating</strong> is Courtside IQ&rsquo;s single value metric — <strong>points of value per 100 possessions</strong>.
-            It blends an individual box estimate (scoring above or below the level&rsquo;s break-even rate, plus credit for assists,
+            It blends an individual box estimate (scoring above or below the team&rsquo;s own break-even rate this season, plus credit for assists,
             rebounds, steals and blocks, minus turnovers and fouls) with the team&rsquo;s net scoring while the player is on the floor.
           </p>
           <p className="no-print" style={{ fontSize: 12, color: MUTED, lineHeight: 1.6, margin: 0 }}>

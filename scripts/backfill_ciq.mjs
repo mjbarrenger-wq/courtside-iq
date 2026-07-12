@@ -14,13 +14,25 @@
  *   node scripts/backfill_ciq.mjs > /tmp/ciq_backfill.sql
  */
 import fs from 'fs'
-import { ciqRating } from '../lib/advancedStats.ts'
+import { ciqRating, seasonCiqBaseline } from '../lib/advancedStats.ts'
 
 const env = Object.fromEntries(fs.readFileSync('.env.local', 'utf8').split('\n').filter(Boolean).map((l) => { const i = l.indexOf('='); return [l.slice(0, i).trim(), l.slice(i + 1).trim()] }))
 const rest = (p) => fetch(`${env.NEXT_PUBLIC_SUPABASE_URL}/rest/v1/${p}`, { headers: { apikey: env.NEXT_PUBLIC_SUPABASE_ANON_KEY, Authorization: `Bearer ${env.NEXT_PUBLIC_SUPABASE_ANON_KEY}` } }).then((r) => r.json())
 
 const box = await rest('player_game_stats?select=id,game_id,player_id,points,twopt_att,threept_att,ft_att,turnovers,ast,oreb,dreb,stl,blk,def_fouls,time_played_seconds')
 const stints = await rest('lineup_stints?select=game_id,player_ids,pf,pa,off_poss,def_poss')
+const games = await rest('games?select=id,season')
+
+// CIQ's scoring baseline is each season's own points-per-play (see
+// lib/advancedStats.ts), not a fixed constant — group rows by season and compute
+// one baseline per season, so a future second season gets its own rate.
+const seasonByGame = Object.fromEntries(games.map((g) => [g.id, g.season ?? 'unknown']))
+const rowsBySeason = {}
+for (const b of box) (rowsBySeason[seasonByGame[b.game_id] ?? 'unknown'] ??= []).push(b)
+const baselineBySeason = Object.fromEntries(
+  Object.entries(rowsBySeason).map(([season, rows]) => [season, seasonCiqBaseline(rows)]),
+)
+console.error(`Season baseline(s): ${JSON.stringify(baselineBySeason)}`)
 
 // on-court context per player-game, summed across their stints
 const oc = {}
@@ -35,7 +47,8 @@ let nPbp = 0, nBox = 0, nNull = 0
 for (const b of box) {
   if (!b.player_id) continue
   const a = oc[`${b.game_id}:${b.player_id}`] ?? null
-  const ciq = ciqRating(b, a && a.offPoss + a.defPoss > 0 ? a : null, b.time_played_seconds || 0)
+  const baseline = baselineBySeason[seasonByGame[b.game_id] ?? 'unknown']
+  const ciq = ciqRating(b, a && a.offPoss + a.defPoss > 0 ? a : null, b.time_played_seconds || 0, baseline)
   if (a) nPbp++; else nBox++
   if (ciq == null) { nNull++; vals.push(`('${b.id}'::uuid, null)`) }
   else vals.push(`('${b.id}'::uuid, ${ciq})`)

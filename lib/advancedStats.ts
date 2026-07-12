@@ -49,23 +49,41 @@ const PERIOD_START_SEC = 600
 // value per 100 possessions, blending a stable individual box estimate with the
 // team's shrunk on-court net impact. Weights are accepted possession-value
 // estimates (a steal ≈ a point saved+gained, a block ≈ 0.7, an offensive rebound
-// ≈ half a possession, etc.); the scoring baseline is the level's average
-// points-per-play so scoring above it is credited and below it penalised. K sets
-// how fast on-court earns weight over box as possessions accumulate — at ~50
-// on-court possessions a game a single game is ~25% on-court / 75% box, and a
-// full season tilts on-court. Kept as one exported block so finalize, the season
-// rollup, and the backfill all compute an identical number.
+// ≈ half a possession, etc.); the scoring baseline is this SEASON's own average
+// points-per-play (see seasonCiqBaseline below) so scoring above it is credited
+// and below it penalised — it self-calibrates to the roster's actual scoring
+// tempo instead of a guessed universal constant. K sets how fast on-court earns
+// weight over box as possessions accumulate — at ~50 on-court possessions a game
+// a single game is ~25% on-court / 75% box, and a full season tilts on-court.
+// Kept as one exported block so finalize, the season rollup, and the backfill
+// all compute an identical number.
 export const CIQ = {
-  baseline: 0.63, // points per offensive "play" that counts as break-even
+  baseline: 0.63, // fallback only — used when a season has no games yet to derive its own rate from
   ast: 1.0, oreb: 0.5, dreb: 0.3, stl: 1.0, blk: 0.7, defFoul: 0.3,
-  // A turnover already costs the baseline (~0.63) implicitly, since it is a "play"
-  // that scored nothing. This is an EXTRA penalty on top, for the live-ball/
-  // transition danger a giveaway carries beyond an ordinary empty possession —
-  // total cost ≈ 1.0 point per turnover.
+  // A turnover already costs the baseline implicitly, since it is a "play" that
+  // scored nothing. This is an EXTRA penalty on top, for the live-ball/transition
+  // danger a giveaway carries beyond an ordinary empty possession — total cost
+  // ≈ baseline + 0.4 points per turnover.
   turnover: 0.4,
   K: 150, // shrinkage: on-court weight = possPlayed / (possPlayed + K)
   estTeamPossPerGame: 48, // box-only fallback: scale minutes → on-court possessions
 } as const
+
+// This season's own scoring baseline: total points ÷ total "plays" (FGA + FT
+// plays + turnovers) across every player-game passed in. Replaces a guessed
+// universal constant with the roster's actual rate, so CIQ's break-even line
+// tracks reality as the season's scoring tempo settles. Falls back to
+// CIQ.baseline when there's no data yet (e.g. the first game of a new season).
+export function seasonCiqBaseline(
+  rows: { points: number; twopt_att: number; threept_att: number; ft_att: number; turnovers: number }[],
+): number {
+  let pts = 0, plays = 0
+  for (const r of rows) {
+    pts += r.points
+    plays += r.twopt_att + r.threept_att + ftPlays(r.ft_att) + r.turnovers
+  }
+  return plays > 0 ? pts / plays : CIQ.baseline
+}
 
 // The box counting fields CIQ reads. A superset lives on PlayerCounts and on a
 // player_game_stats row, so both the live event log and a stored box row qualify.
@@ -82,15 +100,17 @@ export interface CiqOnCourt { offPoss: number; defPoss: number; pf: number; pa: 
 
 /**
  * CIQ Rating for one player-game. Returns points/100 (1dp), or null when the
- * player logged no possessions to rate.
+ * player logged no possessions to rate. `baseline` should be this season's own
+ * scoring rate (seasonCiqBaseline); defaults to CIQ.baseline when omitted.
  */
 export function ciqRating(
   c: CiqCounts, onCourt: CiqOnCourt | null, timePlayedSeconds: number,
+  baseline: number = CIQ.baseline,
 ): number | null {
   const fga = c.twopt_att + c.threept_att
   const plays = fga + ftPlays(c.ft_att) + c.turnovers
   const boxRaw =
-    (c.points - plays * CIQ.baseline) +
+    (c.points - plays * baseline) +
     CIQ.ast * c.ast + CIQ.oreb * c.oreb + CIQ.dreb * c.dreb +
     CIQ.stl * c.stl + CIQ.blk * c.blk -
     CIQ.defFoul * c.def_fouls - CIQ.turnover * c.turnovers
@@ -331,14 +351,17 @@ function inferNsFouls(events: AggEvent[]): Map<string, number> {
  * Compute the full advanced stat line for every player who appears in the box or on
  * the floor. `box` and `stints` come from pbpAggregate; `timeSource` matches the one
  * passed to reconstructStints (native games: 'video' when no clock was run).
+ * `ciqBaseline` should be this season's own scoring rate (seasonCiqBaseline);
+ * defaults to CIQ.baseline when the caller has no season data to derive it from.
  */
 export function computePlayerAdvanced(
   events: AggEvent[],
   starters: string[],
   box: BoxAggregate,
-  opts: { timeSource?: 'clock' | 'video' } = {},
+  opts: { timeSource?: 'clock' | 'video'; ciqBaseline?: number } = {},
 ): Map<string, AdvancedPlayer> {
   const timeSource = opts.timeSource ?? 'clock'
+  const ciqBaseline = opts.ciqBaseline ?? CIQ.baseline
   const onCourt = walkOnCourt(events, starters, timeSource)
   const ftInfer = inferFtEvents(events)
   const nsFouls = inferNsFouls(events)
@@ -392,6 +415,7 @@ export function computePlayerAdvanced(
         ast, oreb: c?.oreb ?? 0, dreb: c?.dreb ?? 0, stl, blk, def_fouls: c?.def_fouls ?? 0 },
       offPoss + defPoss > 0 ? { offPoss, defPoss, pf: a.teamPts, pa: a.oppPts } : null,
       a.seconds,
+      ciqBaseline,
     )
 
     out.set(pid, {

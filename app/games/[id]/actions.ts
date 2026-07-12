@@ -6,7 +6,8 @@ import {
   reconstructStints, stintToRow, aggregateBox, sidePossessions, aggregateOpponentByJersey,
   opponentSecondsByJersey, type AggEvent,
 } from '@/lib/pbpAggregate'
-import { computePlayerAdvanced, playerSecondsFromStints } from '@/lib/advancedStats'
+import { computePlayerAdvanced, playerSecondsFromStints, seasonCiqBaseline } from '@/lib/advancedStats'
+import { videoTimeFromClock } from '@/lib/videoAlign'
 import type { LocalEvent } from '@/lib/entryState'
 
 // Called by the Regenerate button. Generates a fresh debrief and writes it to
@@ -116,10 +117,28 @@ export async function finalizeNativeGame(
   // durations. Fall back to video_time when the clock wasn't used.
   const timeSource = aggEvents.some(e => e.clock_sec != null) ? 'clock' : 'video'
   const stints = reconstructStints(aggEvents, starters, { timeSource })
+
+  // CIQ's scoring baseline is this season's own points-per-play, not a fixed
+  // constant (see lib/advancedStats.ts). Derived from every OTHER game already
+  // played this season, so this game doesn't skew its own baseline.
+  let ciqBaseline: number | undefined
+  const { data: gameRow } = await supabase.from('games').select('season').eq('id', gameId).single()
+  if (gameRow?.season) {
+    const { data: seasonGames } = await supabase.from('games').select('id').eq('season', gameRow.season)
+    const seasonGameIds = (seasonGames ?? []).map(g => g.id).filter(id => id !== gameId)
+    if (seasonGameIds.length > 0) {
+      const { data: seasonRows } = await supabase
+        .from('player_game_stats')
+        .select('points, twopt_att, threept_att, ft_att, turnovers')
+        .in('game_id', seasonGameIds)
+      if (seasonRows && seasonRows.length > 0) ciqBaseline = seasonCiqBaseline(seasonRows)
+    }
+  }
+
   // Full Hoopsalytics-parity advanced line per player (box-derived exact +
   // pbp-inferred + on-court our-method). See lib/advancedStats.ts for the parity
   // note; this is the same module scripts/validate_advanced.mjs checks vs games 29-32.
-  const advanced = computePlayerAdvanced(aggEvents, starters, box, { timeSource })
+  const advanced = computePlayerAdvanced(aggEvents, starters, box, { timeSource, ciqBaseline })
 
   // Per-player arithmetic guard (§4): points and rebounds must reconcile to the
   // component counts. By construction they will unless the event stream is corrupt,
@@ -320,4 +339,47 @@ export async function finalizeNativeGame(
     written: { play_by_play: pbpRows.length, lineup_stints: stintRows.length, player_game_stats: playerRows.length },
     tallied: { team: talliedTeam, opp: talliedOpp },
   }
+}
+
+// ── Video-timing retrofit alignment ─────────────────────────────────────────
+// Backfills play_by_play.video_time for an already box-scored/imported game, from
+// coach-confirmed (video_time, clock_time) anchor pairs per period. See
+// lib/videoAlign.ts for the interpolation itself; this is just the read-mutate-
+// write around it, reusing the same delete-then-reinsert + verify pattern as
+// finalizeNativeGame (play_by_play has no anon UPDATE policy — only INSERT/DELETE).
+//
+// Only periods present in `anchorsByPeriod` are touched — a period not included
+// (e.g. aligning one quarter at a time) keeps whatever video_time it already had,
+// so re-running this for one quarter can't silently wipe another's alignment.
+export interface AlignResult {
+  success: boolean
+  error?: string
+  updated?: number // rows whose video_time changed this call
+}
+
+export async function alignGameVideoTiming(
+  gameId: string,
+  anchorsByPeriod: Record<number, { videoTime: number; clockTime: number }[]>,
+): Promise<AlignResult> {
+  const { data: existing, error: fetchErr } = await supabase
+    .from('play_by_play')
+    .select('event_order, period, clock_time, video_time, player_id, jersey_number, event_type, team_side, points, team_score, opp_score, shot_x, shot_y')
+    .eq('game_id', gameId)
+    .order('event_order', { ascending: true })
+  if (fetchErr) return { success: false, error: `fetch play_by_play: ${fetchErr.message}` }
+  if (!existing || existing.length === 0) return { success: false, error: 'No play-by-play found for this game.' }
+
+  let updated = 0
+  const rows = existing.map(row => {
+    const anchors = anchorsByPeriod[row.period]
+    if (!anchors || anchors.length < 2 || row.clock_time == null) return { ...row, game_id: gameId }
+    const vt = videoTimeFromClock(Number(row.clock_time), anchors)
+    if (vt == null) return { ...row, game_id: gameId }
+    updated++
+    return { ...row, game_id: gameId, video_time: r1(vt) }
+  })
+
+  const err = await replaceRows('play_by_play', gameId, rows as Record<string, unknown>[])
+  if (err) return { success: false, error: err }
+  return { success: true, updated }
 }
