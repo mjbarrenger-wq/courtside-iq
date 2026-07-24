@@ -231,8 +231,19 @@ export default function AlignScreen({
   }
 
   // ── Overlay state: game score / clock / stats as of the focused play ──────────
-  const focusedOrder = hoverOrder ?? videoOrder ?? (periodEvents.length ? periodEvents[periodEvents.length - 1].event_order : null)
+  // Priority: the hovered play, else the play the video is sitting on. When the video
+  // is before the first recorded play there is deliberately NO focused play — we show
+  // the score carried into the quarter, never a stale late-game play.
+  const focusedOrder = hoverOrder ?? videoOrder
   const focusEvent = focusedOrder != null ? events.find(e => e.event_order === focusedOrder) ?? null : null
+  // Score as it stood entering this period, before its first recorded play (0–0 in Q1).
+  const periodStartScore = useMemo(() => {
+    const first = periodEvents[0]
+    if (!first) return { team: 0, opp: 0 }
+    let prev: AlignEvent | null = null
+    for (const e of events) { if (e.event_order >= first.event_order) break; prev = e }
+    return prev ? { team: prev.teamScore, opp: prev.oppScore } : { team: 0, opp: 0 }
+  }, [events, periodEvents])
   const focusBox = useMemo(() => {
     if (focusedOrder == null) return null
     return aggregateBox(events.filter(e => e.event_order <= focusedOrder).map(e => ({
@@ -323,19 +334,18 @@ export default function AlignScreen({
               ? <div id={`yta-${gameId}`} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }} />
               : <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', color: '#9aa4b2', fontSize: 12 }}>No video for this quarter.</div>}
 
-            {/* Scoreboard bug — game state as of the focused play */}
-            {focusEvent && (
+            {/* Scoreboard bug — state as of the focused play, or the score carried
+                into the quarter when the video is before its first recorded play. */}
+            {activeVideoId && periodEvents.length > 0 && (
               <div style={{
                 position: 'absolute', top: 10, left: 10, zIndex: 2, display: 'flex', alignItems: 'center', gap: 10,
                 background: 'rgba(15,23,42,0.82)', color: '#fff', borderRadius: 10, padding: '6px 12px', pointerEvents: 'none',
               }}>
-                <span style={{ fontSize: 11, fontWeight: 800, background: TEAL, borderRadius: 6, padding: '2px 7px' }}>Q{focusEvent.period}</span>
+                <span style={{ fontSize: 11, fontWeight: 800, background: TEAL, borderRadius: 6, padding: '2px 7px' }}>Q{focusEvent?.period ?? period}</span>
                 <span style={{ fontSize: 18, fontWeight: 900, fontVariantNumeric: 'tabular-nums' }}>
-                  {focusEvent.teamScore}<span style={{ color: '#94a3b8', margin: '0 6px', fontWeight: 700 }}>–</span>{focusEvent.oppScore}
+                  {focusEvent ? focusEvent.teamScore : periodStartScore.team}<span style={{ color: '#94a3b8', margin: '0 6px', fontWeight: 700 }}>–</span>{focusEvent ? focusEvent.oppScore : periodStartScore.opp}
                 </span>
-                {focusEvent.clockTime != null && (
-                  <span style={{ fontSize: 12, color: '#cbd5e1', fontVariantNumeric: 'tabular-nums' }}>{fmtClock(focusEvent.clockTime)}</span>
-                )}
+                <span style={{ fontSize: 12, color: '#cbd5e1', fontVariantNumeric: 'tabular-nums' }}>{fmtClock(focusEvent?.clockTime ?? 600)}</span>
               </div>
             )}
 
@@ -447,6 +457,7 @@ export default function AlignScreen({
                       <span style={{ color: MUTED, width: 40 }}>{fmtClock(e.clockTime)}</span>
                       <span style={{ fontWeight: 700, color: e.team_side === 'opponent' ? AMBER : TEAL, minWidth: 84, whiteSpace: 'nowrap' }}>{eventName(e)}</span>
                       <span style={{ whiteSpace: 'nowrap', flex: 1 }}>{PRETTY[e.event_type] ?? e.event_type}{e.points > 0 && <span style={{ color: GREEN, fontWeight: 700 }}> +{e.points}</span>}</span>
+                      <span title="Running score after this play" style={{ color: e.points > 0 ? SEC : '#9aa4b2', fontWeight: e.points > 0 ? 700 : 500, fontVariantNumeric: 'tabular-nums', fontSize: 10.5, width: 42, textAlign: 'right', whiteSpace: 'nowrap' }}>{e.teamScore}–{e.oppScore}</span>
                       {isAnchor
                         ? <span style={{ fontSize: 10, fontWeight: 800, color: TEAL }}>📍 anchor</span>
                         : e.videoTime != null
