@@ -119,9 +119,11 @@ export default function AlignScreen({
   const [error, setError] = useState<string | null>(null)
 
   // Which play the on-video overlay reflects (score / clock / that player's stats,
-  // all as of that play). Follows the row the coach points at; falls back to the
-  // latest play in the period so the scoreboard is never blank.
-  const [focusOrder, setFocusOrder] = useState<number | null>(null)
+  // all as of that play). Priority: the row the coach is pointing at, else the play
+  // the video is currently sitting on (for synced footage), else the latest play so
+  // the scoreboard is never blank.
+  const [hoverOrder, setHoverOrder] = useState<number | null>(null)
+  const [videoOrder, setVideoOrder] = useState<number | null>(null)
   // Manual anchor entry — lets the coach anchor a clock the play list doesn't carry,
   // most usefully the quarter tip at 10:00, and correct a time by hand.
   const [manualClock, setManualClock] = useState('10:00')
@@ -175,6 +177,28 @@ export default function AlignScreen({
     try { ytRef.current?.seekTo?.(Math.max(0, sec), true) } catch { /* noop */ }
   }
 
+  // Follow the video: on synced footage, surface the play the video is currently
+  // sitting on so the overlay updates as it plays or scrubs (a hover still wins).
+  const tickRef = useRef<() => void>(() => {})
+  tickRef.current = () => {
+    const pos = currentVideoTime()
+    if (pos == null) return
+    let found: number | null = null, bestVt = -1
+    for (const e of events) {
+      if (perQuarter && e.period !== period) continue
+      if (e.videoTime == null || e.videoTime > pos || e.videoTime <= bestVt) continue
+      bestVt = e.videoTime; found = e.event_order
+    }
+    setVideoOrder(prev => (prev === found ? prev : found))
+  }
+  useEffect(() => {
+    if (!activeVideoId) return
+    const id = setInterval(() => tickRef.current(), 250)
+    return () => clearInterval(id)
+  }, [activeVideoId])
+  // Switching quarters drops any stale focus from the previous period.
+  useEffect(() => { setHoverOrder(null); setVideoOrder(null) }, [period])
+
   function setAnchorHere(e: AlignEvent) {
     if (e.clockTime == null) return
     const vt = currentVideoTime()
@@ -207,7 +231,7 @@ export default function AlignScreen({
   }
 
   // ── Overlay state: game score / clock / stats as of the focused play ──────────
-  const focusedOrder = focusOrder ?? (periodEvents.length ? periodEvents[periodEvents.length - 1].event_order : null)
+  const focusedOrder = hoverOrder ?? videoOrder ?? (periodEvents.length ? periodEvents[periodEvents.length - 1].event_order : null)
   const focusEvent = focusedOrder != null ? events.find(e => e.event_order === focusedOrder) ?? null : null
   const focusBox = useMemo(() => {
     if (focusedOrder == null) return null
@@ -234,15 +258,20 @@ export default function AlignScreen({
   }
 
   return (
-    <main style={{
-      background: BG, minHeight: '100vh', color: '#1a1f2e',
+    <main className="lg:h-[calc(100vh_-_2.75rem)] lg:overflow-hidden" style={{
+      // 2.75rem = the 44px global NavBar; fit the whole screen below it so the video
+      // is height-capped and the panel stays visible without scrolling the page.
+      background: BG, minHeight: 'calc(100vh - 2.75rem)', color: '#1a1f2e',
       fontFamily: "'Inter', system-ui, sans-serif", WebkitFontSmoothing: 'antialiased',
-      padding: '10px 10px 40px',
+      display: 'flex', flexDirection: 'column', padding: '0 10px 10px',
     }}>
       {/* The YouTube API replaces the target div with a fixed-size iframe; force it
           to fill the responsive 16:9 box so the video scales with the window. */}
       <style>{`.ciq-video iframe{position:absolute;inset:0;width:100%!important;height:100%!important;border:0}
 @keyframes ciqAlignCardIn{from{opacity:0;transform:translate(-50%,8px)}to{opacity:1;transform:translate(-50%,0)}}`}</style>
+
+      {/* Fixed top block (header + instructions); the video/panel fill the rest. */}
+      <div style={{ flexShrink: 0, paddingTop: 10 }}>
       {/* Header */}
       <div style={{
         background: CARD, border: `1px solid ${BORDER}`, borderRadius: 12,
@@ -276,21 +305,20 @@ export default function AlignScreen({
         }}>Done</a>
       </div>
 
-      <div style={{ fontSize: 12, color: MUTED, marginBottom: 10, lineHeight: 1.5 }}>
-        Scrub or play the video to a recognizable moment, then click the matching play in the list below to
-        drop an anchor there. Set at least 2 anchors per quarter — ideally one near the start, one right
-        before the last-minute stoppages, and one near the end — then Save. Hover any play to see the score,
-        game clock and that player&rsquo;s stats at that point. To anchor the tip-off (which isn&rsquo;t a play),
-        use the clock box below: leave it at 10:00 and click <b>= current video</b> at the moment the quarter starts.
+      <div style={{ fontSize: 12, color: MUTED, marginBottom: 8, lineHeight: 1.5 }}>
+        Play or scrub the video to a moment, then click the matching play to anchor it there — 2+ per quarter,
+        then Save. Hover a play, or let the video run, to see the score, clock and that player&rsquo;s stats. To
+        anchor the tip-off, leave the clock box at 10:00 and click <b>= current video</b> as the quarter starts.
         {alreadySynced > 0 && alreadySynced === periodEvents.length && (
           <span style={{ color: GREEN, fontWeight: 700 }}> This quarter is already fully synced — re-align to touch it up.</span>
         )}
       </div>
+      </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_400px]" style={{ gap: 10 }}>
-        {/* Video */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <div className="ciq-video" style={{ position: 'relative', width: '100%', aspectRatio: '16 / 9', maxWidth: '100%', background: '#000', borderRadius: 12, overflow: 'hidden', border: `1px solid ${BORDER}` }}>
+      <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_400px] lg:grid-rows-[minmax(0,1fr)] lg:flex-1 lg:min-h-0" style={{ gap: 10 }}>
+        {/* Video — height-capped on desktop (lg:h-full), width-driven on mobile (w-full). */}
+        <div className="lg:h-full" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 0 }}>
+          <div className="ciq-video w-full lg:h-full lg:w-auto" style={{ position: 'relative', aspectRatio: '16 / 9', maxWidth: '100%', maxHeight: '100%', background: '#000', borderRadius: 12, overflow: 'hidden', border: `1px solid ${BORDER}` }}>
             {activeVideoId
               ? <div id={`yta-${gameId}`} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }} />
               : <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', color: '#9aa4b2', fontSize: 12 }}>No video for this quarter.</div>}
@@ -325,10 +353,12 @@ export default function AlignScreen({
                   {focusEvent.points > 0 && <span style={{ fontSize: 13.5, fontWeight: 900, color: GREEN }}>+{focusEvent.points}</span>}
                 </div>
                 {focusCounts && (
-                  <div style={{ fontSize: 12, color: MUTED, marginTop: 3, fontWeight: 600 }}>
-                    {focusCounts.pts} PTS · {focusCounts.reb} REB · {focusCounts.ast} AST
-                    {focusCounts.stl > 0 && ` · ${focusCounts.stl} STL`}{focusCounts.blk > 0 && ` · ${focusCounts.blk} BLK`}
-                    {' · '}{focusCounts.twopt_made + focusCounts.threept_made}/{focusCounts.twopt_att + focusCounts.threept_att} FG
+                  <div style={{ fontSize: 11.5, color: MUTED, marginTop: 4, fontWeight: 600, lineHeight: 1.5 }}>
+                    <span>{focusCounts.pts} PTS · {focusCounts.reb} REB ({focusCounts.oreb}o/{focusCounts.dreb}d) · {focusCounts.ast} AST · {focusCounts.stl} STL · {focusCounts.blk} BLK · {focusCounts.turnovers} TO · {focusCounts.fouls} PF</span>
+                    <br />
+                    <span>{focusCounts.twopt_made + focusCounts.threept_made}/{focusCounts.twopt_att + focusCounts.threept_att} FG
+                      {focusCounts.threept_att > 0 && ` · ${focusCounts.threept_made}/${focusCounts.threept_att} 3P`}
+                      {focusCounts.ft_att > 0 && ` · ${focusCounts.ft_made}/${focusCounts.ft_att} FT`}</span>
                   </div>
                 )}
               </div>
@@ -337,9 +367,9 @@ export default function AlignScreen({
         </div>
 
         {/* Anchors + event list */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, minWidth: 0 }}>
+        <div className="lg:min-h-0" style={{ display: 'flex', flexDirection: 'column', gap: 8, minWidth: 0 }}>
           {/* Anchor list */}
-          <div style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: 10, padding: 10 }}>
+          <div style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: 10, padding: 10, flexShrink: 0 }}>
             <div style={{ fontSize: 10, fontWeight: 800, color: TEAL, letterSpacing: '0.06em', marginBottom: 6 }}>
               ANCHORS — Q{period} <span style={{ fontWeight: 500, color: MUTED, textTransform: 'none', letterSpacing: 0 }}>({anchors.length} set, need 2+)</span>
             </div>
@@ -391,11 +421,11 @@ export default function AlignScreen({
           </div>
 
           {/* Event list */}
-          <div style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: 10, padding: 8, flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+          <div className="lg:min-h-0 lg:flex-1" style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: 10, padding: 8, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
             <div style={{ fontSize: 10, fontWeight: 800, color: TEAL, letterSpacing: '0.06em', marginBottom: 3 }}>
               PLAYS — Q{period} <span style={{ fontWeight: 500, color: MUTED, textTransform: 'none', letterSpacing: 0 }}>· click to anchor here</span>
             </div>
-            <div style={{ overflowY: 'auto', maxHeight: 480 }}>
+            <div style={{ overflowY: 'auto', flex: 1, minHeight: 40 }}>
               {periodEvents.length === 0 ? (
                 <div style={{ fontSize: 12, color: MUTED }}>No plays in this quarter.</div>
               ) : (
@@ -411,8 +441,8 @@ export default function AlignScreen({
                         padding: '4px 6px', borderRadius: 5, cursor: 'pointer',
                         background: isAnchor ? '#eaf3f6' : 'transparent',
                       }}
-                      onMouseEnter={ev => { setFocusOrder(e.event_order); if (!isAnchor) ev.currentTarget.style.background = '#f1f5f9' }}
-                      onMouseLeave={ev => { if (!isAnchor) ev.currentTarget.style.background = 'transparent' }}
+                      onMouseEnter={ev => { setHoverOrder(e.event_order); if (!isAnchor) ev.currentTarget.style.background = '#f1f5f9' }}
+                      onMouseLeave={ev => { setHoverOrder(null); if (!isAnchor) ev.currentTarget.style.background = 'transparent' }}
                     >
                       <span style={{ color: MUTED, width: 40 }}>{fmtClock(e.clockTime)}</span>
                       <span style={{ fontWeight: 700, color: e.team_side === 'opponent' ? AMBER : TEAL, minWidth: 84, whiteSpace: 'nowrap' }}>{eventName(e)}</span>
@@ -420,7 +450,7 @@ export default function AlignScreen({
                       {isAnchor
                         ? <span style={{ fontSize: 10, fontWeight: 800, color: TEAL }}>📍 anchor</span>
                         : e.videoTime != null
-                        ? <button onClick={ev => { ev.stopPropagation(); seekTo(e.videoTime as number) }} style={{ fontSize: 10, color: MUTED, background: 'transparent', border: `1px solid ${BORDER}`, borderRadius: 5, padding: '1px 6px', cursor: 'pointer' }}>synced · jump</button>
+                        ? <span onClick={ev => { ev.stopPropagation(); seekTo(e.videoTime as number) }} title="Jump the video to this play" style={{ fontSize: 10, color: '#9aa4b2', cursor: 'pointer', whiteSpace: 'nowrap' }}>✓ synced</span>
                         : previewVt != null && <span style={{ fontSize: 10, color: MUTED }}>≈{fmtVt(previewVt)}</span>}
                     </div>
                   )
