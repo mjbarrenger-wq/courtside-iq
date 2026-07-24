@@ -155,8 +155,14 @@ export default function WatchScreen({
   tickRef.current = () => {
     const pos = videoTime()
     if (pos == null) return
-    let found: number | null = null
-    for (const e of periodEvents) { if ((e.video_time as number) <= pos) found = e.event_order; else break }
+    // Scan all synced plays for the one at the greatest video_time <= now. (An
+    // early break broke if interpolated video_times weren't perfectly monotonic,
+    // which could freeze the cursor and the live box/card on one play.)
+    let found: number | null = null, bestVt = -1
+    for (const e of periodEvents) {
+      const vt = e.video_time as number
+      if (vt <= pos && vt > bestVt) { bestVt = vt; found = e.event_order }
+    }
     if (found !== curOrder) setCurOrder(found)
   }
   useEffect(() => {
@@ -198,6 +204,7 @@ export default function WatchScreen({
     return {
       p,
       pts: c?.pts ?? 0, reb: c?.reb ?? 0, ast: c?.ast ?? 0, stl: c?.stl ?? 0, blk: c?.blk ?? 0,
+      to: c?.turnovers ?? 0,
       pf: c?.fouls ?? 0, fgm: (c?.twopt_made ?? 0) + (c?.threept_made ?? 0), fga: (c?.twopt_att ?? 0) + (c?.threept_att ?? 0),
     }
   }).sort((a, b) => b.pts - a.pts || b.fga - a.fga)
@@ -290,10 +297,12 @@ export default function WatchScreen({
                   {curEvent.points > 0 && <span style={{ fontSize: 14, fontWeight: 900, color: GREEN }}>+{curEvent.points}</span>}
                 </div>
                 {cardCounts && (
-                  <div style={{ fontSize: 12, color: MUTED, marginTop: 3, fontWeight: 600 }}>
-                    {cardCounts.pts} PTS · {cardCounts.reb} REB · {cardCounts.ast} AST
-                    {cardCounts.stl > 0 && ` · ${cardCounts.stl} STL`}{cardCounts.blk > 0 && ` · ${cardCounts.blk} BLK`}
-                    {' · '}{cardCounts.twopt_made + cardCounts.threept_made}/{cardCounts.twopt_att + cardCounts.threept_att} FG
+                  <div style={{ fontSize: 11.5, color: MUTED, marginTop: 4, fontWeight: 600, lineHeight: 1.5 }}>
+                    <span>{cardCounts.pts} PTS · {cardCounts.reb} REB ({cardCounts.oreb}o/{cardCounts.dreb}d) · {cardCounts.ast} AST · {cardCounts.stl} STL · {cardCounts.blk} BLK · {cardCounts.turnovers} TO · {cardCounts.fouls} PF</span>
+                    <br />
+                    <span>{cardCounts.twopt_made + cardCounts.threept_made}/{cardCounts.twopt_att + cardCounts.threept_att} FG
+                      {cardCounts.threept_att > 0 && ` · ${cardCounts.threept_made}/${cardCounts.threept_att} 3P`}
+                      {cardCounts.ft_att > 0 && ` · ${cardCounts.ft_made}/${cardCounts.ft_att} FT`}</span>
                   </div>
                 )}
               </div>
@@ -314,7 +323,7 @@ export default function WatchScreen({
                   <tr style={{ borderBottom: `1px solid ${BORDER}` }}>
                     <th style={{ ...th, textAlign: 'left' }}>PLAYER</th>
                     <th style={th}>PTS</th><th style={th}>REB</th><th style={th}>AST</th>
-                    <th style={th}>STL</th><th style={th}>BLK</th><th style={th}>PF</th><th style={th}>FG</th>
+                    <th style={th}>STL</th><th style={th}>BLK</th><th style={th}>TO</th><th style={th}>PF</th><th style={th}>FG</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -325,7 +334,7 @@ export default function WatchScreen({
                         <td style={{ ...td, textAlign: 'left', fontWeight: 700, color: active ? TEAL : '#1a1f2e' }}>#{r.p.jersey_number} {r.p.first_name}</td>
                         <td style={{ ...td, fontWeight: 800 }}>{r.pts}</td>
                         <td style={td}>{r.reb}</td><td style={td}>{r.ast}</td>
-                        <td style={td}>{r.stl}</td><td style={td}>{r.blk}</td><td style={td}>{r.pf}</td>
+                        <td style={td}>{r.stl}</td><td style={td}>{r.blk}</td><td style={td}>{r.to}</td><td style={td}>{r.pf}</td>
                         <td style={td}>{r.fgm}/{r.fga}</td>
                       </tr>
                     )
@@ -337,6 +346,7 @@ export default function WatchScreen({
                     <td style={td}>{box.opponent.ast}</td>
                     <td style={td}>{box.opponent.stl}</td>
                     <td style={td}>{box.opponent.blk}</td>
+                    <td style={td}>{box.opponent.turnovers}</td>
                     <td style={td}>{box.opponent.off_fouls + box.opponent.def_fouls}</td>
                     <td style={td}>{box.opponent.twopt_made + box.opponent.threept_made}/{box.opponent.twopt_att + box.opponent.threept_att}</td>
                   </tr>
