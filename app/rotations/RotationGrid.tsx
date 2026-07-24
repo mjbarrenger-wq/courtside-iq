@@ -2,7 +2,7 @@
 // Rotation Grid — Timeline visualisation + substitution sheet
 // Dynamic: reads numPeriods, periodDuration, noSubFirst/LastMins from result.config
 
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import type { RotationPlayer, PlayerConstraint, OptimiserResult, Position } from './types'
 import { assignLineupPositions } from './optimiser'
 
@@ -121,6 +121,238 @@ function Tab({ label, active, onClick }: { label: string; active: boolean; onCli
     }}>
       {label}
     </button>
+  )
+}
+
+// ── Court view ────────────────────────────────────────────────────────────────
+// Five rows — one per court position — showing who occupies each spot over time.
+// This is the coach's reading of the plan: "who is my point guard at 6:00?"
+
+const COURT_POS: Position[] = ['PG', 'SG', 'SF', 'PF', 'C']
+
+// A continuous block of windows in one period where the same player holds the
+// same position. `playerId` is null when the spot is unfilled (short lineup).
+interface CourtRun {
+  startWindow: number
+  length: number
+  playerId: string | null
+  /** Player was already on court in the previous window but in a different spot. */
+  slidFrom: Position | null
+}
+
+// Occupant of each court position, window by window, for one period.
+function occupantsForPeriod(
+  plan: OptimiserResult['plan'],
+  period: number,
+  windows: number[],
+  byId: Map<string, RotationPlayer>,
+): (string | null)[][] {
+  return COURT_POS.map(() => new Array<string | null>(windows.length).fill(null))
+    .map((row, rowIdx) =>
+      row.map((_, wi) => {
+        const slot = slotOf(plan, period, windows[wi])
+        if (!slot) return null
+        const posMap = assignLineupPositions(slot.playerIds, byId)
+        return slot.playerIds.find(id => posMap[id] === COURT_POS[rowIdx]) ?? null
+      }),
+    )
+}
+
+// Collapse a window-by-window occupant array into contiguous runs.
+function runsFromOccupants(occupants: (string | null)[], windows: number[]): CourtRun[] {
+  const runs: CourtRun[] = []
+  for (let i = 0; i < occupants.length; i++) {
+    const id = occupants[i]
+    const last = runs[runs.length - 1]
+    if (last && last.playerId === id) last.length++
+    else runs.push({ startWindow: windows[i], length: 1, playerId: id, slidFrom: null })
+  }
+  return runs
+}
+
+function CourtView({ result, players }: { result: OptimiserResult; players: RotationPlayer[] }) {
+  const { plan, config } = result
+  const { numPeriods, periodDuration, noSubFirstMins, noSubLastMins } = config
+  const POS_W = 46
+  const ROW_H = 30
+
+  const [hoveredSlot, setHoveredSlot] = useState<{ q: number; w: number } | null>(null)
+
+  const periods = Array.from({ length: numPeriods }, (_, i) => i + 1)
+  const windows = Array.from({ length: periodDuration }, (_, i) => i + 1)
+  const labelEvery = periodDuration <= 12 ? 2 : 3
+
+  const byId = useMemo(() => new Map(players.map(p => [p.id, p])), [players])
+
+  // runs[period][rowIdx] — memoised because assignLineupPositions runs a small
+  // search per window and this re-renders on every hover.
+  const runs = useMemo(() => {
+    const out: Record<number, CourtRun[][]> = {}
+    for (const period of periods) {
+      const occ = occupantsForPeriod(plan, period, windows, byId)
+      const periodRuns = occ.map(row => runsFromOccupants(row, windows))
+
+      // Flag a player who stayed on court but changed spot, so the label can
+      // show they slid rather than reading as a fresh substitution.
+      periodRuns.forEach((rowRuns, rowIdx) => {
+        for (const run of rowRuns) {
+          if (!run.playerId || run.startWindow === windows[0]) continue
+          const prevWi = run.startWindow - windows[0] - 1
+          const prevRow = occ.findIndex(row => row[prevWi] === run.playerId)
+          if (prevRow >= 0 && prevRow !== rowIdx) run.slidFrom = COURT_POS[prevRow]
+        }
+      })
+      out[period] = periodRuns
+    }
+    return out
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [plan, byId, numPeriods, periodDuration])
+
+  return (
+    <div style={{ overflowX: 'auto' }} onMouseLeave={() => setHoveredSlot(null)}>
+
+      {/* Period headers */}
+      <div style={{ display: 'flex', marginLeft: POS_W, marginBottom: 4, gap: 8 }}>
+        {periods.map(p => (
+          <div key={p} style={{
+            flex: 1, textAlign: 'center',
+            fontSize: 11, fontWeight: 700, color: TEAL, letterSpacing: '0.06em',
+            background: 'rgba(151,207,220,0.06)',
+            borderRadius: '4px 4px 0 0', padding: '3px 0',
+          }}>
+            {periodAbbr(numPeriods, p)}
+          </div>
+        ))}
+      </div>
+
+      {/* Window time labels */}
+      <div style={{ display: 'flex', marginLeft: POS_W, marginBottom: 8, gap: 8 }}>
+        {periods.map(p => (
+          <div key={p} style={{ flex: 1, display: 'flex' }}>
+            {windows.map(w => {
+              const locked = isLockedWindow(w, noSubFirstMins, noSubLastMins, periodDuration)
+              const showLabel = (w === 1) || (w % labelEvery === 0) || (w === periodDuration)
+              return (
+                <div key={w} style={{ flex: 1, textAlign: 'center', fontSize: 8, color: locked ? '#44526a' : MUTED }}>
+                  {showLabel ? windowTimeLabel(w, periodDuration) : ''}
+                </div>
+              )
+            })}
+          </div>
+        ))}
+      </div>
+
+      {/* Hover readout — the full five on court at the hovered minute */}
+      <div style={{
+        height: 28, marginBottom: 8, display: 'flex', alignItems: 'center',
+        paddingLeft: POS_W, transition: 'opacity 0.1s',
+        opacity: hoveredSlot ? 1 : 0, pointerEvents: 'none',
+      }}>
+        {hoveredSlot && (() => {
+          const slot = slotOf(plan, hoveredSlot.q, hoveredSlot.w)
+          const posMap = slot ? assignLineupPositions(slot.playerIds, byId) : {}
+          const sorted = [...(slot?.playerIds ?? [])].sort(
+            (a, b) => COURT_POS.indexOf(posMap[a]) - COURT_POS.indexOf(posMap[b]),
+          )
+          return (
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 12,
+              fontSize: 11, background: 'rgba(151,207,220,0.08)',
+              border: '1px solid rgba(151,207,220,0.2)',
+              borderRadius: 6, padding: '4px 10px',
+            }}>
+              <span style={{ color: TEAL, fontWeight: 700 }}>
+                {periodAbbr(numPeriods, hoveredSlot.q)} · {windowTimeLabel(hoveredSlot.w, periodDuration)} remaining
+              </span>
+              <span style={{ color: SEC }}>
+                {sorted.map(id => `${posMap[id]} ${playerName(players, id)}`).join('  ·  ')}
+              </span>
+            </div>
+          )
+        })()}
+      </div>
+
+      {/* One row per court position */}
+      {COURT_POS.map((pos, rowIdx) => (
+        <div key={pos} style={{ display: 'flex', alignItems: 'center', marginBottom: 4, gap: 8 }}>
+          {/* Position label */}
+          <div style={{
+            width: POS_W, flexShrink: 0, fontSize: 11, fontWeight: 800,
+            color: TEAL, letterSpacing: '0.04em',
+          }}>
+            {pos}
+          </div>
+
+          {periods.map(period => (
+            // minWidth 0 stops the nowrap player labels from forcing a period
+            // wider than its 1/n share — otherwise rows stop lining up in time.
+            <div key={period} style={{ flex: 1, minWidth: 0, display: 'flex', gap: 1, borderRadius: 4, padding: '2px 3px' }}>
+              {runs[period][rowIdx].map(run => {
+                const color = run.playerId ? playerColor(players, run.playerId) : BORDER
+                const secondary = run.playerId
+                  ? isSecondaryAssignment(players, run.playerId, pos)
+                  : false
+                const label = run.playerId ? playerName(players, run.playerId) : ''
+
+                return (
+                  <div
+                    key={run.startWindow}
+                    style={{ flex: run.length, minWidth: 4, display: 'flex', gap: 1 }}
+                    title={run.playerId
+                      ? `${label} at ${pos} — ${windowTimeLabel(run.startWindow, periodDuration)} for ${run.length} min${run.slidFrom ? ` (slid from ${run.slidFrom})` : ''}`
+                      : `${pos} unfilled`}
+                  >
+                    {/* Bar spans the run; hover targets stay per-window */}
+                    <div style={{
+                      position: 'relative', flex: 1, minWidth: 0, height: ROW_H,
+                      display: 'flex', alignItems: 'center',
+                      background: run.playerId ? color : 'rgba(255,255,255,0.04)',
+                      border: `1px solid ${run.playerId ? color : BORDER}`,
+                      // Period-opening lineups aren't sub calls, so no marker there.
+                      borderLeft: run.playerId && run.startWindow !== windows[0]
+                        ? `3px solid ${run.slidFrom ? TEAL : AMBER}`
+                        : `1px solid ${run.playerId ? color : BORDER}`,
+                      borderRadius: 3,
+                      opacity: run.playerId ? 1 : 0.3,
+                      overflow: 'hidden',
+                    }}>
+                      {/* Per-window hover strips */}
+                      <div style={{ position: 'absolute', inset: 0, display: 'flex' }}>
+                        {Array.from({ length: run.length }, (_, i) => run.startWindow + i).map(w => (
+                          <div key={w} style={{ flex: 1 }} onMouseEnter={() => setHoveredSlot({ q: period, w })} />
+                        ))}
+                      </div>
+                      {run.playerId && (
+                        <span style={{
+                          position: 'relative', pointerEvents: 'none',
+                          padding: '0 6px', fontSize: 10, fontWeight: 700,
+                          color: PRIMARY, whiteSpace: 'nowrap',
+                          overflow: 'hidden', textOverflow: 'ellipsis',
+                        }}>
+                          {label}
+                          {secondary && (
+                            <span style={{ color: '#92400e', fontWeight: 800 }} title="Out of primary position"> *</span>
+                          )}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          ))}
+        </div>
+      ))}
+
+      {/* Legend */}
+      <div style={{ marginTop: 12, fontSize: 10, color: MUTED, lineHeight: 1.8 }}>
+        <span><span style={{ display: 'inline-block', width: 3, height: 10, background: AMBER, marginRight: 5, verticalAlign: 'middle' }} />New player into the spot</span>
+        {' · '}
+        <span><span style={{ display: 'inline-block', width: 3, height: 10, background: TEAL, marginRight: 5, verticalAlign: 'middle' }} />Same player, slid across from another spot</span>
+        {' · '}
+        <span><span style={{ color: '#92400e', fontWeight: 800 }}>*</span> playing out of their primary position</span>
+      </div>
+    </div>
   )
 }
 
@@ -437,7 +669,7 @@ function SubSheetView({ result, players }: { result: OptimiserResult; players: R
 // ── Main component ────────────────────────────────────────────────────────────
 
 export default function RotationGrid({ result, players }: Props) {
-  const [tab, setTab] = useState<'timeline' | 'minutes' | 'sheet'>('timeline')
+  const [tab, setTab] = useState<'court' | 'timeline' | 'minutes' | 'sheet'>('court')
   const { config, subCallsPerQuarter, totalSubCalls } = result
   const { numPeriods } = config
 
@@ -526,13 +758,15 @@ export default function RotationGrid({ result, players }: Props) {
 
       {/* Tabs */}
       <div style={{ display: 'flex', borderBottom: `1px solid ${BORDER}`, marginBottom: 20 }}>
-        <Tab label="Timeline"     active={tab === 'timeline'} onClick={() => setTab('timeline')} />
+        <Tab label="On Court"     active={tab === 'court'}    onClick={() => setTab('court')}    />
+        <Tab label="By Player"    active={tab === 'timeline'} onClick={() => setTab('timeline')} />
         <Tab label="Playing Time" active={tab === 'minutes'}  onClick={() => setTab('minutes')}  />
         <Tab label="Sub Sheet"    active={tab === 'sheet'}    onClick={() => setTab('sheet')}    />
       </div>
 
       {/* Tab content */}
       <div style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: 12, padding: 24, overflowX: 'auto' }}>
+        {tab === 'court'    && <CourtView    result={result} players={players} />}
         {tab === 'timeline' && <TimelineView result={result} players={players} />}
         {tab === 'minutes'  && <MinutesView  result={result} players={players} />}
         {tab === 'sheet'    && <SubSheetView result={result} players={players} />}
