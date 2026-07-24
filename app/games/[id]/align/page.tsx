@@ -32,6 +32,8 @@ function toEvents(pbp: any[]): AlignEvent[] {
       jersey_number: r.jersey_number ?? null,
       clockTime: r.clock_time != null && r.clock_time !== '' ? Number(r.clock_time) : null,
       videoTime: r.video_time != null && r.video_time !== '' ? Number(r.video_time) : null,
+      teamScore: r.team_score ?? 0,
+      oppScore: r.opp_score ?? 0,
     }))
 }
 
@@ -40,7 +42,7 @@ export default async function AlignPage({ params }: { params: Promise<{ id: stri
   const [gamesRaw, playersRaw, pbpRaw] = await Promise.all([
     fetchJson(`games?id=eq.${id}&select=id,game_date,opponent_id,video_urls`),
     fetchJson('players?select=id,jersey_number,first_name,last_name&order=jersey_number.asc'),
-    fetchJson(`play_by_play?game_id=eq.${id}&select=event_order,period,clock_time,video_time,player_id,jersey_number,event_type,team_side,points&order=event_order.asc`),
+    fetchJson(`play_by_play?game_id=eq.${id}&select=event_order,period,clock_time,video_time,player_id,jersey_number,event_type,team_side,points,team_score,opp_score&order=event_order.asc`),
   ])
   const game = Array.isArray(gamesRaw) ? gamesRaw[0] : null
   const players: AlignPlayer[] = Array.isArray(playersRaw) ? playersRaw : []
