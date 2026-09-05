@@ -147,27 +147,32 @@ export default async function BoxScorePage({
   // ── Top 3 contributors ───────────────────────────────────────────────────────
   interface ContribRow {
     id: string; name: string; jersey: number
-    pts: number; ast: number; stl: number; blk: number; to: number
+    pts: number; reb: number; ast: number; stl: number; blk: number; to: number
     ciq: number | null; impact: number
   }
   const contributors: ContribRow[] = (players as any[])
     .map((p: any): ContribRow | null => {
       const s = (pStats as any[]).find((r: any) => r.player_id === p.id)
       if (!s) return null
-      const pts = s.points || 0
-      const ast = s.ast || 0
-      const stl = s.stl || 0
-      const blk = s.blk || 0
-      const to  = s.turnovers || 0
+      const pts  = s.points || 0
+      const oreb = s.oreb || 0
+      const dreb = s.dreb || 0
+      const ast  = s.ast || 0
+      const stl  = s.stl || 0
+      const blk  = s.blk || 0
+      const to   = s.turnovers || 0
       return {
         id: p.id,
         name: `${p.first_name} ${p.last_name}`,
         jersey: p.jersey_number,
-        pts, ast, stl, blk, to,
+        pts, reb: oreb + dreb, ast, stl, blk, to,
         ciq: s.ciq_rating == null ? null : Number(s.ciq_rating),
-        // CIQ Rating is the value metric; fall back to a simple impact score only
-        // if a row somehow has no rating (e.g. a player with no possessions).
-        impact: pts + (ast + stl + blk) * 0.5 - to * 0.75,
+        // CIQ Rating is the value metric (it already credits rebounds — 0.5 per
+        // offensive board, 0.3 per defensive, see lib/advancedStats CIQ weights).
+        // Fall back to a simple impact score only if a row somehow has no rating
+        // (e.g. a player with no possessions); it uses the same rebound weights so
+        // a big rebounding game still counts when CIQ is missing.
+        impact: pts + (ast + stl + blk) * 0.5 + oreb * 0.5 + dreb * 0.3 - to * 0.75,
       }
     })
     .filter((r): r is ContribRow => r !== null)
@@ -543,6 +548,7 @@ export default async function BoxScorePage({
                   <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
                     {[
                       { label: 'PTS', val: c.pts, highlight: true },
+                      { label: 'REB', val: c.reb },
                       { label: 'AST', val: c.ast },
                       { label: 'STL', val: c.stl },
                       { label: 'TO',  val: c.to, bad: true },
