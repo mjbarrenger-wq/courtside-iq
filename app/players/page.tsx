@@ -7,23 +7,22 @@ import { GamePicker } from '../dashboard/GamePicker'
 import type { PickerGame } from '../dashboard/GamePicker'
 import type { FilterKey, GameTypeKey } from '../dashboard/filterConfig'
 import { FILTER_CONFIG, GAME_TYPE_CONFIG } from '../dashboard/filterConfig'
+import { fetchRows } from '@/lib/supabaseRest'
+import type { GameRow, GameWithOpponent, PlayerRow, PlayerGameStatsRow } from '@/lib/dbTypes'
 
 export const dynamic = 'force-dynamic'
 
-const SB_URL  = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const SB_KEY  = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 const TEAM_ID = 'b1000000-0000-0000-0000-000000000001'
 
-async function fetchJson(path: string) {
-  const res = await fetch(`${SB_URL}/rest/v1/${path}`, {
-    headers: { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}` },
-    cache: 'no-store',
-  })
-  return res.json()
-}
+// Rows as this page selects them. jersey_number is narrowed from the nullable
+// dbTypes definition because PlayerBubble needs a number.
+type GameListRow = Pick<GameWithOpponent, 'id' | 'game_date' | 'result' | 'team_score' | 'opponent_score' | 'game_type' | 'opponents'>
+type RosterRow   = Pick<PlayerRow, 'id' | 'first_name' | 'last_name' | 'jersey_number'> & { jersey_number: number }
+type PppStatRow  = Pick<PlayerGameStatsRow, 'player_id' | 'off_ppp' | 'def_ppp' | 'time_played_seconds'>
+type FilterableGame = Pick<GameRow, 'game_date' | 'result' | 'team_score' | 'opponent_score'>
 
 // ── Filter helpers (shared logic with dashboard) ──────────────────────────────
-function applyFilter(allGames: any[], filter: FilterKey): any[] {
+function applyFilter<G extends FilterableGame>(allGames: G[], filter: FilterKey): G[] {
   const sorted = [...allGames].sort(
     (a, b) => new Date(b.game_date).getTime() - new Date(a.game_date).getTime()
   )
@@ -40,7 +39,7 @@ function applyFilter(allGames: any[], filter: FilterKey): any[] {
   }
 }
 
-function contextLabel(games: any[], filter: FilterKey, isCustom: boolean): string {
+function contextLabel(games: FilterableGame[], filter: FilterKey, isCustom: boolean): string {
   if (!games.length) return 'No games'
   const sorted = [...games].sort(
     (a, b) => new Date(a.game_date).getTime() - new Date(b.game_date).getTime()
@@ -65,13 +64,12 @@ export default async function PlayerQuadrantsPage({
   const gameType = (GAME_TYPE_CONFIG.some(t => t.key === rawType) ? rawType : 'all_types') as GameTypeKey
 
   // All games (for slider + picker)
-  const allGamesRaw = await fetchJson(
+  const allGames = await fetchRows<GameListRow>(
     `games?team_id=eq.${TEAM_ID}&select=id,game_date,result,team_score,opponent_score,game_type,opponents(full_name)&order=game_date.asc`
   )
-  const allGames: any[] = Array.isArray(allGamesRaw) ? allGamesRaw : []
 
   // Apply filter or custom game IDs
-  let filteredGames: any[]
+  let filteredGames: GameListRow[]
   if (isCustom) {
     const specificIds = gamesParam!.split(',').filter(Boolean)
     filteredGames = allGames.filter(g => specificIds.includes(g.id))
@@ -82,34 +80,34 @@ export default async function PlayerQuadrantsPage({
     }
   }
 
-  const gameIds = filteredGames.map((g: any) => g.id)
+  const gameIds = filteredGames.map(g => g.id)
   const idList  = gameIds.length ? `(${gameIds.join(',')})` : '()'
 
   // Fetch players + filtered stats in parallel
   const [players, stats] = await Promise.all([
-    fetchJson(
+    fetchRows<RosterRow>(
       `players?team_id=eq.${TEAM_ID}&select=id,first_name,last_name,jersey_number&order=jersey_number.asc`
     ),
     gameIds.length
-      ? fetchJson(
+      ? fetchRows<PppStatRow>(
           `player_game_stats?select=player_id,off_ppp,def_ppp,time_played_seconds&game_id=in.${idList}`
         )
-      : Promise.resolve([]),
+      : Promise.resolve<PppStatRow[]>([]),
   ])
 
   // Aggregate per player across filtered games — exclude players with fewer than 3 games
-  const bubbles: PlayerBubble[] = (Array.isArray(players) ? players : [])
-    .map((p: any) => {
-      const rows = (Array.isArray(stats) ? stats : []).filter(
-        (s: any) => s.player_id === p.id && s.off_ppp != null && s.def_ppp != null
+  const bubbles: PlayerBubble[] = players
+    .map(p => {
+      const rows = stats.filter(
+        s => s.player_id === p.id && s.off_ppp != null && s.def_ppp != null
       )
       if (rows.length < 3) return null
 
-      const avg = (key: string) =>
-        rows.reduce((s: number, r: any) => s + (Number(r[key]) || 0), 0) / rows.length
+      const avg = (key: keyof PppStatRow) =>
+        rows.reduce((s: number, r) => s + (Number(r[key]) || 0), 0) / rows.length
 
       const avgSeconds = rows.reduce(
-        (s: number, r: any) => s + (Number(r.time_played_seconds) || 0), 0
+        (s: number, r) => s + (Number(r.time_played_seconds) || 0), 0
       ) / rows.length
 
       return {
@@ -125,12 +123,12 @@ export default async function PlayerQuadrantsPage({
     .filter(Boolean) as PlayerBubble[]
 
   // Slider + picker data (always full season)
-  const sliderGames = allGames.map((g: any) => ({
+  const sliderGames = allGames.map(g => ({
     id:    g.id,
     label: new Date(g.game_date).toLocaleDateString('en-AU', { day: 'numeric', month: 'short' }),
   }))
 
-  const pickerGames: PickerGame[] = allGames.map((g: any) => ({
+  const pickerGames: PickerGame[] = allGames.map(g => ({
     id:       g.id,
     label:    new Date(g.game_date).toLocaleDateString('en-AU', { day: 'numeric', month: 'short' }),
     opponent: g.opponents?.full_name ?? 'Unknown',

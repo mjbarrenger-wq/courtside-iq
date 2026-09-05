@@ -7,28 +7,28 @@ import { FilterBar } from '../dashboard/FilterBar'
 import type { FilterKey, GameTypeKey } from '../dashboard/filterConfig'
 import { FILTER_CONFIG, GAME_TYPE_CONFIG } from '../dashboard/filterConfig'
 import { PlayerSelector, type PlayerOption } from '../dashboard/PlayerSelector'
+import { fetchRows } from '@/lib/supabaseRest'
+import type { GameRow, GameWithOpponent, PlayerRow, PlayerGameStatsRow, OpponentGameStatsRow } from '@/lib/dbTypes'
 
 export const dynamic = 'force-dynamic'
 export const metadata: Metadata = { title: 'Season Trend — Courtside IQ' }
 
 const TEAM_ID = 'b1000000-0000-0000-0000-000000000001'
-const SB_URL  = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const SB_KEY  = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 
-async function fetchJson(path: string) {
-  const res = await fetch(`${SB_URL}/rest/v1/${path}`, {
-    headers: { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}` },
-    cache: 'no-store',
-  })
-  return res.json()
-}
+// Rows as this page selects them. The stat queries filter on `game_id=in.(...)`,
+// which can't match a null game_id, so that column is narrowed from the nullable
+// dbTypes definition; jersey_number is narrowed because PlayerOption needs a number.
+type GameListRow = Pick<GameWithOpponent, 'id' | 'game_date' | 'result' | 'team_score' | 'opponent_score' | 'game_type' | 'opponents'>
+type RosterRow   = Pick<PlayerRow, 'id' | 'first_name' | 'last_name' | 'jersey_number'> & { jersey_number: number }
+type OppPppRow   = Pick<OpponentGameStatsRow, 'game_id' | 'opp_off_ppp' | 'opp_def_ppp'> & { game_id: string }
+type FilterableGame = Pick<GameRow, 'game_date' | 'result' | 'team_score' | 'opponent_score'>
 
 const BG     = '#f4f5f7'
 const CARD   = '#ffffff'
 const BORDER = '#e2e5eb'
 
 // ── Filter helper (same pattern as dashboard/players/players[id]) ──────────────
-function applyFilter(allGames: any[], filter: FilterKey): any[] {
+function applyFilter<G extends FilterableGame>(allGames: G[], filter: FilterKey): G[] {
   const sorted = [...allGames].sort(
     (a, b) => new Date(a.game_date).getTime() - new Date(b.game_date).getTime()
   )
@@ -69,13 +69,12 @@ export default async function TrendsPage({
   const filter   = (FILTER_CONFIG.some(f => f.key === rawFilter) ? rawFilter : 'all') as FilterKey
   const gameType = (GAME_TYPE_CONFIG.some(t => t.key === rawType) ? rawType : 'all_types') as GameTypeKey
 
-  const [gamesRaw, playersRaw] = await Promise.all([
-    fetchJson(`games?team_id=eq.${TEAM_ID}&select=id,game_date,result,team_score,opponent_score,game_type,opponents(full_name)&order=game_date.asc`),
-    fetchJson(`players?team_id=eq.${TEAM_ID}&select=id,first_name,last_name,jersey_number&order=jersey_number.asc`),
+  const [allGames, players] = await Promise.all([
+    fetchRows<GameListRow>(`games?team_id=eq.${TEAM_ID}&select=id,game_date,result,team_score,opponent_score,game_type,opponents(full_name)&order=game_date.asc`),
+    fetchRows<RosterRow>(`players?team_id=eq.${TEAM_ID}&select=id,first_name,last_name,jersey_number&order=jersey_number.asc`),
   ])
 
-  const allGames = Array.isArray(gamesRaw) ? gamesRaw : []
-  const allPlayers: PlayerOption[] = (Array.isArray(playersRaw) ? playersRaw : []).map((p: any) => ({
+  const allPlayers: PlayerOption[] = players.map(p => ({
     id: p.id, name: `${p.first_name} ${p.last_name}`, jersey: p.jersey_number,
   }))
   const selectedPlayer = playerId ? allPlayers.find(p => p.id === playerId) : undefined
@@ -83,10 +82,10 @@ export default async function TrendsPage({
   // View + Type filters applied on top of the full season
   let filteredGames = applyFilter(allGames, filter)
   if (gameType !== 'all_types') {
-    filteredGames = filteredGames.filter((g: any) => g.game_type === gameType)
+    filteredGames = filteredGames.filter(g => g.game_type === gameType)
   }
 
-  const gameIds = filteredGames.map((g: any) => g.id)
+  const gameIds = filteredGames.map(g => g.id)
   const idList  = gameIds.length ? `(${gameIds.join(',')})` : null
 
   const category: StatKey = STAT_CATEGORIES.some(c => c.key === rawStat) ? (rawStat as StatKey) : 'ppp'
@@ -108,6 +107,10 @@ export default async function TrendsPage({
     ft_made: number; ft_att: number; turnovers: number; ast: number; oreb: number; dreb: number
     stl: number; blk: number
   }
+  // Player mode hands the row straight to computeBoxStats, so its counting
+  // columns are typed as RawBox's numbers rather than dbTypes' nullable ones.
+  type PlayerTrendRow = RawBox & Pick<PlayerGameStatsRow, 'game_id' | 'off_ppp' | 'def_ppp' | 'net_ppp' | 'points'> & { game_id: string }
+  type TeamStatRow    = Pick<PlayerGameStatsRow, 'game_id' | keyof RawBox> & { game_id: string }
   function computeBoxStats(s: RawBox, ppg: number) {
     const fga = s.twopt_att + s.threept_att
     return {
@@ -126,66 +129,60 @@ export default async function TrendsPage({
 
   if (playerId) {
     const rows = idList
-      ? await fetchJson(`player_game_stats?select=game_id,off_ppp,def_ppp,net_ppp,points,twopt_made,twopt_att,threept_made,threept_att,ft_made,ft_att,turnovers,ast,oreb,dreb,stl,blk&player_id=eq.${playerId}&game_id=in.${idList}`)
+      ? await fetchRows<PlayerTrendRow>(`player_game_stats?select=game_id,off_ppp,def_ppp,net_ppp,points,twopt_made,twopt_att,threept_made,threept_att,ft_made,ft_att,turnovers,ast,oreb,dreb,stl,blk&player_id=eq.${playerId}&game_id=in.${idList}`)
       : []
-    if (Array.isArray(rows)) {
-      for (const r of rows) {
-        pppByGame[r.game_id] = {
-          off: r.off_ppp != null ? Number(r.off_ppp) : null,
-          def: r.def_ppp != null ? Number(r.def_ppp) : null,
-          net: r.net_ppp != null ? Number(r.net_ppp) : null,
-        }
-        boxByGame[r.game_id] = computeBoxStats(r, r.points ?? 0)
+    for (const r of rows) {
+      pppByGame[r.game_id] = {
+        off: r.off_ppp != null ? Number(r.off_ppp) : null,
+        def: r.def_ppp != null ? Number(r.def_ppp) : null,
+        net: r.net_ppp != null ? Number(r.net_ppp) : null,
       }
+      boxByGame[r.game_id] = computeBoxStats(r, r.points ?? 0)
     }
   } else if (idList) {
     const [oppStatsRaw, statRows] = await Promise.all([
-      fetchJson(`opponent_game_stats?select=game_id,opp_off_ppp,opp_def_ppp&game_id=in.${idList}`),
-      fetchJson(`player_game_stats?select=game_id,twopt_made,twopt_att,threept_made,threept_att,ft_made,ft_att,turnovers,ast,oreb,dreb,stl,blk&game_id=in.${idList}`),
+      fetchRows<OppPppRow>(`opponent_game_stats?select=game_id,opp_off_ppp,opp_def_ppp&game_id=in.${idList}`),
+      fetchRows<TeamStatRow>(`player_game_stats?select=game_id,twopt_made,twopt_att,threept_made,threept_att,ft_made,ft_att,turnovers,ast,oreb,dreb,stl,blk&game_id=in.${idList}`),
     ])
 
-    if (Array.isArray(oppStatsRaw)) {
-      for (const r of oppStatsRaw) {
-        // opp_def_ppp = how well they defended us = our Off PPP
-        // opp_off_ppp = how well they attacked us = our Def PPP
-        const off = r.opp_def_ppp != null ? Number(r.opp_def_ppp) : null
-        const def = r.opp_off_ppp != null ? Number(r.opp_off_ppp) : null
-        pppByGame[r.game_id] = {
-          off, def,
-          net: off != null && def != null ? Math.round((off - def) * 1000) / 1000 : null,
-        }
+    for (const r of oppStatsRaw) {
+      // opp_def_ppp = how well they defended us = our Off PPP
+      // opp_off_ppp = how well they attacked us = our Def PPP
+      const off = r.opp_def_ppp != null ? Number(r.opp_def_ppp) : null
+      const def = r.opp_off_ppp != null ? Number(r.opp_off_ppp) : null
+      pppByGame[r.game_id] = {
+        off, def,
+        net: off != null && def != null ? Math.round((off - def) * 1000) / 1000 : null,
       }
     }
 
-    if (Array.isArray(statRows)) {
-      const sums: Record<string, RawBox> = {}
-      for (const r of statRows) {
-        if (!sums[r.game_id]) {
-          sums[r.game_id] = { twopt_made:0, twopt_att:0, threept_made:0, threept_att:0,
-            ft_made:0, ft_att:0, turnovers:0, ast:0, oreb:0, dreb:0, stl:0, blk:0 }
-        }
-        const s = sums[r.game_id]
-        s.twopt_made   += r.twopt_made   || 0
-        s.twopt_att    += r.twopt_att    || 0
-        s.threept_made += r.threept_made || 0
-        s.threept_att  += r.threept_att  || 0
-        s.ft_made      += r.ft_made      || 0
-        s.ft_att       += r.ft_att       || 0
-        s.turnovers    += r.turnovers    || 0
-        s.ast          += r.ast          || 0
-        s.oreb         += r.oreb         || 0
-        s.dreb         += r.dreb         || 0
-        s.stl          += r.stl          || 0
-        s.blk          += r.blk          || 0
+    const sums: Record<string, RawBox> = {}
+    for (const r of statRows) {
+      if (!sums[r.game_id]) {
+        sums[r.game_id] = { twopt_made:0, twopt_att:0, threept_made:0, threept_att:0,
+          ft_made:0, ft_att:0, turnovers:0, ast:0, oreb:0, dreb:0, stl:0, blk:0 }
       }
-      for (const gameId of Object.keys(sums)) {
-        const game = filteredGames.find((g: any) => g.id === gameId)
-        boxByGame[gameId] = computeBoxStats(sums[gameId], game?.team_score ?? 0)
-      }
+      const s = sums[r.game_id]
+      s.twopt_made   += r.twopt_made   || 0
+      s.twopt_att    += r.twopt_att    || 0
+      s.threept_made += r.threept_made || 0
+      s.threept_att  += r.threept_att  || 0
+      s.ft_made      += r.ft_made      || 0
+      s.ft_att       += r.ft_att       || 0
+      s.turnovers    += r.turnovers    || 0
+      s.ast          += r.ast          || 0
+      s.oreb         += r.oreb         || 0
+      s.dreb         += r.dreb         || 0
+      s.stl          += r.stl          || 0
+      s.blk          += r.blk          || 0
+    }
+    for (const gameId of Object.keys(sums)) {
+      const game = filteredGames.find(g => g.id === gameId)
+      boxByGame[gameId] = computeBoxStats(sums[gameId], game?.team_score ?? 0)
     }
   }
 
-  const gamePoints: GamePoint[] = filteredGames.map((g: any, i: number) => {
+  const gamePoints: GamePoint[] = filteredGames.map((g, i) => {
     const ppp = pppByGame[g.id]
     const box = boxByGame[g.id]
     return {
@@ -212,8 +209,8 @@ export default async function TrendsPage({
     }
   })
 
-  const wins   = filteredGames.filter((g: any) => g.result === 'W').length
-  const losses = filteredGames.filter((g: any) => g.result === 'L').length
+  const wins   = filteredGames.filter(g => g.result === 'W').length
+  const losses = filteredGames.filter(g => g.result === 'L').length
 
   // First half vs second half split — generalised to whichever stat is selected
   const withData = category === 'ppp'

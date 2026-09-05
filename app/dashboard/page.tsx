@@ -1,5 +1,8 @@
 import { Suspense } from 'react'
+import Link from 'next/link'
 import { getSeasonAggregates } from '@/lib/getSeasonAggregates'
+import { fetchRows } from '@/lib/supabaseRest'
+import type { GameRow, GameWithOpponent, PlayerRow, PlayerGameStatsRow, OpponentGameStatsRow, DrillRow, TeamRow } from '@/lib/dbTypes'
 import { getBenchmarks } from '@/lib/getBenchmarks'
 import { computeDriverTree, computePlayerDriverTree, PillarScore, MetricScore, DriverTreeOutput, PlayerStats } from '@/lib/driverTree'
 import { COACHING_WRITING_STANDARDS } from '@/lib/writingStandards'
@@ -16,14 +19,6 @@ export const dynamic = 'force-dynamic'
 const TEAM_ID = 'b1000000-0000-0000-0000-000000000001'
 const SB_URL  = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const SB_KEY  = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-
-async function fetchJson(path: string) {
-  const res = await fetch(`${SB_URL}/rest/v1/${path}`, {
-    headers: { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}` },
-    cache: 'no-store',
-  })
-  return res.json()
-}
 
 // Coaching translation for each pillar — used in Key Takeaways
 const PILLAR_TRANSLATION: Record<string, { strength: string; weakness: string }> = {
@@ -88,7 +83,7 @@ const PILLAR_KEY: Record<string, string> = {
 // Returns drills matched to the current view's weakest pillars
 function getRelevantDashboardDrills(
   leakageAreas: { pillar: string; delta: number; pp100?: number | null }[],
-  allDrills: DashboardDrill[],
+  allDrills: DrillRow[],
   limit = 4,
 ): DashboardDrill[] {
   const weakPillars = leakageAreas
@@ -104,7 +99,7 @@ function getRelevantDashboardDrills(
   for (const pillar of weakPillars) {
     const matches = allDrills
       .filter(d => d.pillar === pillar)
-      .sort((a, b) => (a as any).difficulty_order - (b as any).difficulty_order)
+      .sort((a, b) => a.difficulty_order - b.difficulty_order)
       .slice(0, 2)
     result.push(...matches)
     if (result.length >= limit) break
@@ -445,8 +440,32 @@ function BranchConnector() {
   )
 }
 
+// ── Row types ─────────────────────────────────────────────────────────────────
+// Rows as this page selects them. The per-game stat queries filter on
+// `game_id=in.(...)`, which can't match a null game_id, so that column is narrowed
+// from the nullable dbTypes definition; jersey_number is narrowed because the
+// selector and player card need a number.
+type GameListRow    = Pick<GameWithOpponent, 'id' | 'game_date' | 'result' | 'team_score' | 'opponent_score' | 'game_type' | 'opponents'>
+type RosterRow      = Pick<PlayerRow, 'id' | 'first_name' | 'last_name' | 'jersey_number'> & { jersey_number: number }
+type TeamBracketRow = Pick<TeamRow, 'age_group' | 'gender' | 'division'>
+type OppGameRow     = Pick<OpponentGameStatsRow,
+  'game_id' | 'opp_off_ppp' | 'opp_def_ppp' | 'opp_twopt_made' | 'opp_twopt_att' | 'opp_threept_made' | 'opp_threept_att'
+  | 'opp_turnovers' | 'opp_oreb' | 'opp_dreb' | 'opp_possessions'> & { game_id: string }
+type PlayerGameRow  = Pick<PlayerGameStatsRow,
+  'player_id' | 'game_id' | 'twopt_made' | 'twopt_att' | 'threept_made' | 'threept_att' | 'ft_made' | 'ft_att'
+  | 'turnovers' | 'ast' | 'oreb' | 'dreb' | 'stl' | 'blk' | 'def_fouls' | 'def_ppp' | 'plus_minus'> & { game_id: string }
+type PlayerFullRow  = Pick<PlayerGameStatsRow,
+  'points' | 'twopt_made' | 'twopt_att' | 'threept_made' | 'threept_att' | 'ft_made' | 'ft_att' | 'turnovers' | 'ast'
+  | 'oreb' | 'dreb' | 'stl' | 'blk' | 'def_fouls' | 'off_fouls' | 'plus_minus' | 'vps' | 'off_ppp' | 'def_ppp' | 'net_ppp'>
+/** Per-game team totals summed from player_game_stats rows (the playerByGame values). */
+type TeamGameBox = {
+  twopt_made: number; twopt_att: number; threept_made: number; threept_att: number
+  ft_made: number; ft_att: number; turnovers: number; oreb: number; dreb: number; def_fouls: number
+}
+type FilterableGame = Pick<GameRow, 'game_date' | 'result' | 'team_score' | 'opponent_score'>
+
 // ── Filter helpers ────────────────────────────────────────────────────────────
-function applyFilter(allGames: any[], filter: FilterKey): any[] {
+function applyFilter<G extends FilterableGame>(allGames: G[], filter: FilterKey): G[] {
   const sorted = [...allGames].sort(
     (a, b) => new Date(b.game_date).getTime() - new Date(a.game_date).getTime()
   )
@@ -463,7 +482,7 @@ function applyFilter(allGames: any[], filter: FilterKey): any[] {
   }
 }
 
-function contextLabel(games: any[], filter: FilterKey, isCustom: boolean): string {
+function contextLabel(games: FilterableGame[], filter: FilterKey, isCustom: boolean): string {
   if (!games.length) return 'No games'
   const sorted = [...games].sort(
     (a, b) => new Date(a.game_date).getTime() - new Date(b.game_date).getTime()
@@ -479,8 +498,8 @@ function contextLabel(games: any[], filter: FilterKey, isCustom: boolean): strin
 // ── Per-game sparkline computation ───────────────────────────────────────────
 function computePillarSparklines(
   sortedGameIds: string[],
-  playerByGame: Record<string, any>,
-  oppByGame: Record<string, any>,
+  playerByGame: Record<string, TeamGameBox>,
+  oppByGame: Record<string, OppGameRow>,
 ) {
   const sparks = {
     shotEfficiency:      [] as number[],
@@ -530,13 +549,12 @@ export default async function DashboardPage({
   const gameType   = (GAME_TYPE_CONFIG.some(t => t.key === rawType) ? rawType : 'all_types') as GameTypeKey
 
   // All games (for slider + filtering)
-  const allGamesRaw = await fetchJson(
+  const allGames = await fetchRows<GameListRow>(
     `games?team_id=eq.${TEAM_ID}&select=id,game_date,result,team_score,opponent_score,game_type,opponents(full_name)&order=game_date.asc`
   )
-  const allGames = Array.isArray(allGamesRaw) ? allGamesRaw : []
 
   // Apply filter or custom game IDs
-  let filteredGames: any[]
+  let filteredGames: GameListRow[]
   if (isCustom) {
     const specificIds = gamesParam!.split(',').filter(Boolean)
     filteredGames = allGames.filter(g => specificIds.includes(g.id))
@@ -547,7 +565,7 @@ export default async function DashboardPage({
       filteredGames = filteredGames.filter(g => g.game_type === gameType)
     }
   }
-  const gameIds = filteredGames.map((g: any) => g.id)
+  const gameIds = filteredGames.map(g => g.id)
   const idList  = `(${gameIds.join(',')})`
 
   // A Type filter (or a custom range) matched zero games — show a clean empty
@@ -586,7 +604,7 @@ export default async function DashboardPage({
               {isCustom
                 ? 'No games in the selected custom range.'
                 : <>No games are currently tagged as <strong>{typeLabel}</strong>. Assign types on the{' '}
-                    <a href="/games" style={{ color: '#307b92', fontWeight: 600 }}>Game Config</a> page, or switch the Type filter above.</>}
+                    <Link href="/games" style={{ color: '#307b92', fontWeight: 600 }}>Game Config</Link> page, or switch the Type filter above.</>}
             </div>
           </div>
         </div>
@@ -595,87 +613,81 @@ export default async function DashboardPage({
   }
 
   // Fetch players list (always needed for selector)
-  const playersRaw = await fetchJson(`players?team_id=eq.${TEAM_ID}&select=id,first_name,last_name,jersey_number&order=jersey_number.asc`)
-  const allPlayers = Array.isArray(playersRaw)
-    ? playersRaw.map((p: any) => ({ id: p.id, name: `${p.first_name} ${p.last_name}`, jersey: p.jersey_number }))
-    : []
+  const playersRaw = await fetchRows<RosterRow>(`players?team_id=eq.${TEAM_ID}&select=id,first_name,last_name,jersey_number&order=jersey_number.asc`)
+  const allPlayers = playersRaw.map(p => ({ id: p.id, name: `${p.first_name} ${p.last_name}`, jersey: p.jersey_number }))
 
   // Fetch aggregates + per-game data + drills + team bracket in parallel
-  const [aggregates, perGameOpp, perGamePlayers, drillsRaw, teamRows] = await Promise.all([
+  const [aggregates, perGameOpp, perGamePlayers, allDrills, teamRows] = await Promise.all([
     getSeasonAggregates(TEAM_ID, filter === 'all' && gameType === 'all_types' && !isCustom ? undefined : gameIds),
-    fetchJson(
+    fetchRows<OppGameRow>(
       `opponent_game_stats?select=game_id,opp_off_ppp,opp_def_ppp,opp_twopt_made,opp_twopt_att,opp_threept_made,opp_threept_att,opp_turnovers,opp_oreb,opp_dreb,opp_possessions&game_id=in.${idList}&order=game_id.asc`
     ),
-    fetchJson(
+    fetchRows<PlayerGameRow>(
       `player_game_stats?select=player_id,game_id,twopt_made,twopt_att,threept_made,threept_att,ft_made,ft_att,turnovers,ast,oreb,dreb,stl,blk,def_fouls,def_ppp,plus_minus&game_id=in.${idList}`
     ),
-    fetchJson(`drills?select=*`),
-    fetchJson(`teams?id=eq.${TEAM_ID}&select=age_group,gender,division`),
+    fetchRows<DrillRow>(`drills?select=*`),
+    fetchRows<TeamBracketRow>(`teams?id=eq.${TEAM_ID}&select=age_group,gender,division`),
   ])
 
   // Field baselines for this team's bracket (Tier 1 — "level vs field" reading)
-  const bracket = Array.isArray(teamRows) ? teamRows[0] : undefined
+  const bracket = teamRows[0]
   const benchmarks = bracket ? await getBenchmarks(bracket) : {}
 
   // Does this team have real opponent data?
-  const hasOppData = Array.isArray(perGameOpp) && perGameOpp.length > 0
+  const hasOppData = perGameOpp.length > 0
 
   // Build per-game lookup maps
-  const oppByGame: Record<string, any>    = {}
-  if (Array.isArray(perGameOpp)) {
-    for (const r of perGameOpp) oppByGame[r.game_id] = r
-  }
+  const oppByGame: Record<string, OppGameRow> = {}
+  for (const r of perGameOpp) oppByGame[r.game_id] = r
 
-  const playerByGame: Record<string, any> = {}
+  const playerByGame: Record<string, TeamGameBox> = {}
   const perPlayerAgg: Record<string, {
     games: number; twopt_made: number; twopt_att: number; threept_made: number; threept_att: number
     ft_made: number; ft_att: number; turnovers: number; ast: number; oreb: number; dreb: number
     stl: number; blk: number; def_fouls: number; def_ppp_sum: number; plus_minus: number
   }> = {}
 
-  if (Array.isArray(perGamePlayers)) {
-    for (const r of perGamePlayers) {
-      // per-game team aggregates
-      if (!playerByGame[r.game_id]) {
-        playerByGame[r.game_id] = { twopt_made:0, twopt_att:0, threept_made:0, threept_att:0,
-          ft_made:0, ft_att:0, turnovers:0, oreb:0, dreb:0, def_fouls:0 }
-      }
-      const g = playerByGame[r.game_id]
-      g.twopt_made   += r.twopt_made   || 0
-      g.twopt_att    += r.twopt_att    || 0
-      g.threept_made += r.threept_made || 0
-      g.threept_att  += r.threept_att  || 0
-      g.ft_made      += r.ft_made      || 0
-      g.ft_att       += r.ft_att       || 0
-      g.turnovers    += r.turnovers    || 0
-      g.oreb         += r.oreb         || 0
-      g.dreb         += r.dreb         || 0
-      g.def_fouls    += r.def_fouls    || 0
+  for (const r of perGamePlayers) {
+    // per-game team aggregates
+    if (!playerByGame[r.game_id]) {
+      playerByGame[r.game_id] = { twopt_made:0, twopt_att:0, threept_made:0, threept_att:0,
+        ft_made:0, ft_att:0, turnovers:0, oreb:0, dreb:0, def_fouls:0 }
+    }
+    const g = playerByGame[r.game_id]
+    g.twopt_made   += r.twopt_made   || 0
+    g.twopt_att    += r.twopt_att    || 0
+    g.threept_made += r.threept_made || 0
+    g.threept_att  += r.threept_att  || 0
+    g.ft_made      += r.ft_made      || 0
+    g.ft_att       += r.ft_att       || 0
+    g.turnovers    += r.turnovers    || 0
+    g.oreb         += r.oreb         || 0
+    g.dreb         += r.dreb         || 0
+    g.def_fouls    += r.def_fouls    || 0
 
-      // per-player aggregates for ranking
-      if (r.player_id) {
-        if (!perPlayerAgg[r.player_id]) {
-          perPlayerAgg[r.player_id] = { games:0, twopt_made:0, twopt_att:0, threept_made:0, threept_att:0,
-            ft_made:0, ft_att:0, turnovers:0, ast:0, oreb:0, dreb:0, stl:0, blk:0, def_fouls:0, def_ppp_sum:0, plus_minus:0 }
-        }
-        const p = perPlayerAgg[r.player_id]
-        p.games++
-        p.twopt_made   += r.twopt_made   || 0
-        p.twopt_att    += r.twopt_att    || 0
-        p.threept_made += r.threept_made || 0
-        p.threept_att  += r.threept_att  || 0
-        p.ft_made      += r.ft_made      || 0
-        p.ft_att       += r.ft_att       || 0
-        p.turnovers    += r.turnovers    || 0
-        p.ast          += r.ast          || 0
-        p.oreb         += r.oreb         || 0
-        p.dreb         += r.dreb         || 0
-        p.stl          += r.stl          || 0
-        p.blk          += r.blk          || 0
-        p.def_fouls    += r.def_fouls    || 0
-        p.def_ppp_sum  += r.def_ppp      || 0
-        p.plus_minus   += r.plus_minus   || 0
+    // per-player aggregates for ranking
+    if (r.player_id) {
+      if (!perPlayerAgg[r.player_id]) {
+        perPlayerAgg[r.player_id] = { games:0, twopt_made:0, twopt_att:0, threept_made:0, threept_att:0,
+          ft_made:0, ft_att:0, turnovers:0, ast:0, oreb:0, dreb:0, stl:0, blk:0, def_fouls:0, def_ppp_sum:0, plus_minus:0 }
       }
+      const p = perPlayerAgg[r.player_id]
+      p.games++
+      p.twopt_made   += r.twopt_made   || 0
+      p.twopt_att    += r.twopt_att    || 0
+      p.threept_made += r.threept_made || 0
+      p.threept_att  += r.threept_att  || 0
+      p.ft_made      += r.ft_made      || 0
+      p.ft_att       += r.ft_att       || 0
+      p.turnovers    += r.turnovers    || 0
+      p.ast          += r.ast          || 0
+      p.oreb         += r.oreb         || 0
+      p.dreb         += r.dreb         || 0
+      p.stl          += r.stl          || 0
+      p.blk          += r.blk          || 0
+      p.def_fouls    += r.def_fouls    || 0
+      p.def_ppp_sum  += r.def_ppp      || 0
+      p.plus_minus   += r.plus_minus   || 0
     }
   }
 
@@ -715,21 +727,21 @@ export default async function DashboardPage({
   let pillarRanks: { rank: number; total: number; tie: boolean }[] | null = null
   let statRankSummary = ''
   const numGames = Math.max(Object.keys(playerByGame).length, 1)
-  const numActivePlayers = Array.isArray(perGamePlayers) && perGamePlayers.length > 0
+  const numActivePlayers = perGamePlayers.length > 0
     ? perGamePlayers.length / numGames
     : 10
 
   if (playerId) {
-    selectedPlayer = allPlayers.find((p: any) => p.id === playerId) ?? null
+    selectedPlayer = allPlayers.find(p => p.id === playerId) ?? null
 
     // Fetch full player_game_stats for selected player (with all fields needed)
-    const playerFullRaw = await fetchJson(
+    const playerFullRaw = await fetchRows<PlayerFullRow>(
       `player_game_stats?player_id=eq.${playerId}&game_id=in.${idList}&select=points,twopt_made,twopt_att,threept_made,threept_att,ft_made,ft_att,turnovers,ast,oreb,dreb,stl,blk,def_fouls,off_fouls,plus_minus,vps,off_ppp,def_ppp,net_ppp`
     )
 
-    if (Array.isArray(playerFullRaw) && playerFullRaw.length > 0) {
-      const sum = (key: string) => playerFullRaw.reduce((s: number, r: any) => s + (Number(r[key]) || 0), 0)
-      const avg = (key: string) => playerFullRaw.length > 0 ? sum(key) / playerFullRaw.length : 0
+    if (playerFullRaw.length > 0) {
+      const sum = (key: keyof PlayerFullRow) => playerFullRaw.reduce((s: number, r) => s + (Number(r[key]) || 0), 0)
+      const avg = (key: keyof PlayerFullRow) => playerFullRaw.length > 0 ? sum(key) / playerFullRaw.length : 0
 
       const ps: PlayerStats = {
         games:        playerFullRaw.length,
@@ -828,7 +840,6 @@ export default async function DashboardPage({
     : await getInsightsFromDB(allPillarDrivers, SB_URL, SB_KEY)
 
   // Drills matched to current leakage areas (team or player)
-  const allDrills: DashboardDrill[] = Array.isArray(drillsRaw) ? drillsRaw : []
   const relevantDrills = getRelevantDashboardDrills(tree.leakage_areas, allDrills)
 
   // Sorted game IDs for sparklines (chronological)
@@ -847,12 +858,12 @@ export default async function DashboardPage({
   const pace   = aggregates.possessions / aggregates.games
 
   // Slider + picker game lists (always full season, sorted oldest→newest)
-  const sliderGames = allGames.map((g: any) => ({
+  const sliderGames = allGames.map(g => ({
     id:    g.id,
     label: new Date(g.game_date).toLocaleDateString('en-AU', { day: 'numeric', month: 'short' }),
   }))
 
-  const pickerGames: PickerGame[] = allGames.map((g: any) => ({
+  const pickerGames: PickerGame[] = allGames.map(g => ({
     id:       g.id,
     label:    new Date(g.game_date).toLocaleDateString('en-AU', { day: 'numeric', month: 'short' }),
     opponent: g.opponents?.full_name ?? 'Unknown',
