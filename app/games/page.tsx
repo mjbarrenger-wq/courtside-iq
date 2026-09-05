@@ -1,36 +1,26 @@
+import Link from 'next/link'
 import GamesSetupTable, { type GameRow, type OpponentOption } from './GamesSetupTable'
 import type { GameTypeKey } from '../dashboard/filterConfig'
+import { fetchRows } from '@/lib/supabaseRest'
+import type { GameRow as DbGameRow } from '@/lib/dbTypes'
 
 export const dynamic = 'force-dynamic'
-
-const SB_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const SB_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 
 const BG     = '#f4f5f7'
 const BORDER = '#e2e5eb'
 const HEADER = '#ffffff'
 const MUTED  = '#6b7280'
 
-async function fetchJson(path: string) {
-  const res = await fetch(`${SB_URL}/rest/v1/${path}`, {
-    headers: { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}` },
-    cache: 'no-store',
-  })
-  return res.json()
-}
-
 export default async function GamesSetupPage() {
-  const [gamesRaw, opponentsRaw] = await Promise.all([
-    fetchJson('games?select=*&order=game_date.asc'),
-    fetchJson('opponents?select=id,full_name&order=full_name.asc'),
+  const [games, opponents] = await Promise.all([
+    fetchRows<DbGameRow>('games?select=*&order=game_date.asc'),
+    fetchRows<OpponentOption>('opponents?select=id,full_name&order=full_name.asc'),
   ])
 
-  const opponents: OpponentOption[] = Array.isArray(opponentsRaw) ? opponentsRaw : []
-
-  const rows: GameRow[] = (Array.isArray(gamesRaw) ? gamesRaw : []).map((g: any) => ({
+  const rows: GameRow[] = games.map(g => ({
     id:              g.id,
     game_date:       g.game_date,
-    opponent_id:     g.opponent_id,
+    opponent_id:     g.opponent_id ?? '',
     home_away:       g.home_away ?? null,
     round:           g.round ?? null,
     venue:           g.venue ?? null,
@@ -53,16 +43,16 @@ export default async function GamesSetupPage() {
       <div className="px-4 md:px-8 py-5" style={{ background: HEADER, borderBottom: `1px solid ${BORDER}` }}>
         <div style={{ maxWidth: 1160, margin: '0 auto' }}>
           <div style={{ fontSize: 11, color: MUTED, marginBottom: 6 }}>
-            <a href="/" style={{ color: MUTED, textDecoration: 'none' }}>Overview</a>
+            <Link href="/" style={{ color: MUTED, textDecoration: 'none' }}>Overview</Link>
             <span style={{ margin: '0 6px' }}>›</span>
             <span style={{ color: '#307b92' }}>Game Config</span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
             <div style={{ fontSize: 22, fontWeight: 800, color: '#1a1f2e' }}>Game Config</div>
-            <a href="/games/new" style={{
+            <Link href="/games/new" style={{
               fontSize: 12, fontWeight: 700, color: '#ffffff', background: '#307b92',
               border: 'none', borderRadius: 8, padding: '8px 16px', textDecoration: 'none', whiteSpace: 'nowrap',
-            }}>+ New Game</a>
+            }}>+ New Game</Link>
           </div>
           <div style={{ fontSize: 13, color: MUTED, marginTop: 4 }}>
             Configure game type (regular season, finals, tournament, grading, practice) and details for every game.

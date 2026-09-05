@@ -1,14 +1,17 @@
 import type { Metadata } from 'next'
 import { getSeasonAggregates } from '@/lib/getSeasonAggregates'
 import { computeDriverTree } from '@/lib/driverTree'
+import { fetchRows } from '@/lib/supabaseRest'
+import type { DrillRow } from '@/lib/dbTypes'
 import PracticeBuilder from './PracticeBuilder'
 
 export const dynamic = 'force-dynamic'
 export const metadata: Metadata = { title: 'Practice Builder — Courtside IQ' }
 
 const TEAM_ID = 'b1000000-0000-0000-0000-000000000001'
-const SB_URL  = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const SB_KEY  = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+
+type PracticeDrill = Pick<DrillRow,
+  'id' | 'pillar' | 'name' | 'difficulty' | 'duration_mins' | 'setup' | 'execution' | 'coaching_cues'>
 
 // Map pillar display names → drills table pillar keys
 const PILLAR_KEY_MAP: Record<string, string> = {
@@ -22,18 +25,10 @@ const PILLAR_KEY_MAP: Record<string, string> = {
   'Discipline':          'discipline',
 }
 
-async function fetchJson(path: string) {
-  const res = await fetch(`${SB_URL}/rest/v1/${path}`, {
-    headers: { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}` },
-    cache: 'no-store',
-  })
-  return res.json()
-}
-
 export default async function PracticePage() {
-  const [aggregates, drillsRaw] = await Promise.all([
+  const [aggregates, drills] = await Promise.all([
     getSeasonAggregates(TEAM_ID),
-    fetchJson(
+    fetchRows<PracticeDrill>(
       `drills?difficulty=in.(foundation,developing)` +
       `&select=id,pillar,name,difficulty,duration_mins,setup,execution,coaching_cues` +
       `&order=pillar.asc,difficulty_order.asc`
@@ -43,16 +38,14 @@ export default async function PracticePage() {
   const tree = computeDriverTree(aggregates)
 
   // Build drills map: pillar_key → top 3 drills
-  const drillsByKey: Record<string, any[]> = {}
-  if (Array.isArray(drillsRaw)) {
-    for (const d of drillsRaw) {
-      if (!drillsByKey[d.pillar]) drillsByKey[d.pillar] = []
-      if (drillsByKey[d.pillar].length < 3) drillsByKey[d.pillar].push(d)
-    }
+  const drillsByKey: Record<string, PracticeDrill[]> = {}
+  for (const d of drills) {
+    if (!drillsByKey[d.pillar]) drillsByKey[d.pillar] = []
+    if (drillsByKey[d.pillar].length < 3) drillsByKey[d.pillar].push(d)
   }
 
   // Re-key by display name so PracticeBuilder and actions.ts can look up by pillar name
-  const drillsByPillar: Record<string, any[]> = {}
+  const drillsByPillar: Record<string, PracticeDrill[]> = {}
   for (const [displayName, key] of Object.entries(PILLAR_KEY_MAP)) {
     drillsByPillar[displayName] = drillsByKey[key] ?? []
   }

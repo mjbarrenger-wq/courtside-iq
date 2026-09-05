@@ -1,19 +1,17 @@
 import type { Metadata } from 'next'
+import { fetchRows } from '@/lib/supabaseRest'
+import type { PlayerRow, PlayerGameStatsRow } from '@/lib/dbTypes'
 
 export const dynamic = 'force-dynamic'
 export const metadata: Metadata = { title: 'Player Profiles — Courtside IQ' }
 
 const TEAM_ID = 'b1000000-0000-0000-0000-000000000001'
-const SB_URL  = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const SB_KEY  = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 
-async function fetchJson(path: string) {
-  const res = await fetch(`${SB_URL}/rest/v1/${path}`, {
-    headers: { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}` },
-    cache: 'no-store',
-  })
-  return res.json()
-}
+type ProfilePlayer = Pick<PlayerRow,
+  'id' | 'first_name' | 'last_name' | 'jersey_number' | 'primary_positions' | 'secondary_positions'>
+type StatRow = Pick<PlayerGameStatsRow,
+  'player_id' | 'points' | 'twopt_made' | 'twopt_att' | 'threept_made' | 'threept_att' |
+  'ft_made' | 'ft_att' | 'oreb' | 'dreb' | 'ast' | 'stl' | 'blk' | 'turnovers'>
 
 const POSITION_COLOR: Record<string, string> = {
   PG: '#307b92', SG: '#307b92',
@@ -22,19 +20,16 @@ const POSITION_COLOR: Record<string, string> = {
 }
 
 export default async function ProfilesPage() {
-  const [playersRaw, statsRaw] = await Promise.all([
-    fetchJson(`players?team_id=eq.${TEAM_ID}&select=id,first_name,last_name,jersey_number,primary_positions,secondary_positions&order=jersey_number.asc`),
-    fetchJson(`player_game_stats?select=player_id,points,twopt_made,twopt_att,threept_made,threept_att,ft_made,ft_att,oreb,dreb,ast,stl,blk,turnovers`),
+  const [players, stats] = await Promise.all([
+    fetchRows<ProfilePlayer>(`players?team_id=eq.${TEAM_ID}&select=id,first_name,last_name,jersey_number,primary_positions,secondary_positions&order=jersey_number.asc`),
+    fetchRows<StatRow>(`player_game_stats?select=player_id,points,twopt_made,twopt_att,threept_made,threept_att,ft_made,ft_att,oreb,dreb,ast,stl,blk,turnovers`),
   ])
 
-  const players = Array.isArray(playersRaw) ? playersRaw : []
-  const stats   = Array.isArray(statsRaw)   ? statsRaw   : []
-
-  const roster = players.map((p: any) => {
-    const rows  = stats.filter((r: any) => r.player_id === p.id)
+  const roster = players.map(p => {
+    const rows  = stats.filter(r => r.player_id === p.id)
     const gp    = rows.length
-    const sum   = (k: string) => rows.reduce((s: number, r: any) => s + (Number(r[k]) || 0), 0)
-    const avg   = (k: string) => gp > 0 ? Math.round((sum(k) / gp) * 10) / 10 : 0
+    const sum   = (k: keyof StatRow) => rows.reduce((s, r) => s + (Number(r[k]) || 0), 0)
+    const avg   = (k: keyof StatRow) => gp > 0 ? Math.round((sum(k) / gp) * 10) / 10 : 0
     const fgAtt = sum('twopt_att') + sum('threept_att')
     const fgMade= sum('twopt_made') + sum('threept_made')
     const pts   = sum('points')

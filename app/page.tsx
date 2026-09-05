@@ -1,17 +1,13 @@
+import Link from 'next/link'
 import PlayerStatsTable from './PlayerStatsTable'
+import { fetchRows } from '@/lib/supabaseRest'
+import type { GameWithOpponent, PlayerRow, PlayerGameStatsRow, DrillRow } from '@/lib/dbTypes'
 
 export const dynamic = 'force-dynamic'
 
-const SB_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const SB_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-
-async function fetchJson(path: string) {
-  const res = await fetch(`${SB_URL}/rest/v1/${path}`, {
-    headers: { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}` },
-    cache: 'no-store',
-  })
-  return res.json()
-}
+type StatRow = Pick<PlayerGameStatsRow,
+  'player_id' | 'points' | 'oreb' | 'dreb' | 'ast' | 'stl' | 'blk' | 'turnovers' |
+  'ft_made' | 'ft_att' | 'twopt_made' | 'twopt_att' | 'threept_made' | 'threept_att'>
 
 const BG     = '#f4f5f7'
 const BORDER = '#e2e5eb'
@@ -19,32 +15,32 @@ const CARD   = '#ffffff'
 const HEADER = '#ffffff'
 
 export default async function Home() {
-  const [gamesRaw, stats, players, drillsRaw] = await Promise.all([
-    fetchJson('games?select=*,opponents(full_name)&order=game_date.asc'),
-    fetchJson('player_game_stats?select=player_id,points,oreb,dreb,ast,stl,blk,turnovers,ft_made,ft_att,twopt_made,twopt_att,threept_made,threept_att'),
-    fetchJson('players?select=*&order=jersey_number.asc'),
-    fetchJson('drills?select=id'),
+  const [gamesRaw, stats, players, drills] = await Promise.all([
+    fetchRows<GameWithOpponent>('games?select=*,opponents(full_name)&order=game_date.asc'),
+    fetchRows<StatRow>('player_game_stats?select=player_id,points,oreb,dreb,ast,stl,blk,turnovers,ft_made,ft_att,twopt_made,twopt_att,threept_made,threept_att'),
+    fetchRows<PlayerRow>('players?select=*&order=jersey_number.asc'),
+    fetchRows<Pick<DrillRow, 'id'>>('drills?select=id'),
   ])
-  const drillCount = Array.isArray(drillsRaw) ? drillsRaw.length : 0
+  const drillCount = drills.length
 
-  const games = (Array.isArray(gamesRaw) ? gamesRaw : []).map((g: any) => ({
+  const games = gamesRaw.map(g => ({
     ...g,
     opponent_name: g.opponents?.full_name ?? 'Unknown',
   }))
 
-  const wins      = games.filter((g: any) => g.result === 'W').length
-  const losses    = games.filter((g: any) => g.result === 'L').length
-  const totalFor  = games.reduce((s: number, g: any) => s + g.team_score, 0)
-  const totalOpp  = games.reduce((s: number, g: any) => s + g.opponent_score, 0)
+  const wins      = games.filter(g => g.result === 'W').length
+  const losses    = games.filter(g => g.result === 'L').length
+  const totalFor  = games.reduce((s, g) => s + (g.team_score ?? 0), 0)
+  const totalOpp  = games.reduce((s, g) => s + (g.opponent_score ?? 0), 0)
   const pointDiff = totalFor - totalOpp
   const ppg       = games.length ? (totalFor / games.length).toFixed(1) : '—'
   const oppPpg    = games.length ? (totalOpp / games.length).toFixed(1) : '—'
 
-  const playerTotals = (Array.isArray(players) ? players : []).map((p: any) => {
-    const ps  = (Array.isArray(stats) ? stats : []).filter((s: any) => s.player_id === p.id)
-    const sum = (key: string) => ps.reduce((s: number, r: any) => s + (Number(r[key]) || 0), 0)
+  const playerTotals = players.map(p => {
+    const ps  = stats.filter(s => s.player_id === p.id)
+    const sum = (key: keyof StatRow) => ps.reduce((s, r) => s + (Number(r[key]) || 0), 0)
     const gp  = ps.length
-    const avg = (key: string) => gp > 0 ? Math.round((sum(key) / gp) * 10) / 10 : 0
+    const avg = (key: keyof StatRow) => gp > 0 ? Math.round((sum(key) / gp) * 10) / 10 : 0
     const ftMade    = sum('ft_made'),    ftAtt    = sum('ft_att')
     const twoptMade = sum('twopt_made'), twoptAtt = sum('twopt_att')
     const thryptMade= sum('threept_made'), thryptAtt = sum('threept_att')
@@ -56,7 +52,7 @@ export default async function Home() {
     return {
       id:     p.id,
       name:   `${p.first_name} ${p.last_name}`,
-      jersey: p.jersey_number,
+      jersey: p.jersey_number ?? 0,
       gp,
       ppg:    avg('points'),
       rpg:    Math.round(((sum('oreb') + sum('dreb')) / Math.max(gp, 1)) * 10) / 10,
@@ -132,7 +128,7 @@ export default async function Home() {
                 Value Driver Tree
               </div>
               <div style={{ fontSize: 13, color: '#6b7280', lineHeight: 1.7, flex: 1 }}>
-                Net PPP decomposition across 8 performance pillars. Understand what's driving wins and
+                Net PPP decomposition across 8 performance pillars. Understand what&apos;s driving wins and
                 losses — shot efficiency, possession control, defensive pressure, and more.
               </div>
               <div style={{ marginTop: 18, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
@@ -148,7 +144,7 @@ export default async function Home() {
           </a>
 
           {/* Quadrants */}
-          <a href="/players" style={{ textDecoration: 'none', display: 'flex' }}>
+          <Link href="/players" style={{ textDecoration: 'none', display: 'flex' }}>
             <div style={{
               background: CARD, border: `1px solid ${BORDER}`,
               borderTop: '3px solid #307b92',
@@ -179,7 +175,7 @@ export default async function Home() {
                 ))}
               </div>
             </div>
-          </a>
+          </Link>
 
           {/* CIQ Leaderboard */}
           <a href="/ciq" style={{ textDecoration: 'none', display: 'flex' }}>
@@ -337,7 +333,7 @@ export default async function Home() {
                 Practice Builder
               </div>
               <div style={{ fontSize: 13, color: '#6b7280', lineHeight: 1.7, flex: 1 }}>
-                AI-generated 60 or 90-minute session plans built around your team's current weakest
+                AI-generated 60 or 90-minute session plans built around your team&apos;s current weakest
                 pillars, with structured blocks and coaching cues.
               </div>
               <div style={{ marginTop: 18, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
@@ -371,7 +367,7 @@ export default async function Home() {
                 Drills Library
               </div>
               <div style={{ fontSize: 13, color: '#6b7280', lineHeight: 1.7, flex: 1 }}>
-                {drillCount} drills across all 8 driver pillars — ranked by your team's current performance
+                {drillCount} drills across all 8 driver pillars — ranked by your team&apos;s current performance
                 data. Worst-performing areas surface first.
               </div>
               <div style={{ marginTop: 18, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
@@ -421,7 +417,7 @@ export default async function Home() {
           </a>
 
           {/* Game Config */}
-          <a href="/games" style={{ textDecoration: 'none', display: 'flex' }}>
+          <Link href="/games" style={{ textDecoration: 'none', display: 'flex' }}>
             <div style={{
               background: CARD, border: `1px solid ${BORDER}`,
               borderTop: '3px solid #8b5cf6',
@@ -452,7 +448,7 @@ export default async function Home() {
                 ))}
               </div>
             </div>
-          </a>
+          </Link>
 
           {/* Glossary */}
           <a href="/glossary" style={{ textDecoration: 'none', display: 'flex' }}>
@@ -518,7 +514,7 @@ export default async function Home() {
             <span style={{ fontSize: 13, fontWeight: 700, color: '#307b92' }}>RECENT RESULTS</span>
           </div>
           <div style={{ padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: 6 }}>
-            {[...games].reverse().slice(0, 10).map((g: any) => {
+            {[...games].reverse().slice(0, 10).map(g => {
               const date = new Date(g.game_date).toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })
               return (
                 <a key={g.id} href={`/games/${g.id}`} style={{ textDecoration: 'none' }} className="game-row-link">

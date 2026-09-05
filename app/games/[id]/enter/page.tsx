@@ -1,27 +1,30 @@
+import Link from 'next/link'
 import EntryScreen, { type EntryPlayer } from './EntryScreen'
 import type { EntryState, LocalEvent } from '@/lib/entryState'
+import { fetchRows } from '@/lib/supabaseRest'
+import type { GameRow, OpponentRow, PlayByPlayRow, LineupStintRow } from '@/lib/dbTypes'
 
 export const dynamic = 'force-dynamic'
 
-const SB_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const SB_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-
-async function fetchJson(path: string) {
-  const res = await fetch(`${SB_URL}/rest/v1/${path}`, {
-    headers: { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}` },
-    cache: 'no-store',
-  })
-  return res.json()
-}
+// play_by_play as finalize writes it: every native row carries an order, period,
+// event type and side, so those four schema-nullable columns are non-null here.
+type PbpRow =
+  Pick<PlayByPlayRow, 'clock_time' | 'video_time' | 'player_id' | 'jersey_number' | 'points' | 'team_score' | 'opp_score' | 'shot_x' | 'shot_y'> & {
+    event_order: NonNullable<PlayByPlayRow['event_order']>
+    period: NonNullable<PlayByPlayRow['period']>
+    event_type: NonNullable<PlayByPlayRow['event_type']>
+    team_side: NonNullable<PlayByPlayRow['team_side']>
+  }
+type StintRow = Pick<LineupStintRow, 'period' | 'start_clock' | 'player_ids'>
 
 // Rebuild the in-app entry state from a game's stored play-by-play, so a finalized
 // (or previously-scored) game can be reopened and edited rather than being locked.
 // Starters come from the first period-1 lineup stint (they aren't logged as events);
 // the dressed set is the whole roster so any player can be subbed during an edit.
 function reconstructState(
-  gameId: string, pbp: any[], stints: any[], players: EntryPlayer[],
+  gameId: string, pbp: PbpRow[], stints: StintRow[], players: EntryPlayer[],
 ): EntryState | null {
-  if (!Array.isArray(pbp) || pbp.length === 0) return null
+  if (pbp.length === 0) return null
 
   const events: LocalEvent[] = pbp
     .slice()
@@ -64,7 +67,7 @@ function reconstructState(
     }
   }
 
-  const p1 = (Array.isArray(stints) ? stints : []).filter(s => s.period === 1)
+  const p1 = stints.filter(s => s.period === 1)
   const first = p1.find(s => s.start_clock === '10:00') ?? p1[0]
   let starters: string[] = Array.isArray(first?.player_ids) ? first.player_ids : []
   if (starters.length !== 5) {
@@ -91,32 +94,31 @@ function reconstructState(
 
 export default async function EnterPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  const [gamesRaw, playersRaw, pbpRaw, stintsRaw] = await Promise.all([
-    fetchJson(`games?id=eq.${id}&select=id,game_date,opponent_id,video_urls`),
-    fetchJson('players?select=id,jersey_number,first_name,last_name&order=jersey_number.asc'),
-    fetchJson(`play_by_play?game_id=eq.${id}&select=event_order,period,clock_time,video_time,player_id,jersey_number,event_type,team_side,points,team_score,opp_score,shot_x,shot_y&order=event_order.asc`),
-    fetchJson(`lineup_stints?game_id=eq.${id}&select=period,start_clock,player_ids`),
+  const [games, players, pbp, stints] = await Promise.all([
+    fetchRows<Pick<GameRow, 'id' | 'game_date' | 'opponent_id' | 'video_urls'>>(`games?id=eq.${id}&select=id,game_date,opponent_id,video_urls`),
+    fetchRows<EntryPlayer>('players?select=id,jersey_number,first_name,last_name&order=jersey_number.asc'),
+    fetchRows<PbpRow>(`play_by_play?game_id=eq.${id}&select=event_order,period,clock_time,video_time,player_id,jersey_number,event_type,team_side,points,team_score,opp_score,shot_x,shot_y&order=event_order.asc`),
+    fetchRows<StintRow>(`lineup_stints?game_id=eq.${id}&select=period,start_clock,player_ids`),
   ])
-  const game = Array.isArray(gamesRaw) ? gamesRaw[0] : null
-  const players: EntryPlayer[] = Array.isArray(playersRaw) ? playersRaw : []
+  const game = games[0] ?? null
 
   let opponentName = 'Opponent'
   if (game?.opponent_id) {
-    const oppRaw = await fetchJson(`opponents?id=eq.${game.opponent_id}&select=full_name`)
-    if (Array.isArray(oppRaw) && oppRaw[0]?.full_name) opponentName = oppRaw[0].full_name
+    const opp = await fetchRows<Pick<OpponentRow, 'full_name'>>(`opponents?id=eq.${game.opponent_id}&select=full_name`)
+    if (opp[0]?.full_name) opponentName = opp[0].full_name
   }
 
   if (!game) {
     return (
       <main style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', fontFamily: "'Inter', system-ui, sans-serif" }}>
         <div style={{ fontSize: 13, color: '#6b7280' }}>
-          Game not found. <a href="/games/new" style={{ color: '#307b92' }}>Create one</a>.
+          Game not found. <Link href="/games/new" style={{ color: '#307b92' }}>Create one</Link>.
         </div>
       </main>
     )
   }
 
-  const resumeState = reconstructState(id, pbpRaw, stintsRaw, players)
+  const resumeState = reconstructState(id, pbp, stints, players)
 
   return (
     <EntryScreen

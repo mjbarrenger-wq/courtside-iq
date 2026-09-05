@@ -3,21 +3,16 @@ import type { Metadata } from 'next'
 import { FilterBar } from '../dashboard/FilterBar'
 import type { FilterKey, GameTypeKey } from '../dashboard/filterConfig'
 import { FILTER_CONFIG, GAME_TYPE_CONFIG } from '../dashboard/filterConfig'
+import { fetchRows } from '@/lib/supabaseRest'
+import type { GameWithOpponent } from '@/lib/dbTypes'
 
 export const dynamic = 'force-dynamic'
 export const metadata: Metadata = { title: 'Game Debriefs — Courtside IQ' }
 
 const TEAM_ID = 'b1000000-0000-0000-0000-000000000001'
-const SB_URL  = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const SB_KEY  = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 
-async function fetchJson(path: string) {
-  const res = await fetch(`${SB_URL}/rest/v1/${path}`, {
-    headers: { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}` },
-    cache: 'no-store',
-  })
-  return res.json()
-}
+type DebriefGame = Pick<GameWithOpponent,
+  'id' | 'game_date' | 'result' | 'team_score' | 'opponent_score' | 'home_away' | 'game_type' | 'opponents'>
 
 const BG     = '#f4f5f7'
 const CARD   = '#ffffff'
@@ -37,7 +32,7 @@ const TYPE_BADGE: Record<string, { label: string; color: string; bg: string; bor
 
 // Sorted most-recent-first — this is a browsing list, not a chronological
 // chart, so newest games surface at the top (opposite convention to Trends).
-function applyFilter(allGames: any[], filter: FilterKey): any[] {
+function applyFilter(allGames: DebriefGame[], filter: FilterKey): DebriefGame[] {
   const sorted = [...allGames].sort(
     (a, b) => new Date(b.game_date).getTime() - new Date(a.game_date).getTime()
   )
@@ -63,18 +58,17 @@ export default async function DebriefsPage({
   const filter   = (FILTER_CONFIG.some(f => f.key === rawFilter) ? rawFilter : 'all') as FilterKey
   const gameType = (GAME_TYPE_CONFIG.some(t => t.key === rawType) ? rawType : 'all_types') as GameTypeKey
 
-  const gamesRaw = await fetchJson(
+  const allGames = await fetchRows<DebriefGame>(
     `games?team_id=eq.${TEAM_ID}&select=id,game_date,result,team_score,opponent_score,home_away,game_type,opponents(full_name)&order=game_date.asc`
   )
-  const allGames = Array.isArray(gamesRaw) ? gamesRaw : []
 
   let games = applyFilter(allGames, filter)
   if (gameType !== 'all_types') {
-    games = games.filter((g: any) => g.game_type === gameType)
+    games = games.filter(g => g.game_type === gameType)
   }
 
-  const wins   = games.filter((g: any) => g.result === 'W').length
-  const losses = games.filter((g: any) => g.result === 'L').length
+  const wins   = games.filter(g => g.result === 'W').length
+  const losses = games.filter(g => g.result === 'L').length
 
   return (
     <main style={{
@@ -114,9 +108,9 @@ export default async function DebriefsPage({
                 No games match this filter.
               </div>
             )}
-            {games.map((g: any) => {
+            {games.map(g => {
               const date  = new Date(g.game_date).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' })
-              const badge = TYPE_BADGE[g.game_type] ?? TYPE_BADGE.regular_season
+              const badge = TYPE_BADGE[g.game_type ?? ''] ?? TYPE_BADGE.regular_season
               const oppName = g.opponents?.full_name ?? 'Unknown'
               return (
                 <a key={g.id} href={`/games/${g.id}`} style={{ textDecoration: 'none' }} className="game-row-link">

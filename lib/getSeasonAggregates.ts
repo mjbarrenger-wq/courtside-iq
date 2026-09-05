@@ -1,16 +1,7 @@
 import { cache } from 'react'
 import { SeasonAggregates } from './driverTree'
-
-const url = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-
-async function fetchJson(path: string) {
-  const res = await fetch(`${url}/rest/v1/${path}`, {
-    headers: { 'apikey': key, 'Authorization': `Bearer ${key}` },
-    cache: 'no-store'
-  })
-  return res.json()
-}
+import { fetchRows } from './supabaseRest'
+import type { GameRow, PlayerGameStatsRow, OpponentGameStatsRow } from './dbTypes'
 
 // Only the columns the aggregate actually reads — trimmed from `select=*` (which
 // pulled ~56 player columns / 295 KB for a season) down to ~80 KB.
@@ -21,6 +12,18 @@ const OPP_COLS =
   'opp_twopt_made,opp_twopt_att,opp_threept_made,opp_threept_att,opp_ft_made,opp_ft_att,' +
   'opp_turnovers,opp_oreb,opp_dreb,opp_def_fouls,opp_possessions,opp_ast,opp_stl,opp_blk'
 const GAME_COLS = 'id,opponent_score'
+
+// Row shapes matching the three select lists above. `aggregateSeason` accepts any
+// superset (a page that fetched `select=*` can pass its rows straight in).
+export type SeasonGameRow = Pick<GameRow, 'id' | 'opponent_score'>
+export type SeasonPlayerRow = Pick<PlayerGameStatsRow,
+  'player_id' | 'points' | 'twopt_made' | 'twopt_att' | 'threept_made' | 'threept_att' |
+  'ft_made' | 'ft_att' | 'turnovers' | 'off_fouls' | 'oreb' | 'dreb' | 'ast' | 'stl' | 'blk' |
+  'def_fouls' | 'plus_minus' | 'vps'>
+export type SeasonOppRow = Pick<OpponentGameStatsRow,
+  'opp_twopt_made' | 'opp_twopt_att' | 'opp_threept_made' | 'opp_threept_att' |
+  'opp_ft_made' | 'opp_ft_att' | 'opp_turnovers' | 'opp_oreb' | 'opp_dreb' | 'opp_def_fouls' |
+  'opp_possessions' | 'opp_ast' | 'opp_stl' | 'opp_blk'>
 
 function emptyAggregates(): SeasonAggregates {
   return {
@@ -44,7 +47,7 @@ function emptyAggregates(): SeasonAggregates {
  * average and the hardcoded opponent estimate fallback.
  */
 export function aggregateSeason(
-  games: any[], playerStats: any[], oppStats: any[],
+  games: SeasonGameRow[], playerStats: SeasonPlayerRow[], oppStats: SeasonOppRow[],
 ): SeasonAggregates {
   const g = games.length
 
@@ -75,20 +78,20 @@ export function aggregateSeason(
   const playerVpsAvgs = Object.values(vpsMap).filter(p => p.count > 0).map(p => p.sum / p.count)
   const vps = playerVpsAvgs.length > 0
     ? (playerVpsAvgs.reduce((s, v) => s + v, 0) / playerVpsAvgs.length) * playerStats.length
-    : playerStats.reduce((s: number, r: any) => s + (r.vps || 0), 0)
+    : playerStats.reduce((s, r) => s + (r.vps || 0), 0)
   const ftf = ft_att
 
   const fga = twopt_att + threept_att
   const possessions = fga + 0.44 * ft_att - oreb + turnovers
 
-  const opp_pts = games.reduce((s: number, gm: any) => s + (gm.opponent_score || 0), 0)
+  const opp_pts = games.reduce((s, gm) => s + (gm.opponent_score || 0), 0)
 
   // ── Opponent, one pass (or hardcoded estimate when no opponent rows) ──
   let opp_twopt_made = 0, opp_twopt_att = 0, opp_threept_made = 0, opp_threept_att = 0
   let opp_ft_made = 0, opp_ft_att = 0, opp_turnovers = 0, opp_oreb = 0, opp_dreb = 0
   let opp_def_fouls = 0, opp_possessions = 0, opp_ast = 0, opp_stl = 0, opp_blk = 0
 
-  if (Array.isArray(oppStats) && oppStats.length > 0) {
+  if (oppStats.length > 0) {
     for (const r of oppStats) {
       opp_twopt_made += r.opp_twopt_made || 0; opp_twopt_att += r.opp_twopt_att || 0
       opp_threept_made += r.opp_threept_made || 0; opp_threept_att += r.opp_threept_att || 0
@@ -138,29 +141,25 @@ export const getSeasonAggregates = cache(async (
   const isFiltered = gameIds !== undefined
   if (isFiltered && gameIds.length === 0) return emptyAggregates()
 
-  let games: any[], playerStats: any[], oppStats: any[]
+  let games: SeasonGameRow[], playerStats: SeasonPlayerRow[], oppStats: SeasonOppRow[]
 
   if (isFiltered) {
     const idList = `(${gameIds!.join(',')})`
     ;[games, playerStats, oppStats] = await Promise.all([
-      fetchJson(`games?id=in.${idList}&select=${GAME_COLS}`),
-      fetchJson(`player_game_stats?game_id=in.${idList}&select=${PLAYER_COLS}`),
-      fetchJson(`opponent_game_stats?game_id=in.${idList}&select=${OPP_COLS}`),
+      fetchRows<SeasonGameRow>(`games?id=in.${idList}&select=${GAME_COLS}`),
+      fetchRows<SeasonPlayerRow>(`player_game_stats?game_id=in.${idList}&select=${PLAYER_COLS}`),
+      fetchRows<SeasonOppRow>(`opponent_game_stats?game_id=in.${idList}&select=${OPP_COLS}`),
     ])
   } else {
     // Unfiltered: we need the team's game IDs before the stat queries can filter,
     // so this one case still fetches games first.
-    games = await fetchJson(`games?team_id=eq.${teamId}&select=${GAME_COLS}`)
-    const idList = `(${(Array.isArray(games) ? games : []).map((gm: any) => gm.id).join(',')})`
+    games = await fetchRows<SeasonGameRow>(`games?team_id=eq.${teamId}&select=${GAME_COLS}`)
+    const idList = `(${games.map(gm => gm.id).join(',')})`
     ;[playerStats, oppStats] = await Promise.all([
-      fetchJson(`player_game_stats?game_id=in.${idList}&select=${PLAYER_COLS}`),
-      fetchJson(`opponent_game_stats?game_id=in.${idList}&select=${OPP_COLS}`),
+      fetchRows<SeasonPlayerRow>(`player_game_stats?game_id=in.${idList}&select=${PLAYER_COLS}`),
+      fetchRows<SeasonOppRow>(`opponent_game_stats?game_id=in.${idList}&select=${OPP_COLS}`),
     ])
   }
 
-  return aggregateSeason(
-    Array.isArray(games) ? games : [],
-    Array.isArray(playerStats) ? playerStats : [],
-    Array.isArray(oppStats) ? oppStats : [],
-  )
+  return aggregateSeason(games, playerStats, oppStats)
 })

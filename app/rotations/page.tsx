@@ -5,82 +5,68 @@ import type { Metadata } from 'next'
 import RotationPlanner from './RotationPlanner'
 import LineupPerformance, { type LineupRow } from './LineupPerformance'
 import { listRotationPlans } from './actions'
-import type { RotationPlayer, GameOption } from './types'
+import type { RotationPlayer, GameOption, Position } from './types'
+import { fetchRows } from '@/lib/supabaseRest'
+import type { PlayerRow, PlayerGameStatsRow, GameRow, OpponentRow, LineupStintRow } from '@/lib/dbTypes'
 
 const TEAM_ID = 'b1000000-0000-0000-0000-000000000001'
 
+type StatRow  = Pick<PlayerGameStatsRow, 'player_id' | 'points' | 'oreb' | 'dreb' | 'turnovers' | 'ft_att' | 'twopt_att' | 'threept_att'>
+type StintRow = Pick<LineupStintRow, 'game_id' | 'seconds' | 'player_ids' | 'pf' | 'pa' | 'off_poss' | 'def_poss'>
+
 export const dynamic = 'force-dynamic'
 export const metadata: Metadata = { title: 'Rotation Planner — Courtside IQ' }
-
-const SB_URL  = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const SB_KEY  = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 
 const BG     = '#f4f5f7'
 const BORDER = '#e2e5eb'
 const HEADER = '#ffffff'
 
-async function fetchJson(path: string) {
-  const res = await fetch(`${SB_URL}/rest/v1/${path}`, {
-    headers: { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}` },
-    cache: 'no-store',
-  })
-  return res.json()
-}
-
 export default async function RotationsPage() {
-  const [playersRaw, statsRaw, gamesRaw, opponentsRaw, stintsRaw, plans] = await Promise.all([
-    fetchJson(`players?select=*&order=jersey_number.asc`),
-    fetchJson(`player_game_stats?select=player_id,points,oreb,dreb,turnovers,ft_att,twopt_att,threept_att`),
-    fetchJson(`games?select=id,game_date,opponent_id&team_id=eq.${TEAM_ID}&order=game_date.desc`),
-    fetchJson(`opponents?select=id,name`),
-    fetchJson(`lineup_stints?select=game_id,seconds,player_ids,pf,pa,off_poss,def_poss&team_id=eq.${TEAM_ID}`),
+  const [playerRows, statRows, gameRows, opponentRows, stintArr, plans] = await Promise.all([
+    fetchRows<PlayerRow>(`players?select=*&order=jersey_number.asc`),
+    fetchRows<StatRow>(`player_game_stats?select=player_id,points,oreb,dreb,turnovers,ft_att,twopt_att,threept_att`),
+    fetchRows<Pick<GameRow, 'id' | 'game_date' | 'opponent_id'>>(`games?select=id,game_date,opponent_id&team_id=eq.${TEAM_ID}&order=game_date.desc`),
+    fetchRows<Pick<OpponentRow, 'id' | 'full_name'>>(`opponents?select=id,full_name`),
+    fetchRows<StintRow>(`lineup_stints?select=game_id,seconds,player_ids,pf,pa,off_poss,def_poss&team_id=eq.${TEAM_ID}`),
     listRotationPlans(TEAM_ID),
   ])
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const opponentName: Record<string, string> = Object.fromEntries(
-    (Array.isArray(opponentsRaw) ? opponentsRaw : []).map((o: any) => [o.id, o.name]),
+    opponentRows.map(o => [o.id, o.full_name]),
   )
-  const games: GameOption[] = (Array.isArray(gamesRaw) ? gamesRaw : [])
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    .map((g: any) => {
+  const games: GameOption[] = gameRows
+    .map(g => {
       const d = g.game_date ? new Date(g.game_date).toLocaleDateString('en-AU', { day: 'numeric', month: 'short' }) : ''
-      const opp = opponentName[g.opponent_id] ?? 'Unknown'
+      const opp = opponentName[g.opponent_id ?? ''] ?? 'Unknown'
       return { id: g.id, label: [d, opp].filter(Boolean).join(' — ') }
     })
 
-  const players: RotationPlayer[] = (Array.isArray(playersRaw) ? playersRaw : [])
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    .map((p: any) => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const rows = (Array.isArray(statsRaw) ? statsRaw : []).filter((r: any) => r.player_id === p.id)
+  const players: RotationPlayer[] = playerRows
+    .map(p => {
+      const rows = statRows.filter(r => r.player_id === p.id)
       // Basic PPP approximation from available stats
       // TODO: use getSeasonAggregates for proper Off/Def PPP once available per player
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const pts = rows.reduce((s: number, r: any) => s + (r.points || 0), 0)
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const poss = rows.reduce((s: number, r: any) =>
+      const pts = rows.reduce((s, r) => s + (r.points || 0), 0)
+      const poss = rows.reduce((s, r) =>
         s + (r.twopt_att || 0) + (r.threept_att || 0) + 0.44 * (r.ft_att || 0) + (r.turnovers || 0), 0)
       return {
         id: p.id,
         name: `${p.first_name} ${p.last_name}`,
         firstName: p.first_name,
-        jersey: p.jersey_number,
-        primaryPositions: p.primary_positions ?? [],
-        secondaryPositions: p.secondary_positions ?? [],
+        jersey: p.jersey_number ?? 0,
+        primaryPositions: (p.primary_positions ?? []) as Position[],
+        secondaryPositions: (p.secondary_positions ?? []) as Position[],
         offPpp: poss > 0 ? Math.round((pts / poss) * 1000) / 1000 : undefined,
       }
     })
 
   // ── Lineup performance (from imported play-by-play / lineup_stints) ──────────
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const pInfo: Record<string, { first: string; jersey: number }> = Object.fromEntries(
-    (Array.isArray(playersRaw) ? playersRaw : []).map((p: any) => [p.id, { first: p.first_name, jersey: p.jersey_number ?? 999 }]),
+    playerRows.map(p => [p.id, { first: p.first_name, jersey: p.jersey_number ?? 999 }]),
   )
-  const stintArr = Array.isArray(stintsRaw) ? stintsRaw : []
-  const gamesWithPbp = new Set(stintArr.map((s: any) => s.game_id)).size // eslint-disable-line @typescript-eslint/no-explicit-any
+  const gamesWithPbp = new Set(stintArr.map(s => s.game_id)).size
   const agg: Record<string, { ids: string[]; secs: number; pf: number; pa: number; op: number; dp: number }> = {}
-  for (const s of stintArr as any[]) { // eslint-disable-line @typescript-eslint/no-explicit-any
+  for (const s of stintArr) {
     const ids: string[] = Array.isArray(s.player_ids) ? s.player_ids : []
     const key = [...ids].sort().join('|')
     if (!key) continue
