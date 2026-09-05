@@ -1,3 +1,4 @@
+import Link from 'next/link'
 import RosterPicker, { type RosterPlayer } from './RosterPicker'
 
 export const dynamic = 'force-dynamic'
@@ -43,7 +44,7 @@ export default async function RosterPage({ params }: { params: Promise<{ id: str
       <div className="px-4 md:px-8 py-5" style={{ background: HEADER, borderBottom: `1px solid ${BORDER}` }}>
         <div style={{ maxWidth: 920, margin: '0 auto' }}>
           <div style={{ fontSize: 11, color: MUTED, marginBottom: 6 }}>
-            <a href="/games" style={{ color: MUTED, textDecoration: 'none' }}>Game Config</a>
+            <Link href="/games" style={{ color: MUTED, textDecoration: 'none' }}>Game Config</Link>
             <span style={{ margin: '0 6px' }}>›</span>
             <span style={{ color: '#307b92' }}>Roster</span>
           </div>
@@ -63,7 +64,7 @@ export default async function RosterPage({ params }: { params: Promise<{ id: str
           <RosterPicker gameId={id} players={players} opponentName={opponentName} />
         ) : (
           <div style={{ fontSize: 13, color: MUTED }}>
-            That game doesn&rsquo;t exist. <a href="/games/new" style={{ color: '#307b92' }}>Create one</a>.
+            That game doesn&rsquo;t exist. <Link href="/games/new" style={{ color: '#307b92' }}>Create one</Link>.
           </div>
         )}
       </div>

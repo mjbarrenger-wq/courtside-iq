@@ -178,7 +178,6 @@ export default function GamesSetupTable({
 
   async function saveAll() {
     for (const id of dirtyIds) {
-      // eslint-disable-next-line no-await-in-loop
       await saveRow(id)
     }
   }
@@ -397,8 +396,8 @@ export default function GamesSetupTable({
       </div>
 
       <div style={{ padding: '10px 20px', borderTop: `1px solid ${BORDER}`, fontSize: 10, color: MUTED, background: BG }}>
-        Score and result come from the box-score import and aren't editable here. Changes save per row — use{' '}
-        <strong>Save all changes</strong> to push everything you've edited at once.
+        Score and result come from the box-score import and aren&apos;t editable here. Changes save per row — use{' '}
+        <strong>Save all changes</strong> to push everything you&apos;ve edited at once.
       </div>
     </div>
   )

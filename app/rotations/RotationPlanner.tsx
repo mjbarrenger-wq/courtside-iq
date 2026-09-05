@@ -664,7 +664,7 @@ export default function RotationPlanner({ players: initialPlayers, teamId, games
                 Balance by {config.numPeriods === 2 ? 'half' : 'quarter'}
               </div>
               <div style={{ fontSize: 10, color: MUTED, marginTop: 2 }}>
-                Spread each player's mins evenly
+                Spread each player&apos;s mins evenly
               </div>
             </div>
           </div>

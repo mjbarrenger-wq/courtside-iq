@@ -1,3 +1,4 @@
+import Link from 'next/link'
 import NewGameForm from './NewGameForm'
 import type { OpponentOption } from '../GamesSetupTable'
 
@@ -38,7 +39,7 @@ export default async function NewGamePage() {
       <div className="px-4 md:px-8 py-5" style={{ background: HEADER, borderBottom: `1px solid ${BORDER}` }}>
         <div style={{ maxWidth: 920, margin: '0 auto' }}>
           <div style={{ fontSize: 11, color: MUTED, marginBottom: 6 }}>
-            <a href="/games" style={{ color: MUTED, textDecoration: 'none' }}>Game Config</a>
+            <Link href="/games" style={{ color: MUTED, textDecoration: 'none' }}>Game Config</Link>
             <span style={{ margin: '0 6px' }}>›</span>
             <span style={{ color: '#307b92' }}>New Game</span>
           </div>

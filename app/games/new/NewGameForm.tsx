@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createGame, createOpponent, type NewGameFields } from '../actions'
@@ -276,7 +277,7 @@ export default function NewGameForm({
             cursor: canSave ? 'pointer' : 'default',
           }}
         >{saving ? 'Creating…' : 'Create game → Roster'}</button>
-        <a href="/games" style={{ fontSize: 12, color: MUTED, textDecoration: 'none' }}>Cancel</a>
+        <Link href="/games" style={{ fontSize: 12, color: MUTED, textDecoration: 'none' }}>Cancel</Link>
         <span style={{ fontSize: 11, color: GREEN, marginLeft: 'auto' }}>
           Score &amp; result are filled in when you finalize.
         </span>
