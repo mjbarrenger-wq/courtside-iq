@@ -1,5 +1,11 @@
+import Link from 'next/link'
 import { getSeasonAggregates, aggregateSeason } from '@/lib/getSeasonAggregates'
 import { computeDriverTree } from '@/lib/driverTree'
+import { fetchRows } from '@/lib/supabaseRest'
+import type {
+  GameWithOpponent, OpponentGameStatsRow, OpponentPlayerGameStatsRow,
+  PlayByPlayRow, PlayerGameStatsRow, PlayerRow,
+} from '@/lib/dbTypes'
 import GameDebrief from './GameDebrief'
 import ShotChart from './ShotChart'
 import { type Shot } from './HalfCourt'
@@ -9,16 +15,12 @@ import AttachVideoForm from './AttachVideoForm'
 export const dynamic = 'force-dynamic'
 
 const TEAM_ID = 'b1000000-0000-0000-0000-000000000001'
-const SB_URL  = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const SB_KEY  = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 
-async function fetchJson(path: string) {
-  const res = await fetch(`${SB_URL}/rest/v1/${path}`, {
-    headers: { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}` },
-    cache: 'no-store',
-  })
-  return res.json()
-}
+// ── Row shapes for this page's partial selects ────────────────────────────────
+/** `players?select=id,first_name,last_name,jersey_number` */
+type RosterPlayer = Pick<PlayerRow, 'id' | 'first_name' | 'last_name' | 'jersey_number'>
+/** `play_by_play?...&select=shot_x,shot_y,event_type,team_side` */
+type ShotRow = Pick<PlayByPlayRow, 'shot_x' | 'shot_y' | 'event_type' | 'team_side'>
 
 function fmtMins(secs: number): string {
   if (!secs) return '—'
@@ -77,40 +79,39 @@ export default async function BoxScorePage({
 }) {
   const { id } = await params
 
-  const [gameRaw, playerStatsRaw, oppStatsRaw, playersRaw, shotsRaw, oppPlayerRaw, seasonAggs, syncedRaw] = await Promise.all([
-    fetchJson(`games?id=eq.${id}&select=*,opponents(full_name)&limit=1`),
-    fetchJson(`player_game_stats?game_id=eq.${id}&select=*`),
-    fetchJson(`opponent_game_stats?game_id=eq.${id}&select=*`),
-    fetchJson(`players?select=id,first_name,last_name,jersey_number&order=jersey_number.asc`),
-    fetchJson(`play_by_play?game_id=eq.${id}&shot_x=not.is.null&select=shot_x,shot_y,event_type,team_side`),
-    fetchJson(`opponent_player_game_stats?game_id=eq.${id}&select=*`),
+  const [gameRows, pStats, oppStats, players, shotRows, oppPlayerRaw, seasonAggs, syncedRows] = await Promise.all([
+    fetchRows<GameWithOpponent>(`games?id=eq.${id}&select=*,opponents(full_name)&limit=1`),
+    fetchRows<PlayerGameStatsRow>(`player_game_stats?game_id=eq.${id}&select=*`),
+    fetchRows<OpponentGameStatsRow>(`opponent_game_stats?game_id=eq.${id}&select=*`),
+    fetchRows<RosterPlayer>(`players?select=id,first_name,last_name,jersey_number&order=jersey_number.asc`),
+    fetchRows<ShotRow>(`play_by_play?game_id=eq.${id}&shot_x=not.is.null&select=shot_x,shot_y,event_type,team_side`),
+    fetchRows<OpponentPlayerGameStatsRow>(`opponent_player_game_stats?game_id=eq.${id}&select=*`),
     getSeasonAggregates(TEAM_ID),
-    fetchJson(`play_by_play?game_id=eq.${id}&video_time=not.is.null&select=event_order&limit=1`),
+    fetchRows<Pick<PlayByPlayRow, 'event_order'>>(`play_by_play?game_id=eq.${id}&video_time=not.is.null&select=event_order&limit=1`),
   ])
-  const hasSyncedTiming = Array.isArray(syncedRaw) && syncedRaw.length > 0
+  const hasSyncedTiming = syncedRows.length > 0
 
-  const game   = Array.isArray(gameRaw) && gameRaw.length > 0 ? gameRaw[0] : null
-  const pStats = Array.isArray(playerStatsRaw) ? playerStatsRaw : []
-  const players: any[] = Array.isArray(playersRaw) ? playersRaw : []
+  const game = gameRows.length > 0 ? gameRows[0] : null
 
   // This game's driver tree, aggregated from the rows already fetched above — no
   // extra round-trip (previously a second getSeasonAggregates([id]) re-fetched this
   // game's player + opponent stats that the page had already loaded).
-  const gameAggs = aggregateSeason(
-    game ? [game] : [], pStats, Array.isArray(oppStatsRaw) ? oppStatsRaw : [],
-  )
+  const gameAggs = aggregateSeason(game ? [game] : [], pStats, oppStats)
 
   // Located shots for the shot chart (native games only carry shot_x/shot_y; imported
   // games have none, so the chart section renders only when there is real data).
-  const toShot = (r: any): Shot => ({
+  const toShot = (r: ShotRow): Shot => ({
     x: Number(r.shot_x), y: Number(r.shot_y),
     made: r.event_type === 'made_2pt' || r.event_type === 'made_3pt',
     pts: r.event_type === 'made_3pt' || r.event_type === 'missed_3pt' ? 3 : 2,
   })
-  const shotRows: any[] = Array.isArray(shotsRaw) ? shotsRaw : []
   const ourShots: Shot[] = shotRows.filter(r => r.team_side === 'team').map(toShot)
   const oppShots: Shot[] = shotRows.filter(r => r.team_side === 'opponent').map(toShot)
-  const oppPlayerRows: OppRow[] = Array.isArray(oppPlayerRaw) ? oppPlayerRaw : []
+  // Boundary narrowing: OpponentBox's OppRow declares the count columns as plain
+  // `number`, while the schema (OpponentPlayerGameStatsRow) allows null. The rows
+  // are passed through untouched, exactly as before, so the assertion lives here
+  // at the fetch boundary rather than in the render.
+  const oppPlayerRows = oppPlayerRaw as OppRow[]
 
   if (!game) {
     return (
@@ -150,9 +151,9 @@ export default async function BoxScorePage({
     pts: number; reb: number; ast: number; stl: number; blk: number; to: number
     ciq: number | null; impact: number
   }
-  const contributors: ContribRow[] = (players as any[])
-    .map((p: any): ContribRow | null => {
-      const s = (pStats as any[]).find((r: any) => r.player_id === p.id)
+  const contributors: ContribRow[] = players
+    .map((p): ContribRow | null => {
+      const s = pStats.find(r => r.player_id === p.id)
       if (!s) return null
       const pts  = s.points || 0
       const oreb = s.oreb || 0
@@ -164,7 +165,7 @@ export default async function BoxScorePage({
       return {
         id: p.id,
         name: `${p.first_name} ${p.last_name}`,
-        jersey: p.jersey_number,
+        jersey: p.jersey_number ?? 0,
         pts, reb: oreb + dreb, ast, stl, blk, to,
         ciq: s.ciq_rating == null ? null : Number(s.ciq_rating),
         // CIQ Rating is the value metric (it already credits rebounds — 0.5 per
@@ -189,14 +190,14 @@ export default async function BoxScorePage({
     pm: number | null
   }
 
-  const rows: BoxRow[] = (players as any[])
-    .map((p: any): BoxRow | null => {
-      const s = (pStats as any[]).find((r: any) => r.player_id === p.id)
+  const rows: BoxRow[] = players
+    .map((p): BoxRow | null => {
+      const s = pStats.find(r => r.player_id === p.id)
       if (!s) return null
       return {
         id:     p.id,
         name:   `${p.first_name} ${p.last_name}`,
-        jersey: p.jersey_number,
+        jersey: p.jersey_number ?? 0,
         mins:   fmtMins(s.time_played_seconds || 0),
         pts:    s.points        || 0,
         fgm:    (s.twopt_made  || 0) + (s.threept_made || 0),
@@ -266,7 +267,7 @@ export default async function BoxScorePage({
           {/* Breadcrumb + Watch/Review entry (native games with video only) */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 10 }}>
             <div style={{ fontSize: 11, color: MUTED }}>
-              <a href="/" style={{ color: MUTED, textDecoration: 'none' }}>Overview</a>
+              <Link href="/" style={{ color: MUTED, textDecoration: 'none' }}>Overview</Link>
               <span style={{ margin: '0 6px' }}>›</span>
               <span style={{ color: TEAL }}>Game Debrief</span>
             </div>

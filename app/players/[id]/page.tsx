@@ -12,8 +12,27 @@ import { FilterBar } from '@/app/dashboard/FilterBar'
 import { GamePicker, type PickerGame } from '@/app/dashboard/GamePicker'
 import type { FilterKey, GameTypeKey } from '@/app/dashboard/filterConfig'
 import { FILTER_CONFIG, GAME_TYPE_CONFIG } from '@/app/dashboard/filterConfig'
+import { fetchRows } from '@/lib/supabaseRest'
+import type { DrillRow, GameRow, GameWithOpponent, PlayerGameStatsRow, PlayerRow } from '@/lib/dbTypes'
 
 // WinLossSplit and DevelopmentContent types live in InsightsPanel.tsx
+
+// ── Row shapes for this page's queries (Pick<> mirrors each select list) ─────
+/** `games?select=id,game_date,result,team_score,opponent_score,game_type,opponents(full_name)` */
+type FilterGame = Pick<GameWithOpponent,
+  'id' | 'game_date' | 'result' | 'team_score' | 'opponent_score' | 'game_type' | 'opponents'>
+/** `players?select=id,first_name,last_name,jersey_number` */
+type RosterPlayer = Pick<PlayerRow, 'id' | 'first_name' | 'last_name' | 'jersey_number'>
+/** This player's per-game rows (the Phase 2 player_game_stats select). */
+type PlayerGameRow = Pick<PlayerGameStatsRow,
+  | 'game_id' | 'points' | 'twopt_made' | 'twopt_att' | 'threept_made' | 'threept_att'
+  | 'ft_made' | 'ft_att' | 'turnovers' | 'ast' | 'oreb' | 'dreb' | 'stl' | 'blk'
+  | 'def_fouls' | 'off_fouls' | 'plus_minus' | 'vps' | 'off_ppp' | 'def_ppp' | 'net_ppp' | 'ciq_rating'>
+/** Squad rows for peer ranking (the Phase 2 peer player_game_stats select). */
+type PeerStatRow = Pick<PlayerGameStatsRow,
+  | 'player_id' | 'points' | 'twopt_made' | 'twopt_att' | 'threept_made' | 'threept_att'
+  | 'ft_made' | 'ft_att' | 'turnovers' | 'oreb' | 'dreb' | 'stl' | 'blk'
+  | 'def_fouls' | 'off_fouls' | 'ciq_rating'>
 
 // ── Tooltip content ───────────────────────────────────────────────────────────
 const PILLAR_TOOLTIPS: Record<string, string> = {
@@ -33,17 +52,7 @@ const DEF_STAT_TOOLTIPS: Record<string, string> = {
 
 export const dynamic = 'force-dynamic'
 
-const SB_URL  = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const SB_KEY  = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 const TEAM_ID = 'b1000000-0000-0000-0000-000000000001'
-
-async function fetchJson(path: string) {
-  const res = await fetch(`${SB_URL}/rest/v1/${path}`, {
-    headers: { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}` },
-    cache: 'no-store',
-  })
-  return res.json()
-}
 
 // ── Pillar name → DB pillar key ────────────────────────────────────────────────
 const PILLAR_DB_MAP: Record<string, string> = {
@@ -55,7 +64,7 @@ const PILLAR_DB_MAP: Record<string, string> = {
 
 function getRelevantDrills(
   leakageAreas: { pillar: string }[],
-  allDrills: PlayerDrill[],
+  allDrills: DrillRow[],
 ): PlayerDrill[] {
   const weakPillars = leakageAreas
     .map(d => PILLAR_DB_MAP[d.pillar])
@@ -70,7 +79,7 @@ function getRelevantDrills(
   for (const pillar of weakPillars) {
     const matches = allDrills
       .filter(d => d.pillar === pillar)
-      .sort((a, b) => (a as any).difficulty_order - (b as any).difficulty_order)
+      .sort((a, b) => a.difficulty_order - b.difficulty_order)
       .slice(0, 2)
     result.push(...matches)
     if (result.length >= 4) break
@@ -304,7 +313,9 @@ function DefStat({ label, value, teamAvg, higherBetter = true, rank, totalRanked
 }
 
 // ── Filter helpers ────────────────────────────────────────────────────────────
-function applyFilter(allGames: any[], filter: FilterKey): any[] {
+type FilterableGame = Pick<GameRow, 'game_date' | 'result' | 'team_score' | 'opponent_score'>
+
+function applyFilter<G extends FilterableGame>(allGames: G[], filter: FilterKey): G[] {
   const sorted = [...allGames].sort(
     (a, b) => new Date(b.game_date).getTime() - new Date(a.game_date).getTime()
   )
@@ -321,7 +332,7 @@ function applyFilter(allGames: any[], filter: FilterKey): any[] {
   }
 }
 
-function contextLabel(games: any[], filter: FilterKey, isCustom: boolean): string {
+function contextLabel<G extends FilterableGame>(games: G[], filter: FilterKey, isCustom: boolean): string {
   if (!games.length) return 'No games'
   const sorted = [...games].sort(
     (a, b) => new Date(a.game_date).getTime() - new Date(b.game_date).getTime()
@@ -353,13 +364,12 @@ export default async function PlayerProfilePage({
   const BORDER = '#e2e5eb'
 
   // ── Phase 1: fetch all games to build filter ──────────────────────────────
-  const allGamesRaw = await fetchJson(
+  const allGames = await fetchRows<FilterGame>(
     `games?team_id=eq.${TEAM_ID}&select=id,game_date,result,team_score,opponent_score,game_type,opponents(full_name)&order=game_date.asc`
   )
-  const allGames: any[] = Array.isArray(allGamesRaw) ? allGamesRaw : []
 
   // Apply filter to determine which games to analyse
-  let filteredGames: any[]
+  let filteredGames: FilterGame[]
   if (isCustom) {
     const specificIds = gamesParam!.split(',').filter(Boolean)
     filteredGames = allGames.filter(g => specificIds.includes(g.id))
@@ -373,34 +383,32 @@ export default async function PlayerProfilePage({
   const filteredIdList  = `(${filteredGameIds.join(',') || 'null'})`
 
   // ── Phase 2: parallel fetch using filtered game IDs ───────────────────────
-  const [playerRaw, allPlayers, aggregates, drillsRaw, peerStatsRaw] = await Promise.all([
+  const [playerRows, players, aggregates, allDrills, peerStats] = await Promise.all([
     // Player stats for the FILTERED games only (include game_id for sparkline ordering)
-    fetchJson(
+    fetchRows<PlayerGameRow>(
       `player_game_stats?player_id=eq.${id}&game_id=in.${filteredIdList}&select=game_id,points,twopt_made,twopt_att,threept_made,threept_att,ft_made,ft_att,turnovers,ast,oreb,dreb,stl,blk,def_fouls,off_fouls,plus_minus,vps,off_ppp,def_ppp,net_ppp,ciq_rating`
     ),
-    fetchJson(`players?team_id=eq.${TEAM_ID}&select=id,first_name,last_name,jersey_number&order=jersey_number.asc`),
+    fetchRows<RosterPlayer>(`players?team_id=eq.${TEAM_ID}&select=id,first_name,last_name,jersey_number&order=jersey_number.asc`),
     // Aggregates scoped to filtered games
     getSeasonAggregates(TEAM_ID, filteredGameIds),
-    fetchJson(`drills?select=*`),
+    fetchRows<DrillRow>(`drills?select=*`),
     // Squad stats for peer ranking — scoped to the SAME filtered games as everything
     // else on the page, so a rank badge ("#1 of 10") reflects the active filter
     // (e.g. Last 5) rather than always ranking against the full season.
-    fetchJson(
+    // Named for what it is: squad stats scoped to the active filter, used only
+    // for peer ranking — not a season-wide fetch.
+    fetchRows<PeerStatRow>(
       `player_game_stats?select=player_id,points,twopt_made,twopt_att,threept_made,threept_att,ft_made,ft_att,turnovers,oreb,dreb,stl,blk,def_fouls,off_fouls,ciq_rating&game_id=in.${filteredIdList}`
     ),
   ])
 
-  const players  = Array.isArray(allPlayers) ? allPlayers : []
-  const player   = players.find((p: any) => p.id === id)
-  // Named for what it now is: squad stats scoped to the active filter, used only
-  // for peer ranking — not a season-wide fetch (see the query comment above).
-  const peerStats = Array.isArray(peerStatsRaw) ? peerStatsRaw : []
+  const player = players.find(p => p.id === id)
 
   // Sort player rows chronologically using filteredGames date order
-  const gameOrder = new Map(filteredGames.map((g: any, i: number) => [g.id, i]))
-  const rows = (Array.isArray(playerRaw) ? playerRaw : [])
+  const gameOrder = new Map<string | null, number>(filteredGames.map((g, i) => [g.id, i]))
+  const rows = playerRows
     .slice()
-    .sort((a: any, b: any) => (gameOrder.get(a.game_id) ?? 0) - (gameOrder.get(b.game_id) ?? 0))
+    .sort((a, b) => (gameOrder.get(a.game_id) ?? 0) - (gameOrder.get(b.game_id) ?? 0))
 
   if (!player || rows.length === 0) {
     return (
@@ -410,8 +418,8 @@ export default async function PlayerProfilePage({
     )
   }
 
-  const sum = (key: string) => rows.reduce((s: number, r: any) => s + (Number(r[key]) || 0), 0)
-  const avg = (key: string) => rows.length > 0 ? sum(key) / rows.length : 0
+  const sum = (key: keyof PlayerGameRow) => rows.reduce((s: number, r) => s + (Number(r[key]) || 0), 0)
+  const avg = (key: keyof PlayerGameRow) => rows.length > 0 ? sum(key) / rows.length : 0
 
   const ps: PlayerStats = {
     games:        rows.length,
@@ -433,7 +441,7 @@ export default async function PlayerProfilePage({
 
   // ── Per-game sparkline series (one value per game, in chronological order) ──
   const sparklines: Record<string, number[]> = {}
-  const addSeries = (key: string, fn: (r: any) => number) => {
+  const addSeries = (key: string, fn: (r: PlayerGameRow) => number) => {
     const vals = rows.map(fn).filter((v: number) => isFinite(v))
     if (vals.length >= 2) sparklines[key] = vals
   }
@@ -542,7 +550,7 @@ export default async function PlayerProfilePage({
 
   // CIQ for the current filter window — average of the games in `rows` that carry
   // a rating (a game with no recorded possessions has ciq_rating null).
-  const ciqValues = rows.map((r: any) => r.ciq_rating).filter((v: any) => v != null).map(Number)
+  const ciqValues = rows.map(r => r.ciq_rating).filter(v => v != null).map(Number)
   const avgCiq = ciqValues.length
     ? Math.round((ciqValues.reduce((s: number, v: number) => s + v, 0) / ciqValues.length) * 10) / 10
     : null
@@ -590,19 +598,19 @@ export default async function PlayerProfilePage({
   const rankSummaryArr = ranks.map((r, i) => ({ label: rankLabels[i], rank: r.rank, total: r.total, tie: r.tie }))
 
   // ── Win/Loss split stats ──────────────────────────────────────────────────
-  const gameResultMap = new Map(filteredGames.map((g: any) => [g.id, g.result]))
-  const winRows  = rows.filter((r: any) => gameResultMap.get(r.game_id) === 'W')
-  const lossRows = rows.filter((r: any) => gameResultMap.get(r.game_id) === 'L')
+  const gameResultMap = new Map<string | null, FilterGame['result']>(filteredGames.map(g => [g.id, g.result]))
+  const winRows  = rows.filter(r => gameResultMap.get(r.game_id) === 'W')
+  const lossRows = rows.filter(r => gameResultMap.get(r.game_id) === 'L')
 
-  const wlAvg = (arr: any[], key: string): number | null => {
+  const wlAvg = (arr: PlayerGameRow[], key: keyof PlayerGameRow): number | null => {
     if (!arr.length) return null
-    return Math.round((arr.reduce((s: number, r: any) => s + (Number(r[key]) || 0), 0) / arr.length) * 10) / 10
+    return Math.round((arr.reduce((s: number, r) => s + (Number(r[key]) || 0), 0) / arr.length) * 10) / 10
   }
-  const wlTs = (arr: any[]): number | null => {
+  const wlTs = (arr: PlayerGameRow[]): number | null => {
     if (!arr.length) return null
-    const pts = arr.reduce((s: number, r: any) => s + (r.points || 0), 0)
-    const fga = arr.reduce((s: number, r: any) => s + (r.twopt_att || 0) + (r.threept_att || 0), 0)
-    const fta = arr.reduce((s: number, r: any) => s + (r.ft_att || 0), 0)
+    const pts = arr.reduce((s: number, r) => s + (r.points || 0), 0)
+    const fga = arr.reduce((s: number, r) => s + (r.twopt_att || 0) + (r.threept_att || 0), 0)
+    const fta = arr.reduce((s: number, r) => s + (r.ft_att || 0), 0)
     const d = 2 * (fga + 0.44 * fta)
     return d > 0 ? Math.round((pts / d) * 1000) / 10 : null
   }
@@ -612,8 +620,8 @@ export default async function PlayerProfilePage({
     pts_w:  wlAvg(winRows,  'points'),     pts_l:  wlAvg(lossRows, 'points'),
     ts_w:   wlTs(winRows),                 ts_l:   wlTs(lossRows),
     to_w:   wlAvg(winRows,  'turnovers'),  to_l:   wlAvg(lossRows, 'turnovers'),
-    reb_w:  winRows.length  ? Math.round(winRows.reduce((s: number, r: any) => s + (r.oreb||0) + (r.dreb||0), 0) / winRows.length * 10) / 10  : null,
-    reb_l:  lossRows.length ? Math.round(lossRows.reduce((s: number, r: any) => s + (r.oreb||0) + (r.dreb||0), 0) / lossRows.length * 10) / 10 : null,
+    reb_w:  winRows.length  ? Math.round(winRows.reduce((s: number, r) => s + (r.oreb||0) + (r.dreb||0), 0) / winRows.length * 10) / 10  : null,
+    reb_l:  lossRows.length ? Math.round(lossRows.reduce((s: number, r) => s + (r.oreb||0) + (r.dreb||0), 0) / lossRows.length * 10) / 10 : null,
     stl_w:  wlAvg(winRows,  'stl'),        stl_l:  wlAvg(lossRows, 'stl'),
     ftf_w:  wlAvg(winRows,  'ft_att'),     ftf_l:  wlAvg(lossRows, 'ft_att'),
   }
@@ -667,13 +675,13 @@ export default async function PlayerProfilePage({
   })[0] ?? null
 
   // Drills from DB — passed to InsightsPanel for rendering
-  const allDrills: PlayerDrill[] = Array.isArray(drillsRaw) ? drillsRaw : []
   const relevantDrills = getRelevantDrills(tree.leakage_areas, allDrills)
 
   // Props for InsightsPanel (the async Suspense component that calls Claude)
   const insightsPanelProps: InsightsPanelProps = {
     playerName: fullName,
-    jersey: player.jersey_number,
+    // players.jersey_number is nullable in the schema; InsightsPanel wants a number.
+    jersey: player.jersey_number ?? 0,
     tree,
     aiStats,
     teamAvgs,
@@ -689,7 +697,7 @@ export default async function PlayerProfilePage({
     relevantDrills,
   }
 
-  const playerIdx  = players.findIndex((p: any) => p.id === id)
+  const playerIdx  = players.findIndex(p => p.id === id)
   const prevPlayer = playerIdx > 0 ? players[playerIdx - 1] : null
   const nextPlayer = playerIdx < players.length - 1 ? players[playerIdx + 1] : null
 
@@ -699,7 +707,7 @@ export default async function PlayerProfilePage({
     : filter !== 'all' ? `?filter=${filter}` : ''
 
   // Build picker games list for GamePicker (uses full season)
-  const pickerGames: PickerGame[] = allGames.map((g: any) => ({
+  const pickerGames: PickerGame[] = allGames.map(g => ({
     id:       g.id,
     label:    new Date(g.game_date).toLocaleDateString('en-AU', { day: 'numeric', month: 'short' }),
     opponent: g.opponents?.full_name ?? 'Unknown',
@@ -742,7 +750,7 @@ export default async function PlayerProfilePage({
       <div style={{ background: '#ffffff', borderBottom: `1px solid ${BORDER}`, padding: '10px 28px', overflowX: 'auto' }}>
         <div style={{ display: 'flex', gap: 6, alignItems: 'center', minWidth: 'max-content' }}>
           <span style={{ fontSize: 10, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.08em', marginRight: 4 }}>Players:</span>
-          {players.map((p: any) => (
+          {players.map(p => (
             <a
               key={p.id}
               href={`/players/${p.id}${filterQs}`}
