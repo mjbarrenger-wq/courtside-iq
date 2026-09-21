@@ -15,10 +15,16 @@ The coaching translation principle from the analytics framework reinforces this:
 
 The canonical, chronological project journal lives OUTSIDE this repo at
 `/Users/mattb/AI Courtside IQ/memory.md`. Read it at the start of a session and
-append a `## Session: <date>` entry at the end of a meaningful one. Workflow: Matt
-commits/pushes from the Mac terminal (don't auto-commit); work stays on branch
-`driver-tree-best-practice` (prod deploys from `main`). Supabase writes can silently
-affect 0 rows on an RLS/grant gap — always verify affected-row counts.
+append a `## Session: <date>` entry at the end of a meaningful one.
+
+**Branch: `main`.** All work lands on `main`, which is also what Vercel deploys to
+production. The old `driver-tree-best-practice` branch is retired — it drifted eight
+commits behind and left a local checkout testing stale code against a current
+production site. Don't reintroduce a long-lived side branch: a cloud session's edits
+only reach the Mac through git, so anything not on `main` is invisible there.
+
+Supabase writes can silently affect 0 rows on an RLS/grant gap — always verify
+affected-row counts.
 
 ## Native stat entry (in progress — built across 2026-07-05 sessions)
 
