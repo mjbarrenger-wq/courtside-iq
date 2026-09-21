@@ -5,8 +5,8 @@ import { FilterBar } from '../dashboard/FilterBar'
 import { DateSlider } from '../dashboard/DateSlider'
 import { GamePicker } from '../dashboard/GamePicker'
 import type { PickerGame } from '../dashboard/GamePicker'
-import type { FilterKey, GameTypeKey } from '../dashboard/filterConfig'
-import { FILTER_CONFIG, GAME_TYPE_CONFIG } from '../dashboard/filterConfig'
+import type { FilterKey } from '../dashboard/filterConfig'
+import { FILTER_CONFIG, parseGameTypes, isAllGameTypes, matchesGameType, CONCRETE_GAME_TYPES } from '../dashboard/filterConfig'
 import { fetchRows } from '@/lib/supabaseRest'
 import type { GameRow, GameWithOpponent, PlayerRow, PlayerGameStatsRow } from '@/lib/dbTypes'
 
@@ -61,7 +61,7 @@ export default async function PlayerQuadrantsPage({
   const { filter: rawFilter = 'all', type: rawType = 'all_types', games: gamesParam } = await searchParams
   const isCustom = !!gamesParam
   const filter   = (FILTER_CONFIG.some(f => f.key === rawFilter) ? rawFilter : 'all') as FilterKey
-  const gameType = (GAME_TYPE_CONFIG.some(t => t.key === rawType) ? rawType : 'all_types') as GameTypeKey
+  const gameTypes = parseGameTypes(rawType)
 
   // All games (for slider + picker)
   const allGames = await fetchRows<GameListRow>(
@@ -75,8 +75,8 @@ export default async function PlayerQuadrantsPage({
     filteredGames = allGames.filter(g => specificIds.includes(g.id))
   } else {
     filteredGames = applyFilter(allGames, filter)
-    if (gameType !== 'all_types') {
-      filteredGames = filteredGames.filter(g => g.game_type === gameType)
+    if (!isAllGameTypes(gameTypes)) {
+      filteredGames = filteredGames.filter(g => matchesGameType(g.game_type, gameTypes))
     }
   }
 
@@ -161,7 +161,7 @@ export default async function PlayerQuadrantsPage({
           </div>
           <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
             <Suspense fallback={<div style={{ width: 200, height: 28 }} />}>
-              <FilterBar current={isCustom ? 'all' : filter} currentType={isCustom ? 'all_types' : gameType} />
+              <FilterBar current={isCustom ? 'all' : filter} currentTypes={isCustom ? CONCRETE_GAME_TYPES : gameTypes} />
             </Suspense>
             <Suspense fallback={<div style={{ width: 100, height: 28 }} />}>
               <GamePicker games={pickerGames} />

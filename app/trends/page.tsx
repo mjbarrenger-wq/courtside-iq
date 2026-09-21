@@ -4,8 +4,8 @@ import { TrendChart, type GamePoint } from './TrendChart'
 import { STAT_CATEGORIES, getStatCategory, type StatKey } from './statCategories'
 import { StatCategoryMenu } from './StatCategoryMenu'
 import { FilterBar } from '../dashboard/FilterBar'
-import type { FilterKey, GameTypeKey } from '../dashboard/filterConfig'
-import { FILTER_CONFIG, GAME_TYPE_CONFIG } from '../dashboard/filterConfig'
+import type { FilterKey } from '../dashboard/filterConfig'
+import { FILTER_CONFIG, parseGameTypes, isAllGameTypes, matchesGameType } from '../dashboard/filterConfig'
 import { PlayerSelector, type PlayerOption } from '../dashboard/PlayerSelector'
 import { fetchRows } from '@/lib/supabaseRest'
 import type { GameRow, GameWithOpponent, PlayerRow, PlayerGameStatsRow, OpponentGameStatsRow } from '@/lib/dbTypes'
@@ -67,7 +67,7 @@ export default async function TrendsPage({
   } = await searchParams
 
   const filter   = (FILTER_CONFIG.some(f => f.key === rawFilter) ? rawFilter : 'all') as FilterKey
-  const gameType = (GAME_TYPE_CONFIG.some(t => t.key === rawType) ? rawType : 'all_types') as GameTypeKey
+  const gameTypes = parseGameTypes(rawType)
 
   const [allGames, players] = await Promise.all([
     fetchRows<GameListRow>(`games?team_id=eq.${TEAM_ID}&select=id,game_date,result,team_score,opponent_score,game_type,opponents(full_name)&order=game_date.asc`),
@@ -81,8 +81,8 @@ export default async function TrendsPage({
 
   // View + Type filters applied on top of the full season
   let filteredGames = applyFilter(allGames, filter)
-  if (gameType !== 'all_types') {
-    filteredGames = filteredGames.filter(g => g.game_type === gameType)
+  if (!isAllGameTypes(gameTypes)) {
+    filteredGames = filteredGames.filter(g => matchesGameType(g.game_type, gameTypes))
   }
 
   const gameIds = filteredGames.map(g => g.id)
@@ -261,7 +261,7 @@ export default async function TrendsPage({
           </div>
           <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
             <Suspense fallback={<div style={{ width: 200, height: 28 }} />}>
-              <FilterBar current={filter} currentType={gameType} />
+              <FilterBar current={filter} currentTypes={gameTypes} />
             </Suspense>
             <Suspense fallback={<div style={{ width: 190, height: 28 }} />}>
               <StatCategoryMenu current={category} />

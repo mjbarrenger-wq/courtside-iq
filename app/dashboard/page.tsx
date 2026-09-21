@@ -7,8 +7,8 @@ import { getBenchmarks } from '@/lib/getBenchmarks'
 import { computeDriverTree, computePlayerDriverTree, PillarScore, MetricScore, DriverTreeOutput, PlayerStats } from '@/lib/driverTree'
 import { COACHING_WRITING_STANDARDS } from '@/lib/writingStandards'
 import { FilterBar } from './FilterBar'
-import type { FilterKey, GameTypeKey } from './filterConfig'
-import { FILTER_CONFIG, GAME_TYPE_CONFIG } from './filterConfig'
+import type { FilterKey } from './filterConfig'
+import { FILTER_CONFIG, parseGameTypes, isAllGameTypes, matchesGameType, CONCRETE_GAME_TYPES, gameTypeLabel } from './filterConfig'
 import { DateSlider } from './DateSlider'
 import { PlayerSelector } from './PlayerSelector'
 import { GamePicker } from './GamePicker'
@@ -546,7 +546,7 @@ export default async function DashboardPage({
   const { filter: rawFilter = 'all', type: rawType = 'all_types', games: gamesParam, player: playerId } = await searchParams
   const isCustom = !!gamesParam
   const filter     = (FILTER_CONFIG.some(f => f.key === rawFilter) ? rawFilter : 'all') as FilterKey
-  const gameType   = (GAME_TYPE_CONFIG.some(t => t.key === rawType) ? rawType : 'all_types') as GameTypeKey
+  const gameTypes = parseGameTypes(rawType)
 
   // All games (for slider + filtering)
   const allGames = await fetchRows<GameListRow>(
@@ -561,8 +561,8 @@ export default async function DashboardPage({
   } else {
     filteredGames = applyFilter(allGames, filter)
     // Apply game type filter on top
-    if (gameType !== 'all_types') {
-      filteredGames = filteredGames.filter(g => g.game_type === gameType)
+    if (!isAllGameTypes(gameTypes)) {
+      filteredGames = filteredGames.filter(g => matchesGameType(g.game_type, gameTypes))
     }
   }
   const gameIds = filteredGames.map(g => g.id)
@@ -573,7 +573,7 @@ export default async function DashboardPage({
   // silently fall back to the unfiltered season, and would otherwise divide by
   // zero throughout computeDriverTree). Skips the rest of the page's fetching.
   if (gameIds.length === 0) {
-    const typeLabel = GAME_TYPE_CONFIG.find(t => t.key === gameType)?.label ?? gameType
+    const typeLabel = gameTypeLabel(gameTypes)
     return (
       <main style={{ background: '#f4f5f7', minHeight: '100vh', color: '#1a1f2e', fontFamily: "'Inter', system-ui, sans-serif", WebkitFontSmoothing: 'antialiased', padding: '0 0 40px' }}>
         <div className="px-4 md:px-7 py-3" style={{ background: '#ffffff', borderBottom: '1px solid #e2e5eb' }}>
@@ -588,7 +588,7 @@ export default async function DashboardPage({
               </div>
             </div>
             <Suspense fallback={<div style={{ width: 200, height: 28 }} />}>
-              <FilterBar current={isCustom ? 'all' : filter} currentType={isCustom ? 'all_types' : gameType} />
+              <FilterBar current={isCustom ? 'all' : filter} currentTypes={isCustom ? CONCRETE_GAME_TYPES : gameTypes} />
             </Suspense>
           </div>
         </div>
@@ -603,8 +603,8 @@ export default async function DashboardPage({
             <div style={{ fontSize: 12, color: '#6b7280' }}>
               {isCustom
                 ? 'No games in the selected custom range.'
-                : <>No games are currently tagged as <strong>{typeLabel}</strong>. Assign types on the{' '}
-                    <Link href="/games" style={{ color: '#307b92', fontWeight: 600 }}>Game Config</Link> page, or switch the Type filter above.</>}
+                : <>Nothing in the season matches <strong>{typeLabel}</strong>. Assign types on the{' '}
+                    <Link href="/games" style={{ color: '#307b92', fontWeight: 600 }}>Game Config</Link> page, or change the Type filter above.</>}
             </div>
           </div>
         </div>
@@ -618,7 +618,7 @@ export default async function DashboardPage({
 
   // Fetch aggregates + per-game data + drills + team bracket in parallel
   const [aggregates, perGameOpp, perGamePlayers, allDrills, teamRows] = await Promise.all([
-    getSeasonAggregates(TEAM_ID, filter === 'all' && gameType === 'all_types' && !isCustom ? undefined : gameIds),
+    getSeasonAggregates(TEAM_ID, filter === 'all' && isAllGameTypes(gameTypes) && !isCustom ? undefined : gameIds),
     fetchRows<OppGameRow>(
       `opponent_game_stats?select=game_id,opp_off_ppp,opp_def_ppp,opp_twopt_made,opp_twopt_att,opp_threept_made,opp_threept_att,opp_turnovers,opp_oreb,opp_dreb,opp_possessions&game_id=in.${idList}&order=game_id.asc`
     ),
@@ -916,7 +916,7 @@ export default async function DashboardPage({
           </div>
           <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
             <Suspense fallback={<div style={{ width: 200, height: 28 }} />}>
-              <FilterBar current={isCustom ? 'all' : filter} currentType={isCustom ? 'all_types' : gameType} />
+              <FilterBar current={isCustom ? 'all' : filter} currentTypes={isCustom ? CONCRETE_GAME_TYPES : gameTypes} />
             </Suspense>
             <Suspense fallback={<div style={{ width: 100, height: 28 }} />}>
               <GamePicker games={pickerGames} />

@@ -10,8 +10,8 @@ import PlayerDrillCards, { type PlayerDrill } from './PlayerDrillCards'
 import InsightsPanel, { InsightsSkeleton, type WinLossSplit, type InsightsPanelProps } from './InsightsPanel'
 import { FilterBar } from '@/app/dashboard/FilterBar'
 import { GamePicker, type PickerGame } from '@/app/dashboard/GamePicker'
-import type { FilterKey, GameTypeKey } from '@/app/dashboard/filterConfig'
-import { FILTER_CONFIG, GAME_TYPE_CONFIG } from '@/app/dashboard/filterConfig'
+import type { FilterKey } from '@/app/dashboard/filterConfig'
+import { FILTER_CONFIG, parseGameTypes, isAllGameTypes, matchesGameType, CONCRETE_GAME_TYPES } from '@/app/dashboard/filterConfig'
 import { fetchRows } from '@/lib/supabaseRest'
 import type { DrillRow, GameRow, GameWithOpponent, PlayerGameStatsRow, PlayerRow } from '@/lib/dbTypes'
 
@@ -357,7 +357,7 @@ export default async function PlayerProfilePage({
   const { filter: rawFilter = 'all', type: rawType = 'all_types', games: gamesParam } = await searchParams
   const isCustom = !!gamesParam
   const filter   = (FILTER_CONFIG.some(f => f.key === rawFilter) ? rawFilter : 'all') as FilterKey
-  const gameType = (GAME_TYPE_CONFIG.some(t => t.key === rawType) ? rawType : 'all_types') as GameTypeKey
+  const gameTypes = parseGameTypes(rawType)
 
   const BG     = '#f4f5f7'
   const CARD   = '#ffffff'
@@ -375,8 +375,8 @@ export default async function PlayerProfilePage({
     filteredGames = allGames.filter(g => specificIds.includes(g.id))
   } else {
     filteredGames = applyFilter(allGames, filter)
-    if (gameType !== 'all_types') {
-      filteredGames = filteredGames.filter(g => g.game_type === gameType)
+    if (!isAllGameTypes(gameTypes)) {
+      filteredGames = filteredGames.filter(g => matchesGameType(g.game_type, gameTypes))
     }
   }
   const filteredGameIds = filteredGames.map(g => g.id)
@@ -777,7 +777,7 @@ export default async function PlayerProfilePage({
       {/* ── Filter bar ── */}
       <div className="px-4 md:px-7 py-2" style={{ background: '#f4f5f7', borderBottom: `1px solid ${BORDER}` }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-          <FilterBar current={filter} currentType={isCustom ? 'all_types' : gameType} />
+          <FilterBar current={filter} currentTypes={isCustom ? CONCRETE_GAME_TYPES : gameTypes} />
           <GamePicker games={pickerGames} />
           {(filter !== 'all' || isCustom) && (
             <span style={{ fontSize: 10, color: '#6b7280', marginLeft: 4 }}>

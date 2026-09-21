@@ -1,8 +1,8 @@
 import { Suspense } from 'react'
 import type { Metadata } from 'next'
 import { FilterBar } from '../dashboard/FilterBar'
-import type { FilterKey, GameTypeKey } from '../dashboard/filterConfig'
-import { FILTER_CONFIG, GAME_TYPE_CONFIG } from '../dashboard/filterConfig'
+import type { FilterKey } from '../dashboard/filterConfig'
+import { FILTER_CONFIG, parseGameTypes, isAllGameTypes, matchesGameType } from '../dashboard/filterConfig'
 import { fetchRows } from '@/lib/supabaseRest'
 import type { GameWithOpponent } from '@/lib/dbTypes'
 
@@ -56,15 +56,15 @@ export default async function DebriefsPage({
 }) {
   const { filter: rawFilter = 'all', type: rawType = 'all_types' } = await searchParams
   const filter   = (FILTER_CONFIG.some(f => f.key === rawFilter) ? rawFilter : 'all') as FilterKey
-  const gameType = (GAME_TYPE_CONFIG.some(t => t.key === rawType) ? rawType : 'all_types') as GameTypeKey
+  const gameTypes = parseGameTypes(rawType)
 
   const allGames = await fetchRows<DebriefGame>(
     `games?team_id=eq.${TEAM_ID}&select=id,game_date,result,team_score,opponent_score,home_away,game_type,opponents(full_name)&order=game_date.asc`
   )
 
   let games = applyFilter(allGames, filter)
-  if (gameType !== 'all_types') {
-    games = games.filter(g => g.game_type === gameType)
+  if (!isAllGameTypes(gameTypes)) {
+    games = games.filter(g => matchesGameType(g.game_type, gameTypes))
   }
 
   const wins   = games.filter(g => g.result === 'W').length
@@ -90,7 +90,7 @@ export default async function DebriefsPage({
             </div>
           </div>
           <Suspense fallback={<div style={{ width: 200, height: 28 }} />}>
-            <FilterBar current={filter} currentType={gameType} />
+            <FilterBar current={filter} currentTypes={gameTypes} />
           </Suspense>
         </div>
       </div>
