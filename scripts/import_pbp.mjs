@@ -116,6 +116,9 @@ async function main() {
   // it, a later "Starter" line still updates on-court tracking but is not a starter.
   let tipOffLocked = false
   let q = 0, curClock = 600, ord = 0, ourRun = 0, oppRun = 0
+  // Events whose side had to fall back to the "by Other" text test because the
+  // paste carried no columns — a non-zero count means the export shape changed.
+  let textSided = 0
   const pbp = [], checkpoints = []
   const jerseysOf = (set) => [...set].map((s) => +s.match(/#(\d+)/)[1]).sort((a, b) => a - b)
   const ev = (et, jersey, side, pts) => {
@@ -126,6 +129,22 @@ async function main() {
   }
 
   for (const raw of lines) {
+    // Which side an event belongs to is decided by its COLUMN, read before the
+    // tabs are flattened below. The paste is tab-separated as:
+    //   0 = clock, 1 = our event, 2 = running score, 3 = opponent event.
+    //
+    // Matching on "by Other" instead is wrong in both directions, and both cases
+    // appear in the 2026 finals pastes:
+    //   • an opponent dead-ball rebound reads "Defensive Rebound by Team" — no
+    //     "by Other" to match, so it was credited to us (28 Aug vs Geelong, and
+    //     again in the Grand Final);
+    //   • "Time Out Called by Other" sits in OUR column (it is us calling a
+    //     timeout on them) — harmless only because it is not a tracked event.
+    // The text test is kept as a fallback for any paste shape without columns.
+    const cols = raw.split('\t')
+    const inOppCol = (cols[3] ?? '').trim() !== ''
+    const inOurCol = (cols[1] ?? '').trim() !== ''
+
     const line = raw.replace(/\t/g, ' ').trim()
     if (!line) continue
     const qm = line.match(/^Q(\d)\s/)
@@ -154,7 +173,7 @@ async function main() {
       continue
     }
 
-    const opp = /by Other/.test(line)
+    const opp = inOppCol ? true : inOurCol ? false : /by Other/.test(line)
     const jm = opp ? null : line.match(/by (.+?)#(\d+)/)
     const jersey = jm ? +jm[2] : null
     let et = null, pts = 0
@@ -172,6 +191,7 @@ async function main() {
     else if (/Turnover/.test(line)) et = 'turnover'
     else if (/Defensive Foul/.test(line)) et = 'def_foul'
     if (!et) continue
+    if (!inOppCol && !inOurCol) textSided++
 
     if (pts) { if (opp) oppRun += pts; else ourRun += pts }
     ev(et, jersey, opp ? 'opponent' : 'team', pts)
@@ -204,6 +224,7 @@ async function main() {
   // Diagnostics go to stderr so SQL_OUT mode emits clean SQL on stdout.
   console.error(`Parsed: ${pbp.length} events, ${stints.length} stints | score ${ourRun}-${oppRun} | ` +
     `checkpoints ${checkpoints.length - badCheckpoints.length}/${checkpoints.length} ok | stint-secs ${totalSecs}`)
+  if (textSided) console.error(`⚠ ${textSided} event(s) had no column and were sided by text — check the paste shape.`)
   if (ourBoxPts != null) console.error(`Box score check: our ${ourRun}/${ourBoxPts}, opp ${oppRun}/${oppBoxPts ?? 'n/a'}`)
 
   if (problems.length) {
