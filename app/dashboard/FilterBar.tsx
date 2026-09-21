@@ -77,21 +77,28 @@ export function FilterBar({ current, currentTypes }: FilterBarProps) {
             )
           }
           const key = t.key as ConcreteGameType
-          // Chips show the true selection, so with everything on they all read as
-          // active and one click switches a type off ("All but Practice").
-          const active = currentTypes.includes(key)
+          // From "everything", a chip reads as off and one click narrows to just
+          // that type — the behaviour this bar has always had. Once a real subset
+          // is showing, the chips reflect it and each click adds or removes one.
+          const active = !allTypes && currentTypes.includes(key)
           return (
             <button
               key={t.key}
-              onClick={() => navigate(current, toggleGameType(currentTypes, key))}
+              onClick={() => navigate(current, allTypes ? [key] : toggleGameType(currentTypes, key))}
               style={pillStyle(active)}
-              title={active ? `Exclude ${t.label}` : `Include ${t.label}`}
+              title={
+                allTypes ? `Show only ${t.label}`
+                : active ? `Remove ${t.label} from the selection`
+                : `Add ${t.label} to the selection`
+              }
             >
               {t.emoji} {t.label}
             </button>
           )
         })}
-        <span style={{ fontSize: 10, color: '#9aa3af', marginLeft: 2 }}>pick any</span>
+        <span style={{ fontSize: 10, color: '#9aa3af', marginLeft: 2 }}>
+          {allTypes ? 'pick one, then add more' : 'click to add or remove'}
+        </span>
       </div>
     </div>
   )
